@@ -12,11 +12,14 @@ from typing import Any
 
 from loguru import logger
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
+VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 
 from nanobot.config.loader import load_config
 from nanobot.bus.queue import MessageBus
@@ -122,6 +125,17 @@ async def lifespan(app):
             use_ssl=email_cfg.smtp_use_ssl,
         ))
         logger.info("Email tools registered (read + send)")
+
+    # Register Remotion video tools
+    remotion_dir = config.workspace_path / "remotion"
+    if remotion_dir.exists():
+        from nanobot.agent.tools.remotion import RemotionComposeTool, RemotionRenderTool
+        _agent.tools.register(RemotionComposeTool(remotion_dir=remotion_dir))
+        _agent.tools.register(RemotionRenderTool(
+            remotion_dir=remotion_dir,
+            base_url="http://localhost:18790",
+        ))
+        logger.info("Remotion tools registered (compose + render)")
 
     # Start Slack channel if enabled
     channel_manager = None
@@ -320,12 +334,46 @@ async def serve_screenshot(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(filepath, media_type="image/png")
 
 
+MIME_TYPES = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+}
+
+
+async def serve_video(request: Request) -> FileResponse | JSONResponse:
+    """Serve a rendered Remotion video or still."""
+    filename = request.path_params["filename"]
+    filepath = VIDEOS_DIR / filename
+    # Prevent path traversal
+    if ".." in filename or not filepath.resolve().is_relative_to(VIDEOS_DIR.resolve()):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    media_type = MIME_TYPES.get(filepath.suffix.lower(), "application/octet-stream")
+    return FileResponse(filepath, media_type=media_type)
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
         Route("/v1/models", list_models, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
+        Route("/videos/{filename:path}", serve_video, methods=["GET"]),
+    ],
+    middleware=[
+        Middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["*"],
+        ),
     ],
     lifespan=lifespan,
 )
