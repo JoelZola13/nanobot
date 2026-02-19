@@ -64,7 +64,8 @@ async def lifespan(app):
     bus = MessageBus()
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
-    cron_service = CronService(bus)
+    cron_store_path = config.workspace_path / "cron" / "jobs.json"
+    cron_service = CronService(store_path=cron_store_path)
 
     defaults = config.agents.defaults
     _agent = AgentLoop(
@@ -83,6 +84,19 @@ async def lifespan(app):
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
     )
+    # Wire up cron job callback to process messages through agent
+    async def _on_cron_job(job):
+        logger.info(f"Cron job '{job.name}' firing: {job.payload.message}")
+        response = await _agent.process_direct(
+            content=job.payload.message,
+            session_key=f"cron:{job.id}",
+            channel=job.payload.channel or "cron",
+            chat_id=job.payload.to or "system",
+        )
+        return response
+
+    cron_service.on_job = _on_cron_job
+
     # Register email tools if email channel is configured
     email_cfg = config.channels.email
     if email_cfg.enabled and email_cfg.imap_host and email_cfg.imap_username:
@@ -118,8 +132,13 @@ async def lifespan(app):
         channels_task = asyncio.create_task(channel_manager.start_all())
         logger.info("Slack channel started")
 
+    # Start cron service
+    await cron_service.start()
+    logger.info(f"Cron service started ({len(cron_service.list_jobs(include_disabled=True))} jobs)")
+
     logger.info("Nanobot API server ready")
     yield
+    cron_service.stop()
     if channel_manager:
         await channel_manager.stop_all()
         _agent.stop()

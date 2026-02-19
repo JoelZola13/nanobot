@@ -20,3 +20,6 @@ poetry.lock
 .pytest_cache/
 botpy.log
 tests/
+node_modules/
+LibreChat/
+bridge/dist/

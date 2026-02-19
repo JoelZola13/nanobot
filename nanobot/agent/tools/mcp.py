@@ -30,7 +30,8 @@ class MCPServerConnection:
 
         if self.cfg.command:
             params = StdioServerParameters(
-                command=self.cfg.command, args=self.cfg.args, env=self.cfg.env or None
+                command=self.cfg.command, args=self.cfg.args, env=self.cfg.env or None,
+                cwd=self.cfg.cwd or None,
             )
             read, write = await self._stack.enter_async_context(stdio_client(params))
         elif self.cfg.url:
