@@ -106,8 +106,23 @@ async def lifespan(app):
         ))
         logger.info("Email tools registered (read + send)")
 
+    # Start Slack channel if enabled
+    channel_manager = None
+    slack_cfg = config.channels.slack
+    if slack_cfg.enabled and slack_cfg.bot_token and slack_cfg.app_token:
+        from nanobot.channels.manager import ChannelManager
+        channel_manager = ChannelManager(config, bus)
+        # Start the agent loop (consumes inbound from bus, publishes outbound)
+        agent_task = asyncio.create_task(_agent.run())
+        # Start the channel manager (starts Slack + outbound dispatcher)
+        channels_task = asyncio.create_task(channel_manager.start_all())
+        logger.info("Slack channel started")
+
     logger.info("Nanobot API server ready")
     yield
+    if channel_manager:
+        await channel_manager.stop_all()
+        _agent.stop()
     await _agent.close_mcp()
     _agent = None
 
