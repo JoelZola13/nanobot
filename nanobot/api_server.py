@@ -7,13 +7,16 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Route
+
+SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
 
 from nanobot.config.loader import load_config
 from nanobot.bus.queue import MessageBus
@@ -132,6 +135,9 @@ async def lifespan(app):
         channels_task = asyncio.create_task(channel_manager.start_all())
         logger.info("Slack channel started")
 
+    # Ensure screenshots directory exists
+    SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
     # Start cron service
     await cron_service.start()
     logger.info(f"Cron service started ({len(cron_service.list_jobs(include_disabled=True))} jobs)")
@@ -205,17 +211,60 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
 
 
 async def _stream_response(content: str, session_key: str, model: str):
-    """Stream response as SSE events."""
+    """Stream response as SSE events with intermediate progress."""
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    progress_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-    response_text = await _agent.process_direct(
-        content=content,
-        session_key=session_key,
-        channel="api",
-        chat_id="librechat",
-    )
+    async def _on_progress(text: str) -> None:
+        """Push intermediate progress (tool hints) to the SSE stream."""
+        if text:
+            await progress_queue.put(text)
 
-    # Send the full response as a single chunk (nanobot doesn't do token-level streaming)
+    async def _run_agent():
+        """Run the agent and signal completion."""
+        try:
+            result = await _agent.process_direct(
+                content=content,
+                session_key=session_key,
+                channel="api",
+                chat_id="librechat",
+                on_progress=_on_progress,
+            )
+            await progress_queue.put(None)  # Signal done
+            return result
+        except Exception as e:
+            await progress_queue.put(None)
+            return f"Error: {e}"
+
+    # Start agent processing in background
+    agent_task = asyncio.create_task(_run_agent())
+
+    # Stream intermediate progress as it arrives
+    progress_parts = []
+    while True:
+        item = await progress_queue.get()
+        if item is None:
+            break
+        progress_parts.append(item)
+        # Send progress as a chunk (shown as "thinking" text)
+        progress_text = f"⏳ {item}\n\n"
+        chunk = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "delta": {"role": "assistant", "content": progress_text},
+                "finish_reason": None,
+            }],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+
+    # Get final response
+    response_text = await agent_task
+
+    # Send the final response
     chunk = {
         "id": chat_id,
         "object": "chat.completion.chunk",
@@ -229,7 +278,7 @@ async def _stream_response(content: str, session_key: str, model: str):
     }
     yield f"data: {json.dumps(chunk)}\n\n"
 
-    # Send the final chunk
+    # Send done
     done_chunk = {
         "id": chat_id,
         "object": "chat.completion.chunk",
@@ -262,11 +311,21 @@ async def health(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+async def serve_screenshot(request: Request) -> FileResponse | JSONResponse:
+    """Serve a saved browser screenshot image."""
+    filename = request.path_params["filename"]
+    filepath = SCREENSHOTS_DIR / filename
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return FileResponse(filepath, media_type="image/png")
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
         Route("/v1/models", list_models, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
+        Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
     ],
     lifespan=lifespan,
 )

@@ -183,6 +183,7 @@ class AgentLoop:
         iteration = 0
         final_content = None
         tools_used: list[str] = []
+        screenshot_links: list[str] = []  # Collect markdown image links for final response
 
         while iteration < self.max_iterations:
             iteration += 1
@@ -224,9 +225,32 @@ class AgentLoop:
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
+
+                    # Collect screenshot markdown links from tool results
+                    for line in result.split("\n"):
+                        if line.startswith("![screenshot](http://localhost:18790/screenshots/"):
+                            screenshot_links.append(line)
+
+                    # Vision injection: if the tool captured screenshots, pipe them to the LLM
+                    tool_obj = self.tools.get(tool_call.name)
+                    if tool_obj and hasattr(tool_obj, "_pending_images") and tool_obj._pending_images:
+                        image_parts = []
+                        for data_url in tool_obj._pending_images:
+                            image_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+                        image_parts.append({
+                            "type": "text",
+                            "text": "Browser screenshot — analyze to understand current page state.",
+                        })
+                        messages.append({"role": "user", "content": image_parts})
+                        logger.info(f"Injected {len(tool_obj._pending_images)} screenshot(s) into LLM context")
+                        tool_obj._pending_images.clear()
             else:
                 final_content = self._strip_think(response.content)
                 break
+
+        # Append screenshot images to final response so they render inline in chat
+        if screenshot_links and final_content:
+            final_content = final_content + "\n\n" + "\n".join(screenshot_links)
 
         return final_content, tools_used
 
