@@ -23,3 +23,9 @@ tests/
 node_modules/
 LibreChat/
 bridge/dist/
+
+# Browser automation artifacts
+*.png
+*-login*.md
+*_search*.md
+*-homepage*.md
