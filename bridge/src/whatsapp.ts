@@ -9,6 +9,7 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 
 import { Boom } from '@hapi/boom';
@@ -24,6 +25,7 @@ export interface InboundMessage {
   content: string;
   timestamp: number;
   isGroup: boolean;
+  audioBase64?: string;  // Base64-encoded audio for voice messages
 }
 
 export interface WhatsAppClientOptions {
@@ -121,6 +123,18 @@ export class WhatsAppClient {
 
         const isGroup = msg.key.remoteJid?.endsWith('@g.us') || false;
 
+        // Download audio for voice messages
+        let audioBase64: string | undefined;
+        if (msg.message?.audioMessage) {
+          try {
+            const buffer = await downloadMediaMessage(msg, 'buffer', {});
+            audioBase64 = (buffer as Buffer).toString('base64');
+            console.log(`Downloaded voice message: ${(buffer as Buffer).length} bytes`);
+          } catch (err) {
+            console.error('Failed to download voice message:', err);
+          }
+        }
+
         this.options.onMessage({
           id: msg.key.id || '',
           sender: msg.key.remoteJid || '',
@@ -128,6 +142,7 @@ export class WhatsAppClient {
           content,
           timestamp: msg.messageTimestamp as number,
           isGroup,
+          audioBase64,
         });
       }
     });

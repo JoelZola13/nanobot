@@ -1,7 +1,10 @@
 """WhatsApp channel implementation using Node.js bridge."""
 
 import asyncio
+import base64
 import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -105,20 +108,35 @@ class WhatsAppChannel(BaseChannel):
             # Incoming message from WhatsApp
             # Deprecated by whatsapp: old phone number style typically: <phone>@s.whatspp.net
             pn = data.get("pn", "")
-            # New LID sytle typically: 
+            # New LID sytle typically:
             sender = data.get("sender", "")
             content = data.get("content", "")
-            
+
             # Extract just the phone number or lid as chat_id
             user_id = pn if pn else sender
             sender_id = user_id.split("@")[0] if "@" in user_id else user_id
-            logger.info(f"Sender {sender}")
-            
-            # Handle voice transcription if it's a voice message
-            if content == "[Voice Message]":
-                logger.info(f"Voice message received from {sender_id}, but direct download from bridge is not yet supported.")
-                content = "[Voice Message: Transcription not available for WhatsApp yet]"
-            
+            logger.info(f"WhatsApp message from {sender_id}: {content[:80]}")
+
+            # Transcribe voice messages if audio data is available
+            if content == "[Voice Message]" and data.get("audioBase64"):
+                transcription = await self._transcribe_audio(data["audioBase64"])
+                if transcription:
+                    content = f"[Voice Message] {transcription}"
+                else:
+                    content = "[Voice Message: Could not transcribe]"
+
+            # Skip auto-reply if disabled (send-only mode)
+            if not self.config.auto_reply_enabled:
+                logger.debug(f"WhatsApp auto-reply disabled, forwarding to Slack")
+                # Forward to Slack DM so Joel can review incoming messages
+                if self.config.forward_to_channel and self.config.forward_to_id:
+                    await self.bus.publish_outbound(OutboundMessage(
+                        channel=self.config.forward_to_channel,
+                        chat_id=self.config.forward_to_id,
+                        content=f"*WhatsApp from {sender_id}:*\n{content}",
+                    ))
+                return
+
             await self._handle_message(
                 sender_id=sender_id,
                 chat_id=sender,  # Use full LID for replies
@@ -146,3 +164,24 @@ class WhatsAppChannel(BaseChannel):
         
         elif msg_type == "error":
             logger.error(f"WhatsApp bridge error: {data.get('error')}")
+
+    async def _transcribe_audio(self, audio_b64: str) -> str:
+        """Transcribe base64-encoded audio using Groq Whisper."""
+        try:
+            from nanobot.providers.transcription import GroqTranscriptionProvider
+
+            audio_bytes = base64.b64decode(audio_b64)
+            with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+                f.write(audio_bytes)
+                tmp_path = f.name
+
+            provider = GroqTranscriptionProvider()
+            text = await provider.transcribe(tmp_path)
+            Path(tmp_path).unlink(missing_ok=True)
+
+            if text:
+                logger.info(f"Voice transcription: {text[:80]}")
+            return text
+        except Exception as e:
+            logger.error(f"Voice transcription failed: {e}")
+            return ""

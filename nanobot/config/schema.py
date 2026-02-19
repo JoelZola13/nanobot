@@ -18,6 +18,9 @@ class WhatsAppConfig(Base):
     enabled: bool = False
     bridge_url: str = "ws://localhost:3001"
     bridge_token: str = ""  # Shared token for bridge auth (optional, recommended)
+    auto_reply_enabled: bool = False  # If false, only send messages — never auto-reply
+    forward_to_channel: str = ""  # Forward incoming msgs to this channel (e.g. "slack")
+    forward_to_id: str = ""  # Chat/DM ID on the forward channel
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
