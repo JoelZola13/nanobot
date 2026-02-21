@@ -66,4 +66,29 @@ def _migrate_config(data: dict) -> dict:
     exec_cfg = tools.get("exec", {})
     if "restrictToWorkspace" in exec_cfg and "restrictToWorkspace" not in tools:
         tools["restrictToWorkspace"] = exec_cfg.pop("restrictToWorkspace")
+
+    # Seed tools.postiz from existing MCP postiz entry when the dedicated config
+    # doesn't exist yet (keeps legacy setups working after introducing the native
+    # Postiz tool config.
+    if isinstance(tools, dict) and "postiz" not in tools:
+        mcp_tools = tools.get("mcpServers") or {}
+        postiz_mcp = mcp_tools.get("postiz") if isinstance(mcp_tools, dict) else None
+        if isinstance(postiz_mcp, dict) and postiz_mcp.get("url"):
+            postiz_url = str(postiz_mcp["url"]).strip()
+            if postiz_url:
+                base_url = postiz_url.split("/api/mcp/")[0] or postiz_url
+                tools["postiz"] = {
+                    "enabled": True,
+                    "baseUrl": base_url.rstrip("/"),
+                    "apiKey": "",
+                    "apiKeyHeader": "Authorization",
+                    "apiKeyPrefix": "Bearer",
+                    "extraHeaders": {},
+                    "publishPath": "/api/v1/posts",
+                    "requestTimeout": 30,
+                    "defaultTargetHandle": "streetvoiceswatch",
+                    "defaultPlatform": "instagram",
+                    "defaultMaxCaptionChars": 2200,
+                }
+
     return data

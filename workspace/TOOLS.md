@@ -63,6 +63,68 @@ web_fetch(url: str, extractMode: str = "markdown", maxChars: int = 50000) -> str
 - Supports markdown or plain text extraction
 - Output is truncated at 50,000 characters by default
 
+## Social Publishing
+
+### postiz_publish
+Post to a Postiz endpoint for social publishing workflows.
+```
+postiz_publish(
+  caption: str = None,
+  sourceUrl: str = None,
+  targetHandle: str = "streetvoiceswatch",
+  platform: str = "instagram",
+  mediaUrls: list[str] = None,
+  hashtags: list[str] = None,
+  publish: bool = True,
+  path: str = None,
+  method: str = "POST",
+  payload: dict = None,
+  dryRun: bool = False,
+) -> str
+```
+
+Behavior:
+- If `caption` is missing, the tool tries to draft from `sourceUrl`.
+- `payload` sends a custom body directly to Postiz.
+- `path` overrides the endpoint relative to `tools.postiz.base_url`.
+- Requires `tools.postiz.enabled = true` and a reachable Postiz server.
+
+Quick config:
+```json
+{
+  "tools": {
+    "postiz": {
+      "enabled": true,
+      "baseUrl": "http://localhost:4007",
+      "apiKey": "your-token",
+      "extraHeaders": {"x-org-id": "your-org-id"},
+      "publishPath": "/api/v1/posts",
+      "defaultTargetHandle": "streetvoiceswatch",
+      "defaultPlatform": "instagram"
+    }
+  }
+}
+```
+
+### LibreChat workflow
+
+- Start nanobot API server:
+  - `./start-api.sh` (uses port `18790`)
+- In LibreChat, add a custom OpenAI-compatible provider:
+  - Base URL: `http://localhost:18790/v1`
+  - API key: any string (not used by nanobot API)
+- Post from chat by asking:
+  - `Post this caption to instagram for streetvoiceswatch`
+  - or `Use postiz_publish with sourceUrl https://www.streetvoices.ca/news-item and targetHandle streetvoiceswatch`
+- To force direct publish when needed:
+  - Use a tool call in the message and set `publish: true`.
+- For scheduled campaigns, ask the bot to craft a caption and immediately call
+  `postiz_publish(caption: "...", mediaUrls: [...])`.
+
+## Notes
+- Street Voices reference support can be done by passing `sourceUrl="https://www.streetvoices.ca"`.
+- `targetHandle` defaults to `streetvoiceswatch`.
+
 ## Communication
 
 ### message
