@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 from loguru import logger
 from starlette.applications import Starlette
@@ -850,10 +854,105 @@ async def serve_article_image(request: Request) -> FileResponse | JSONResponse:
     return FileResponse(filepath, media_type=media_type)
 
 
+async def audio_transcriptions(request: Request) -> JSONResponse:
+    """OpenAI-compatible STT endpoint — proxies to Groq Whisper."""
+    try:
+        form = await request.form()
+    except Exception:
+        return _openai_error("Invalid multipart form data", status_code=400)
+
+    upload = form.get("file")
+    if upload is None:
+        return _openai_error("Missing required field: file", param="file")
+
+    response_format = form.get("response_format", "json")
+
+    # Save uploaded file to a temp path
+    suffix = Path(upload.filename).suffix if upload.filename else ".wav"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await upload.read())
+        tmp_path = tmp.name
+
+    try:
+        from nanobot.providers.transcription import GroqTranscriptionProvider
+        provider = GroqTranscriptionProvider()
+        text = await provider.transcribe(tmp_path)
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        return _openai_error(f"Transcription failed: {e}", status_code=500)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+    if response_format == "text":
+        from starlette.responses import Response
+        return Response(text, media_type="text/plain")
+
+    return JSONResponse({"text": text})
+
+
+async def audio_speech(request: Request) -> StreamingResponse | JSONResponse:
+    """OpenAI-compatible TTS endpoint — proxies to OpenAI TTS API."""
+    try:
+        body = await request.json()
+    except Exception:
+        return _openai_error("Invalid JSON body", status_code=400)
+
+    text = body.get("input", "")
+    if not text:
+        return _openai_error("Missing required field: input", param="input")
+
+    voice = body.get("voice", "alloy")
+    model = body.get("model", "tts-1")
+    response_format = body.get("response_format", "mp3")
+    speed = body.get("speed", 1.0)
+
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return _openai_error("OPENAI_API_KEY not configured for TTS", status_code=500)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/audio/speech",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": model,
+                    "input": text,
+                    "voice": voice,
+                    "response_format": response_format,
+                    "speed": speed,
+                },
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        err = e.response.text[:500] if e.response else str(e)
+        return _openai_error(f"OpenAI TTS error: {err}", status_code=502)
+    except Exception as e:
+        return _openai_error(f"TTS request failed: {e}", status_code=500)
+
+    content_type = {
+        "mp3": "audio/mpeg",
+        "opus": "audio/opus",
+        "aac": "audio/aac",
+        "flac": "audio/flac",
+        "wav": "audio/wav",
+        "pcm": "audio/pcm",
+    }.get(response_format, "audio/mpeg")
+
+    return StreamingResponse(
+        content=iter([resp.content]),
+        media_type=content_type,
+        headers={"Content-Disposition": f'inline; filename="speech.{response_format}"'},
+    )
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
         Route("/v1/models", list_models, methods=["GET"]),
+        Route("/v1/audio/transcriptions", audio_transcriptions, methods=["POST"]),
+        Route("/v1/audio/speech", audio_speech, methods=["POST"]),
         Route("/health", health, methods=["GET"]),
         Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
         Route("/videos/{filename:path}", serve_video, methods=["GET"]),
