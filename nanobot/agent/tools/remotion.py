@@ -16,6 +16,8 @@ class RemotionComposeTool(Tool):
         "Create a new Remotion video composition. Writes a TSX file and registers it in Root.tsx. "
         "The code should export a named React component using Remotion APIs "
         "(useCurrentFrame, useVideoConfig, Sequence, AbsoluteFill, Img, Audio, etc). "
+        "To add narration/voiceover, first generate audio with the tts tool, then include it via "
+        "<Audio src={staticFile('audio/FILENAME.wav')}/> (import Audio from 'remotion' and staticFile from 'remotion'). "
         "After composing, use remotion_render to render it to mp4 or gif."
     )
     parameters = {
