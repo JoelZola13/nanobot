@@ -148,6 +148,16 @@ class AgentLoop:
         await self._mcp_stack.__aenter__()
         await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
 
+        # Register computer_use tool if Playwright MCP is available
+        if any("playwright" in name for name in self.tools.tool_names):
+            try:
+                from nanobot.agent.tools.computer_use import ComputerUseManager, ComputerUseTool
+                manager = ComputerUseManager(self.tools, self.provider, self.model)
+                self.tools.register(ComputerUseTool(manager))
+                logger.info("Computer use tool registered (Playwright MCP available)")
+            except Exception as e:
+                logger.debug(f"Computer use tool not available: {e}")
+
     def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""
         if message_tool := self.tools.get("message"):
