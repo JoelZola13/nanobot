@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-
-import httpx
 
 from loguru import logger
 from starlette.applications import Starlette
@@ -890,8 +887,15 @@ async def audio_transcriptions(request: Request) -> JSONResponse:
     return JSONResponse({"text": text})
 
 
+_QWEN_SPEAKERS = {"Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ryan", "Aiden", "Ono_Anna", "Sohee"}
+_OPENAI_VOICE_MAP = {
+    "alloy": "Ryan", "echo": "Ryan", "fable": "Ryan", "onyx": "Ryan", "shimmer": "Ryan",
+    "nova": "Vivian",
+}
+
+
 async def audio_speech(request: Request) -> StreamingResponse | JSONResponse:
-    """OpenAI-compatible TTS endpoint — proxies to OpenAI TTS API."""
+    """OpenAI-compatible TTS endpoint — generates speech locally via Qwen3-TTS."""
     try:
         body = await request.json()
     except Exception:
@@ -901,49 +905,33 @@ async def audio_speech(request: Request) -> StreamingResponse | JSONResponse:
     if not text:
         return _openai_error("Missing required field: input", param="input")
 
-    voice = body.get("voice", "alloy")
-    model = body.get("model", "tts-1")
-    response_format = body.get("response_format", "mp3")
-    speed = body.get("speed", 1.0)
+    voice = body.get("voice", "Ryan")
+    # Map OpenAI voice names → Qwen speaker; pass through if already a Qwen speaker name
+    speaker = voice if voice in _QWEN_SPEAKERS else _OPENAI_VOICE_MAP.get(voice, "Ryan")
 
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        return _openai_error("OPENAI_API_KEY not configured for TTS", status_code=500)
+    tmp_name = f"tts_{uuid.uuid4().hex[:12]}"
+    wav_path = AUDIO_DIR / f"{tmp_name}.wav"
 
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/audio/speech",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "input": text,
-                    "voice": voice,
-                    "response_format": response_format,
-                    "speed": speed,
-                },
-                timeout=60.0,
-            )
-            resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        err = e.response.text[:500] if e.response else str(e)
-        return _openai_error(f"OpenAI TTS error: {err}", status_code=502)
+        from nanobot.agent.tools.tts import QwenTTSTool
+        tool = QwenTTSTool(AUDIO_DIR)
+        result = await tool.execute(text=text, output_name=tmp_name, speaker=speaker)
+        if result.startswith("Error"):
+            return _openai_error(result, status_code=500)
     except Exception as e:
-        return _openai_error(f"TTS request failed: {e}", status_code=500)
+        logger.error(f"Qwen TTS failed: {e}")
+        return _openai_error(f"TTS failed: {e}", status_code=500)
 
-    content_type = {
-        "mp3": "audio/mpeg",
-        "opus": "audio/opus",
-        "aac": "audio/aac",
-        "flac": "audio/flac",
-        "wav": "audio/wav",
-        "pcm": "audio/pcm",
-    }.get(response_format, "audio/mpeg")
+    if not wav_path.exists():
+        return _openai_error("TTS produced no output file", status_code=500)
+
+    audio_bytes = wav_path.read_bytes()
+    wav_path.unlink(missing_ok=True)
 
     return StreamingResponse(
-        content=iter([resp.content]),
-        media_type=content_type,
-        headers={"Content-Disposition": f'inline; filename="speech.{response_format}"'},
+        content=iter([audio_bytes]),
+        media_type="audio/wav",
+        headers={"Content-Disposition": f'inline; filename="speech.wav"'},
     )
 
 
