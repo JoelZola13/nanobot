@@ -24,6 +24,12 @@ node_modules/
 LibreChat/
 bridge/dist/
 
+# Claude worktrees and config
+.claude/
+
+# Lock files
+uv.lock
+
 # Browser automation artifacts
 *.png
 *-login*.md

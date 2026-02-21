@@ -790,12 +790,46 @@ MCP tools are automatically discovered and registered on startup. The LLM can us
 | `nanobot agent --no-markdown` | Show plain-text replies |
 | `nanobot agent --logs` | Show runtime logs during chat |
 | `nanobot gateway` | Start the gateway |
+| `python -m nanobot.api_server` | Start the OpenAI-compatible API server for web UIs |
 | `nanobot status` | Show status |
 | `nanobot provider login openai-codex` | OAuth login for providers |
 | `nanobot channels login` | Link WhatsApp (scan QR) |
 | `nanobot channels status` | Show channel status |
 
 Interactive mode exits: `exit`, `quit`, `/exit`, `/quit`, `:q`, or `Ctrl+D`.
+
+### LibreChat integration
+
+Point LibreChat's OpenAI-compatible provider to:
+
+- Base URL: `http://localhost:18790/v1`
+
+Start server:
+
+```bash
+source /Users/joel/Projects/Nanobot/.venv/bin/activate
+python -m nanobot.api_server
+```
+
+Use Postiz posting by enabling `tools.postiz` in `~/.nanobot/config.json`:
+
+```json
+{
+  "tools": {
+    "postiz": {
+      "enabled": true,
+      "baseUrl": "http://localhost:4007",
+      "publishPath": "/api/v1/posts",
+      "defaultTargetHandle": "streetvoiceswatch",
+      "defaultPlatform": "instagram"
+    }
+  }
+}
+```
+
+Then in LibreChat, ask it to post:
+
+"Use Postiz to publish this caption to `streetvoiceswatch` on Instagram."
 
 <details>
 <summary><b>Scheduled Tasks (Cron)</b></summary>

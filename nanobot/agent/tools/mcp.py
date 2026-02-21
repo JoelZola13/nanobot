@@ -191,6 +191,7 @@ class MCPToolWrapper(Tool):
         from mcp import types
 
         result = await self._conn.call_tool(self._original_name, arguments=kwargs)
+        logger.debug(f"MCP tool '{self._original_name}' raw result: {result}")
         parts = []
         for block in result.content:
             if isinstance(block, types.TextContent):
