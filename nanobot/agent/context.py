@@ -25,30 +25,40 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
     
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        semantic_memories: list[str] | None = None,
+    ) -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
-        
+
         Args:
             skill_names: Optional list of skills to include.
-        
+            semantic_memories: Optional list of relevant memories from Mem0.
+
         Returns:
             Complete system prompt.
         """
         parts = []
-        
+
         # Core identity
         parts.append(self._get_identity())
-        
+
         # Bootstrap files
         bootstrap = self._load_bootstrap_files()
         if bootstrap:
             parts.append(bootstrap)
-        
+
         # Memory context
         memory = self.memory.get_memory_context()
         if memory:
             parts.append(f"# Memory\n\n{memory}")
+
+        # Semantic memories from Mem0
+        if semantic_memories:
+            bullets = "\n".join(f"- {m}" for m in semantic_memories)
+            parts.append(f"## Relevant Memories\n\nThese facts were recalled from past conversations:\n{bullets}")
         
         # Skills - progressive loading
         # 1. Always-loaded skills: include full content
@@ -108,6 +118,10 @@ IMPORTANT: When responding to direct questions or conversations, reply directly 
 Only use the 'message' tool when you need to send a message to a specific chat channel (like WhatsApp).
 For normal conversation, just respond with text - do not call the message tool.
 
+For social publishing requests, prefer the `postiz_publish` tool.
+If the user does not specify a target handle or platform, default to:
+targetHandle="streetvoiceswatch", platform="instagram".
+
 Always be helpful, accurate, and concise. Before calling tools, briefly tell the user what you're about to do (one short sentence in the user's language).
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
 To recall past events, grep {workspace_path}/memory/HISTORY.md"""
@@ -132,6 +146,7 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
+        semantic_memories: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Build the complete message list for an LLM call.
@@ -143,6 +158,7 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
             media: Optional list of local file paths for images/media.
             channel: Current channel (telegram, feishu, etc.).
             chat_id: Current chat/user ID.
+            semantic_memories: Optional relevant memories from Mem0.
 
         Returns:
             List of messages including system prompt.
@@ -150,7 +166,7 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
         messages = []
 
         # System prompt
-        system_prompt = self.build_system_prompt(skill_names)
+        system_prompt = self.build_system_prompt(skill_names, semantic_memories=semantic_memories)
         if channel and chat_id:
             system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
         messages.append({"role": "system", "content": system_prompt})
@@ -164,9 +180,33 @@ To recall past events, grep {workspace_path}/memory/HISTORY.md"""
 
         return messages
 
-    def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
+    def _build_user_content(self, text: str | list[dict[str, Any]], media: list[str] | None) -> str | list[dict[str, Any]]:
         """Build user message content with optional base64-encoded images."""
         if not media:
+            if isinstance(text, list):
+                parts: list[dict[str, Any]] = []
+                for item in text:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("type") in {"text", "input_text"}:
+                        text_part = item.get("text") or ""
+                        if isinstance(text_part, str) and text_part:
+                            parts.append({"type": "text", "text": text_part})
+                    elif item.get("type") == "image_url":
+                        image = item.get("image_url")
+                        if isinstance(image, dict):
+                            url = image.get("url")
+                        else:
+                            url = image
+                        if isinstance(url, str):
+                            parts.append({"type": "image_url", "image_url": {"url": url}})
+                    elif item.get("type") == "input_image":
+                        image_url = item.get("image_url")
+                        if isinstance(image_url, str):
+                            parts.append({"type": "image_url", "image_url": {"url": image_url}})
+                if parts:
+                    return parts
+                return "[image attachment]"
             return text
         
         images = []
