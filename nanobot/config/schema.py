@@ -263,6 +263,22 @@ class MCPServerConfig(Base):
     url: str = ""  # HTTP: streamable HTTP endpoint URL
 
 
+class PostizConfig(Base):
+    """Postiz publishing configuration."""
+
+    enabled: bool = False  # Enable Postiz publishing tool
+    base_url: str = "http://localhost:4007"  # Postiz base URL (e.g. http://localhost:4007)
+    api_key: str = ""  # API key or auth token for Postiz
+    api_key_header: str = "Authorization"
+    api_key_prefix: str = "Bearer"
+    extra_headers: dict[str, str] = Field(default_factory=dict)
+    publish_path: str = "/api/v1/posts"  # Primary Postiz endpoint for publishing
+    request_timeout: int = 30
+    default_target_handle: str = "streetvoiceswatch"
+    default_platform: str = "instagram"
+    default_max_caption_chars: int = 2200
+
+
 class ToolsConfig(Base):
     """Tools configuration."""
 
@@ -270,6 +286,7 @@ class ToolsConfig(Base):
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
+    postiz: PostizConfig = Field(default_factory=PostizConfig)
 
 
 class Config(BaseSettings):

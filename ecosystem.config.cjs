@@ -14,6 +14,9 @@ module.exports = {
       script: "/Users/joel/Projects/Nanobot/start-api.py",
       interpreter: "/Users/joel/Projects/Nanobot/.venv/bin/python",
       cwd: "/Users/joel/Projects/Nanobot",
+      env: {
+        GROQ_API_KEY: process.env.GROQ_API_KEY || "",
+      },
       autorestart: true,
       max_restarts: 50,
       restart_delay: 5000,
