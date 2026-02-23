@@ -1,0 +1,35 @@
+agents:
+  - name: ceo
+    role: lead
+    description: "Central coordinator and Joel's direct interface. Delegates tasks to team managers, resolves cross-team conflicts, and makes strategic decisions."
+    model: default
+    tools: [web_search, web_fetch, file_read, file_write, exec]
+    handoffs:
+      - communication_manager
+      - content_manager
+      - development_manager
+      - finance_manager
+      - grant_manager
+      - research_manager
+      - scraping_manager
+      - security_compliance
+    system_prompt: ceo.md
+    max_iterations: 30
+
+  - name: executive_memory
+    role: member
+    description: "Apex memory node aggregating insights from all department memory agents. Maintains organizational knowledge graph."
+    model: default
+    tools: [file_read, file_write]
+    handoffs: [ceo]
+    system_prompt: executive_memory.md
+    max_iterations: 10
+
+  - name: security_compliance
+    role: member
+    description: "Organization-wide security oversight, access control, compliance monitoring, and threat assessment."
+    model: default
+    tools: [file_read, web_search, exec]
+    handoffs: [ceo]
+    system_prompt: security_compliance.md
+    max_iterations: 15

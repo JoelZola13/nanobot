@@ -33,10 +33,12 @@ from nanobot.cron.service import CronService
 
 _agent: AgentLoop | None = None
 _cron: CronService | None = None
+_orchestrator: Any = None  # Orchestrator | None — lazy import to avoid circular deps
 
 
 def _make_provider(config):
     """Create the appropriate LLM provider from config (mirrors cli/commands.py)."""
+    from loguru import logger
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.providers.openai_codex_provider import OpenAICodexProvider
     from nanobot.providers.custom_provider import CustomProvider
@@ -55,6 +57,14 @@ def _make_provider(config):
             default_model=model,
         )
 
+    # Warn if no API key is configured — the LLM call will fail or hang
+    if not p or not p.api_key:
+        logger.warning(
+            f"No API key found for model '{model}' (provider: {provider_name}). "
+            f"LLM calls will fail. Configure the provider API key in config.yaml "
+            f"or set the appropriate environment variable."
+        )
+
     from nanobot.providers.registry import find_by_name
     spec = find_by_name(provider_name)
 
@@ -69,7 +79,7 @@ def _make_provider(config):
 
 @asynccontextmanager
 async def lifespan(app):
-    global _agent, _cron
+    global _agent, _cron, _orchestrator
     config = load_config()
     bus = MessageBus()
     provider = _make_provider(config)
@@ -177,6 +187,20 @@ async def lifespan(app):
         channel_manager = ChannelManager(config, bus)
         # Start the agent loop (consumes inbound from bus, publishes outbound)
         agent_task = asyncio.create_task(_agent.run())
+
+        def _on_agent_task_done(task: asyncio.Task) -> None:
+            try:
+                exc = task.exception()
+            except asyncio.CancelledError:
+                logger.warning("Agent task was cancelled")
+                return
+            if exc:
+                logger.critical(f"Agent task died with exception: {exc}", exc_info=exc)
+            else:
+                logger.warning("Agent task finished unexpectedly (no exception)")
+
+        agent_task.add_done_callback(_on_agent_task_done)
+
         # Start the channel manager (starts Slack + outbound dispatcher)
         channels_task = asyncio.create_task(channel_manager.start_all())
         logger.info("Slack channel started")
@@ -191,6 +215,43 @@ async def lifespan(app):
     except Exception as exc:
         _cron = None
         logger.warning(f"Cron service failed to start: {exc}. Continuing without cron scheduling.")
+
+    # ── Multi-agent system initialization ──
+    try:
+        from nanobot.agents.loader import load_agents
+        from nanobot.agents.factory import ToolFactory
+        from nanobot.agents.orchestrator import Orchestrator
+
+        teams_dir = Path(__file__).parent / "agents" / "teams"
+        agent_registry = load_agents(teams_dir)
+
+        if len(agent_registry) > 0:
+            tool_config: dict[str, Any] = {
+                "brave_api_key": config.tools.web.search.api_key or None,
+                "restrict_to_workspace": config.tools.restrict_to_workspace,
+                "shell": {
+                    "timeout": getattr(config.tools.exec, "timeout", 120),
+                },
+            }
+            tool_factory = ToolFactory(
+                agent_registry,
+                workspace=config.workspace_path,
+                tool_config=tool_config,
+            )
+            _orchestrator = Orchestrator(
+                provider=provider,
+                agent_registry=agent_registry,
+                tool_factory=tool_factory,
+                default_model=defaults.model,
+            )
+            logger.info(
+                f"Multi-agent system ready: {len(agent_registry)} agents across "
+                f"{len(agent_registry.get_teams())} teams"
+            )
+        else:
+            logger.info("No agent team definitions found — multi-agent system disabled")
+    except Exception as exc:
+        logger.warning(f"Multi-agent system not available: {exc}")
 
     logger.info("Nanobot API server ready")
     yield
@@ -468,6 +529,31 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
     if not messages or not all(isinstance(msg, dict) for msg in messages):
         return _openai_error("Invalid message format", code="invalid_request_error")
 
+    # ── Multi-agent routing ──
+    # If the requested model starts with "agent/", route to the Orchestrator
+    # instead of the single-agent AgentLoop.
+    if requested_model.startswith("agent/") and _orchestrator is not None:
+        agent_name = requested_model.removeprefix("agent/")
+
+        if stream:
+            return StreamingResponse(
+                _stream_agent_response(
+                    agent_name=agent_name,
+                    messages=messages,
+                    model_override=provider_model,
+                    requested_model=requested_model,
+                    include_usage=include_usage,
+                ),
+                media_type="text/event-stream",
+            )
+
+        result = await _orchestrator.run(
+            agent_name=agent_name,
+            messages=messages,
+            model_override=provider_model,
+        )
+        return JSONResponse(result.to_chat_completion(model=requested_model))
+
     if stream:
         return StreamingResponse(
             _stream_response(
@@ -663,6 +749,50 @@ async def _stream_response(
     yield "data: [DONE]\n\n"
 
 
+async def _stream_agent_response(
+    agent_name: str,
+    messages: list[dict],
+    model_override: str | None,
+    requested_model: str,
+    include_usage: bool,
+):
+    """Stream a multi-agent orchestrator response as SSE chunks."""
+    result = await _orchestrator.run(
+        agent_name=agent_name,
+        messages=messages,
+        model_override=model_override,
+    )
+
+    # Stream the content in a single chunk (the orchestrator doesn't support
+    # token-level streaming yet — we send the full response as one delta).
+    chunk = result.to_stream_chunk(delta_content=result.content)
+    chunk["model"] = requested_model
+    yield f"data: {json.dumps(chunk)}\n\n"
+
+    # Send the finish chunk
+    finish_chunk = result.to_stream_chunk(delta_content="")
+    finish_chunk["model"] = requested_model
+    yield f"data: {json.dumps(finish_chunk)}\n\n"
+
+    # Usage packet if requested
+    if include_usage and result.usage:
+        usage_chunk = {
+            "id": f"chatcmpl-{result.session_id}",
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": requested_model,
+            "choices": [],
+            "usage": {
+                "prompt_tokens": result.usage.get("prompt_tokens", 0),
+                "completion_tokens": result.usage.get("completion_tokens", 0),
+                "total_tokens": result.usage.get("total_tokens", 0),
+            },
+        }
+        yield f"data: {json.dumps(usage_chunk)}\n\n"
+
+    yield "data: [DONE]\n\n"
+
+
 async def list_models(request: Request) -> JSONResponse:
     """Handle GET /v1/models."""
     now = int(time.time())
@@ -682,6 +812,11 @@ async def list_models(request: Request) -> JSONResponse:
         {"id": model_id, "object": "model", "created": now, "owned_by": "nanobot"}
         for model_id in deduped
     ]
+
+    # Append multi-agent models if the orchestrator is available
+    if _orchestrator is not None:
+        models.extend(_orchestrator.list_agents())
+
     return JSONResponse({"object": "list", "data": models})
 
 

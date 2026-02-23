@@ -1,0 +1,59 @@
+agents:
+  - name: development_manager
+    role: lead
+    description: "Team lead for all software development and infrastructure. Coordinates backend, frontend, database, and DevOps work."
+    model: default
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file]
+    handoffs:
+      - backend_developer
+      - frontend_developer
+      - database_manager
+      - devops
+      - ceo
+    system_prompt: development_manager.md
+    max_iterations: 25
+
+  - name: backend_developer
+    role: member
+    description: "Server-side code, APIs, services, and business logic implementation."
+    model: default
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file]
+    handoffs: [development_manager, database_manager]
+    system_prompt: backend_developer.md
+    max_iterations: 25
+
+  - name: frontend_developer
+    role: member
+    description: "Client-side UI, interactive experiences, and frontend architecture."
+    model: default
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file]
+    handoffs: [development_manager]
+    system_prompt: frontend_developer.md
+    max_iterations: 25
+
+  - name: database_manager
+    role: member
+    description: "Schema design, migrations, query optimization, and data integrity."
+    model: default
+    tools: [web_search, file_read, file_write, exec]
+    handoffs: [development_manager, backend_developer]
+    system_prompt: database_manager.md
+    max_iterations: 20
+
+  - name: devops
+    role: member
+    description: "Infrastructure, CI/CD, deployment, monitoring, and system reliability."
+    model: default
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir]
+    handoffs: [development_manager]
+    system_prompt: devops.md
+    max_iterations: 20
+
+  - name: development_memory
+    role: member
+    description: "Background worker capturing architecture decisions, bugs, deployments, and technical debt."
+    model: default
+    tools: [file_read, file_write]
+    handoffs: [development_manager]
+    system_prompt: development_memory.md
+    max_iterations: 10

@@ -1,0 +1,40 @@
+agents:
+  - name: finance_manager
+    role: lead
+    description: "Oversees all financial operations — bookkeeping, crypto, reporting. Owns the organization's complete financial picture and coordinates unified views across traditional and crypto assets."
+    model: default
+    tools: [web_search, file_read, file_write, calculator, spreadsheet_read]
+    handoffs:
+      - accounting_agent
+      - crypto_agent
+      - finance_memory
+      - ceo
+    system_prompt: finance_manager.md
+    max_iterations: 20
+
+  - name: accounting_agent
+    role: member
+    description: "Manages bookkeeping, transaction tracking, financial reporting, invoicing, and tax preparation across all business activities."
+    model: default
+    tools: [file_read, file_write, calculator, spreadsheet_read, invoice_generator]
+    handoffs: [finance_manager]
+    system_prompt: accounting_agent.md
+    max_iterations: 15
+
+  - name: crypto_agent
+    role: member
+    description: "Manages cryptocurrency portfolio tracking, wallet monitoring, market analysis, DeFi operations, and crypto tax reporting."
+    model: default
+    tools: [web_search, crypto_api, file_read, file_write, calculator]
+    handoffs: [finance_manager]
+    system_prompt: crypto_agent.md
+    max_iterations: 15
+
+  - name: finance_memory
+    role: member
+    description: "Passive background worker capturing all financial events, transaction histories, budget decisions, and commitment deadlines."
+    model: default
+    tools: [file_read, file_write]
+    handoffs: [finance_manager]
+    system_prompt: finance_memory.md
+    max_iterations: 10
