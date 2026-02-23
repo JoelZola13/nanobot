@@ -535,12 +535,16 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
     if requested_model.startswith("agent/") and _orchestrator is not None:
         agent_name = requested_model.removeprefix("agent/")
 
+        # Don't pass the "agent/xxx" model name to the orchestrator —
+        # let it resolve models from agent specs + default_model instead.
+        agent_model_override = None
+
         if stream:
             return StreamingResponse(
                 _stream_agent_response(
                     agent_name=agent_name,
                     messages=messages,
-                    model_override=provider_model,
+                    model_override=agent_model_override,
                     requested_model=requested_model,
                     include_usage=include_usage,
                 ),
@@ -550,7 +554,7 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
         result = await _orchestrator.run(
             agent_name=agent_name,
             messages=messages,
-            model_override=provider_model,
+            model_override=agent_model_override,
         )
         return JSONResponse(result.to_chat_completion(model=requested_model))
 

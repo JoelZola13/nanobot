@@ -22,6 +22,7 @@ TOOL_CATALOG: dict[str, tuple[str, str]] = {
     "file_edit": ("nanobot.agent.tools.filesystem", "EditFileTool"),
     "list_dir": ("nanobot.agent.tools.filesystem", "ListDirTool"),
     "shell": ("nanobot.agent.tools.shell", "ExecTool"),
+    "exec": ("nanobot.agent.tools.shell", "ExecTool"),  # alias for shell
     "email_send": ("nanobot.agent.tools.email_tools", "EmailSendTool"),
     "email_read": ("nanobot.agent.tools.email_tools", "EmailReadTool"),
     "image_gen": ("nanobot.agent.tools.image_gen", "ImageGenTool"),
@@ -121,7 +122,7 @@ class ToolFactory:
             if self._tool_config.get("restrict_to_workspace"):
                 kwargs["allowed_dir"] = self._workspace
 
-        if tool_name == "shell":
+        if tool_name in ("shell", "exec"):
             kwargs["working_dir"] = str(self._workspace)
             shell_config = self._tool_config.get("shell", {})
             if "timeout" in shell_config:
