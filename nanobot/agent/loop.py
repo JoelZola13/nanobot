@@ -1,11 +1,14 @@
 """Agent loop: the core processing engine."""
 
 import asyncio
+import base64
+import mimetypes
 from contextlib import AsyncExitStack
 import json
 import json_repair
 from pathlib import Path
 import re
+import tempfile
 from typing import Any, Awaitable, Callable
 
 from loguru import logger
@@ -93,6 +96,7 @@ class AgentLoop:
         )
         
         self.mem0 = None  # Mem0Store, set externally by api_server
+        self.orchestrator = None  # Orchestrator, set externally by api_server for multi-agent routing
 
         self._running = False
         self._mcp_servers = mcp_servers or {}
@@ -225,7 +229,7 @@ class AgentLoop:
                         if isinstance(image_url, str):
                             parts.append({"type": "image_url", "image_url": {"url": image_url}})
                     elif part.get("type") in {"input_audio", "audio"}:
-                        parts.append({"type": "text", "text": "[audio attachment]"})
+                        parts.append(part)
                 content = parts
             elif not isinstance(content, str):
                 content = json.dumps(content)
@@ -239,6 +243,118 @@ class AgentLoop:
             normalized.append(entry)
 
         return normalized
+
+    @staticmethod
+    def _normalize_audio_extension_from_mime(mime: str | None) -> str:
+        """Map MIME type to a temp-file extension for transcription."""
+        if not mime:
+            return ".wav"
+        extension = mimetypes.guess_extension(mime)
+        return extension or ".wav"
+
+    @staticmethod
+    async def _transcribe_api_audio_part(part: dict[str, Any]) -> str:
+        """Transcribe an API audio attachment using the Groq transcription provider."""
+        try:
+            from nanobot.providers.transcription import GroqTranscriptionProvider
+        except Exception:
+            logger.exception("Failed to import Groq transcription provider")
+            return ""
+
+        provider = GroqTranscriptionProvider()
+        if not provider.api_key:
+            return ""
+
+        source: str | None = None
+        source_is_base64 = False
+        fmt: str | None = None
+        mime: str | None = None
+
+        audio_data = part.get("input_audio")
+        if isinstance(audio_data, dict):
+            fmt = audio_data.get("format")
+            mime = audio_data.get("mime_type")
+            if isinstance(audio_data.get("data"), str):
+                source = audio_data["data"]
+                source_is_base64 = True
+            elif isinstance(audio_data.get("url"), str):
+                source = audio_data["url"]
+
+        if source is None:
+            audio_url = part.get("audio_url")
+            if isinstance(audio_url, dict) and isinstance(audio_url.get("url"), str):
+                source = audio_url["url"]
+            elif isinstance(audio_url, str):
+                source = audio_url
+
+        if source is None and isinstance(part.get("url"), str):
+            source = part["url"]
+
+        if source is None:
+            return ""
+
+        extension = (
+            f".{fmt.lstrip('.')}"
+            if isinstance(fmt, str) and fmt
+            else AgentLoop._normalize_audio_extension_from_mime(mime)
+        )
+
+        if source_is_base64 and source.startswith("data:"):
+            if "," in source:
+                _, source = source.split(",", 1)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            if source_is_base64:
+                try:
+                    audio_bytes = base64.b64decode(source)
+                except Exception:
+                    logger.warning("Could not decode base64 audio attachment")
+                    return ""
+                Path(tmp_path).write_bytes(audio_bytes)
+            else:
+                import httpx
+
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.get(source, follow_redirects=True)
+                    response.raise_for_status()
+                Path(tmp_path).write_bytes(response.content)
+
+            return await provider.transcribe(tmp_path)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    async def _resolve_audio_attachments(self, messages: list[dict[str, Any]]) -> None:
+        """Transcribe inline/audio attachments in API message content."""
+        for msg in messages:
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+
+            changed = False
+            next_parts: list[Any] = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") in {"input_audio", "audio"}:
+                    changed = True
+                    transcript = await self._transcribe_api_audio_part(part)
+                    if transcript:
+                        next_parts.append({
+                            "type": "text",
+                            "text": f"[audio attachment: {transcript}]",
+                        })
+                    else:
+                        next_parts.append({
+                            "type": "text",
+                            "text": "[audio attachment]",
+                        })
+                    continue
+
+                next_parts.append(part)
+
+            if changed:
+                msg["content"] = next_parts
 
     @staticmethod
     def _extract_last_user_text(messages: list[dict[str, Any]]) -> str:
@@ -288,6 +404,7 @@ class AgentLoop:
         """
         await self._connect_mcp()
         normalized = self._normalize_api_messages(messages)
+        await self._resolve_audio_attachments(normalized)
         if not normalized:
             if return_usage:
                 return "", [], {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}, "stop"
@@ -603,6 +720,13 @@ class AgentLoop:
 
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
+        try:
+            await self._run_inner()
+        except Exception as e:
+            logger.critical(f"Agent loop crashed: {e}", exc_info=True)
+            raise
+
+    async def _run_inner(self) -> None:
         self._running = True
         await self._connect_mcp()
         logger.info("Agent loop started")
@@ -614,15 +738,20 @@ class AgentLoop:
                     timeout=1.0
                 )
                 try:
+                    logger.debug(f"Agent loop: processing message from {msg.channel}:{msg.sender_id}")
                     response = await self._process_message(msg)
                     if response:
+                        logger.debug(f"Agent loop: publishing outbound to {response.channel}:{response.chat_id} ({len(response.content)} chars)")
                         await self.bus.publish_outbound(response)
+                    else:
+                        logger.warning(f"Agent loop: _process_message returned None for {msg.channel}:{msg.sender_id}")
                 except Exception as e:
-                    logger.error(f"Error processing message: {e}")
+                    logger.error(f"Error processing message: {e}", exc_info=True)
                     await self.bus.publish_outbound(OutboundMessage(
                         channel=msg.channel,
                         chat_id=msg.chat_id,
-                        content=f"Sorry, I encountered an error: {str(e)}"
+                        content=f"Sorry, I encountered an error: {str(e)}",
+                        metadata=msg.metadata or {},
                     ))
             except asyncio.TimeoutError:
                 continue
@@ -708,28 +837,53 @@ class AgentLoop:
             except Exception as e:
                 logger.warning(f"Mem0 search error: {e}")
 
-        initial_messages = self.context.build_messages(
-            history=session.get_history(max_messages=self.memory_window),
-            current_message=msg.content,
-            media=msg.media if msg.media else None,
-            channel=msg.channel,
-            chat_id=msg.chat_id,
-            semantic_memories=semantic_memories,
-        )
-
         async def _bus_progress(content: str) -> None:
             await self.bus.publish_outbound(OutboundMessage(
                 channel=msg.channel, chat_id=msg.chat_id, content=content,
                 metadata=msg.metadata or {},
             ))
 
-        final_content, tools_used, _, _ = await self._run_agent_loop(
-            initial_messages, on_progress=on_progress or _bus_progress,
-            model_override=model_override,
-            temperature_override=temperature_override,
-            max_tokens_override=max_tokens_override,
-            max_iterations_override=max_iterations_override,
-        )
+        # Multi-agent path: route through the Orchestrator (CEO as entry point)
+        if self.orchestrator is not None:
+            # Build messages in OpenAI format for the Orchestrator
+            history = session.get_history(max_messages=self.memory_window)
+            orchestrator_messages = list(history)
+            # Build user content (with optional media)
+            user_content = self.context._build_user_content(
+                msg.content, msg.media if msg.media else None
+            )
+            orchestrator_messages.append({"role": "user", "content": user_content})
+
+            result = await self.orchestrator.run(
+                agent_name="ceo",
+                messages=orchestrator_messages,
+                session_id=key,
+                model_override=model_override,
+            )
+            final_content = result.content
+            tools_used: list[str] = []
+            logger.info(
+                f"Multi-agent response via {' → '.join(result.handoff_chain)} "
+                f"(finish={result.finish_reason})"
+            )
+        else:
+            # Single-agent path: existing behavior
+            initial_messages = self.context.build_messages(
+                history=session.get_history(max_messages=self.memory_window),
+                current_message=msg.content,
+                media=msg.media if msg.media else None,
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                semantic_memories=semantic_memories,
+            )
+
+            final_content, tools_used, _, _ = await self._run_agent_loop(
+                initial_messages, on_progress=on_progress or _bus_progress,
+                model_override=model_override,
+                temperature_override=temperature_override,
+                max_tokens_override=max_tokens_override,
+                max_iterations_override=max_iterations_override,
+            )
 
         if final_content is None:
             final_content = "I've completed processing but have no response to give."

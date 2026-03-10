@@ -1,9 +1,13 @@
 """Agent instance — runtime execution loop for a single agent."""
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from loguru import logger
+
+# Type alias for the progress callback
+ProgressCallback = Callable[[str], Awaitable[None]] | None
 
 from nanobot.providers.base import LLMProvider, LLMResponse
 from nanobot.agent.tools.registry import ToolRegistry
@@ -38,6 +42,7 @@ class AgentInstance:
         self,
         messages: list[dict[str, Any]],
         model: str | None = None,
+        on_progress: ProgressCallback = None,
     ) -> "AgentResult":
         """
         Execute the agent loop until it produces a response or handoff.
@@ -46,6 +51,7 @@ class AgentInstance:
             messages: Conversation messages (system prompt should already
                       be prepended by the Orchestrator).
             model: Override model (defaults to spec.model resolved by Orchestrator).
+            on_progress: Async callback for streaming progress updates.
 
         Returns:
             AgentResult with either a text response or a handoff signal.
@@ -105,7 +111,27 @@ class AgentInstance:
                     logger.debug(
                         f"Agent '{self.spec.name}' calling tool: {tc.name}"
                     )
+                    logger.debug(
+                        f"  Tool args: {json.dumps(tc.arguments)[:200]}"
+                    )
+
+                    # Stream tool call progress
+                    if on_progress:
+                        await on_progress(
+                            f"🔧 **{self.spec.name}** → `{tc.name}`"
+                        )
+
+                    # Propagate on_progress to delegate tools so sub-agents
+                    # can also stream their progress
+                    tool_impl = self.tools.get(tc.name)
+                    if tool_impl and hasattr(tool_impl, '_on_progress'):
+                        tool_impl._on_progress = on_progress
+
                     result = await self.tools.execute(tc.name, tc.arguments)
+                    logger.info(
+                        f"  Tool '{tc.name}' result ({len(result)} chars): "
+                        f"{result[:300]}"
+                    )
 
                     # Check if the tool result is a handoff signal
                     if is_handoff_signal(result):

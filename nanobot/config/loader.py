@@ -76,17 +76,18 @@ def _migrate_config(data: dict) -> dict:
         if isinstance(postiz_mcp, dict) and postiz_mcp.get("url"):
             postiz_url = str(postiz_mcp["url"]).strip()
             if postiz_url:
-                base_url = postiz_url.split("/api/mcp/")[0] or postiz_url
+                parts = postiz_url.split("/api/mcp/", 1)
+                base_url = parts[0] or postiz_url
+                api_key = parts[1] if len(parts) > 1 else ""
                 tools["postiz"] = {
                     "enabled": True,
                     "baseUrl": base_url.rstrip("/"),
-                    "apiKey": "",
+                    "apiKey": api_key,
                     "apiKeyHeader": "Authorization",
                     "apiKeyPrefix": "Bearer",
                     "extraHeaders": {},
-                    "publishPath": "/api/v1/posts",
+                    "publishPath": "/api/public/v1/posts",
                     "requestTimeout": 30,
-                    "defaultTargetHandle": "streetvoiceswatch",
                     "defaultPlatform": "instagram",
                     "defaultMaxCaptionChars": 2200,
                 }

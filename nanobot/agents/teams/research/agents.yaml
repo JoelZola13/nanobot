@@ -2,7 +2,7 @@ agents:
   - name: research_manager
     role: lead
     description: "Coordinates research operations, prioritizes requests, synthesizes findings, and delivers intelligence briefs across all research domains."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, file_read, file_write, news_search]
     handoffs:
       - media_platform_researcher
@@ -16,7 +16,7 @@ agents:
   - name: media_platform_researcher
     role: member
     description: "Analyzes social media platforms, content distribution networks, algorithm changes, and digital media ecosystems."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, file_read, file_write, news_search]
     handoffs: [research_manager]
     system_prompt: media_platform_researcher.md
@@ -25,7 +25,7 @@ agents:
   - name: media_program_researcher
     role: member
     description: "Researches media programs, grants, fellowships, residencies, and institutional opportunities in media and arts."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, file_read, file_write, academic_search, news_search]
     handoffs: [research_manager]
     system_prompt: media_program_researcher.md
@@ -34,7 +34,7 @@ agents:
   - name: street_bot_researcher
     role: member
     description: "Street-level research specialist gathering hyperlocal intelligence, community data, and urban environment information for Street Bot Pro."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, file_read, file_write, news_search]
     handoffs: [research_manager, scraping_manager]
     system_prompt: street_bot_researcher.md
@@ -43,7 +43,7 @@ agents:
   - name: research_memory
     role: member
     description: "Background memory layer indexing all research activity, tracking source reliability, and surfacing prior findings on demand."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write]
     handoffs: [research_manager]
     system_prompt: research_memory.md

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad_executive_memory" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <radialGradient id="bg_executive_memory" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#D4AF37" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1a1a2e" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow_executive_memory" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1a1a2e" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Outer ring decoration -->
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#D4AF37" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.35"/>
+
+  <!-- Main circle with gradient -->
+  <circle cx="60" cy="60" r="46" fill="url(#grad_executive_memory)" filter="url(#shadow_executive_memory)"/>
+
+  <!-- Inner highlight -->
+  <circle cx="60" cy="60" r="46" fill="url(#bg_executive_memory)"/>
+
+  <!-- Role glyph -->
+  <g opacity="0.85" transform="translate(60,38)">
+    <circle cx="0" cy="0" r="5" fill="none" stroke="#f5e6b8" stroke-width="1.2"/>
+    <path d="M-3,-1 Q0,-4 3,-1" fill="none" stroke="#f5e6b8" stroke-width="1"/>
+    <path d="M-3,1 Q0,4 3,1" fill="none" stroke="#f5e6b8" stroke-width="1"/>
+    <line x1="0" y1="-5" x2="0" y2="-8" stroke="#f5e6b8" stroke-width="1"/>
+    <line x1="-4" y1="-3" x2="-7" y2="-5" stroke="#f5e6b8" stroke-width="1"/>
+    <line x1="4" y1="-3" x2="7" y2="-5" stroke="#f5e6b8" stroke-width="1"/>
+    <circle cx="0" cy="-8" r="1.2" fill="#f5e6b8"/>
+    <circle cx="-7" cy="-5" r="1.2" fill="#f5e6b8"/>
+    <circle cx="7" cy="-5" r="1.2" fill="#f5e6b8"/>
+  </g>
+
+  <!-- Initials -->
+  <text x="60" y="68"
+        text-anchor="middle" dominant-baseline="middle"
+        font-family="'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+        font-size="26" font-weight="600"
+        fill="#ffffff" letter-spacing="1.5">
+    EM
+  </text>
+</svg>

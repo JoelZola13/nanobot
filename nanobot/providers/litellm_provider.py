@@ -1,5 +1,6 @@
 """LiteLLM provider implementation for multi-provider support."""
 
+import asyncio
 import json
 import json_repair
 import os
@@ -7,9 +8,14 @@ from typing import Any
 
 import litellm
 from litellm import acompletion
+from loguru import logger
 
 from nanobot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
 from nanobot.providers.registry import find_by_model, find_gateway
+
+# Default timeout for LLM API calls (seconds). Prevents indefinite hangs
+# when the provider is unreachable or API key is missing/invalid.
+LLM_CALL_TIMEOUT = 300  # 5 minutes
 
 
 class LiteLLMProvider(LLMProvider):
@@ -156,11 +162,27 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
         
+        if not self.api_key:
+            logger.warning(f"No API key configured for model {model} — LLM call will likely fail")
+
+        logger.debug(f"LLM call: model={model}, messages={len(messages)}, tools={len(tools) if tools else 0}")
+
         try:
-            response = await acompletion(**kwargs)
+            response = await asyncio.wait_for(
+                acompletion(**kwargs),
+                timeout=LLM_CALL_TIMEOUT,
+            )
+            logger.debug(f"LLM response received: finish_reason={response.choices[0].finish_reason}")
             return self._parse_response(response)
+        except asyncio.TimeoutError:
+            logger.error(f"LLM call timed out after {LLM_CALL_TIMEOUT}s for model {model}")
+            return LLMResponse(
+                content=f"Error: LLM call timed out after {LLM_CALL_TIMEOUT} seconds. Check your API key and provider configuration.",
+                finish_reason="error",
+            )
         except Exception as e:
             # Return error as content for graceful handling
+            logger.error(f"LLM call failed for model {model}: {e}")
             return LLMResponse(
                 content=f"Error calling LLM: {str(e)}",
                 finish_reason="error",

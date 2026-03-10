@@ -402,9 +402,66 @@ def gateway(
         enabled=True
     )
     
+    # ── Multi-agent system initialization ──
+    try:
+        from pathlib import Path as _Path
+        from nanobot.agents.loader import load_agents
+        from nanobot.agents.factory import ToolFactory
+        from nanobot.agents.orchestrator import Orchestrator
+
+        teams_dir = _Path(__file__).resolve().parent.parent / "agents" / "teams"
+        agent_registry = load_agents(teams_dir)
+
+        if len(agent_registry) > 0:
+            tool_config: dict = {
+                "brave_api_key": config.tools.web.search.api_key or None,
+                "restrict_to_workspace": config.tools.restrict_to_workspace,
+                "shell": {
+                    "timeout": getattr(config.tools.exec, "timeout", 120),
+                },
+            }
+            tool_factory = ToolFactory(
+                agent_registry,
+                workspace=config.workspace_path,
+                tool_config=tool_config,
+                provider=provider,
+            )
+            orchestrator = Orchestrator(
+                provider=provider,
+                agent_registry=agent_registry,
+                tool_factory=tool_factory,
+                default_model=config.agents.defaults.model,
+            )
+            agent.orchestrator = orchestrator
+
+            # Wire up binding resolver for multi-agent routing
+            from nanobot.routing import BindingResolver, BindingRule
+            rules = [
+                BindingRule(
+                    channel=b.channel, account=b.account, peer=b.peer,
+                    agent=b.agent, session_namespace=b.session_namespace,
+                )
+                for b in config.routing.bindings
+            ]
+            if rules:
+                agent.binding_resolver = BindingResolver(
+                    rules=rules, default_agent=config.routing.default_agent,
+                )
+                console.print(f"[green]✓[/green] Routing: {len(rules)} binding rules")
+
+            console.print(
+                f"[green]✓[/green] Multi-agent system: "
+                f"{len(agent_registry)} agents across "
+                f"{len(agent_registry.get_teams())} teams"
+            )
+        else:
+            console.print("[yellow]No agent team definitions found — multi-agent system disabled[/yellow]")
+    except Exception as exc:
+        console.print(f"[yellow]Multi-agent system not available: {exc}[/yellow]")
+
     # Create channel manager
     channels = ChannelManager(config, bus)
-    
+
     if channels.enabled_channels:
         console.print(f"[green]✓[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
     else:
@@ -1000,6 +1057,182 @@ def _login_github_copilot() -> None:
     except Exception as e:
         console.print(f"[red]Authentication error: {e}[/red]")
         raise typer.Exit(1)
+
+
+# ============================================================================
+# Talk (voice) command
+# ============================================================================
+
+
+@app.command()
+def talk(
+    speaker: str = typer.Option("Ryan", "--speaker", "-s", help="TTS voice (Ryan, Vivian, Serena, Dylan, Eric, Aiden)"),
+    wake_words: str = typer.Option("hey nanobot,nanobot", "--wake-words", "-w", help="Comma-separated wake words"),
+    session_id: str = typer.Option("voice:direct", "--session", help="Session ID"),
+    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show runtime logs"),
+):
+    """Start hands-free voice talk mode with wake word detection."""
+    try:
+        import sounddevice  # noqa: F401
+    except ImportError:
+        console.print("[red]sounddevice not installed. Run: pip install nanobot[voice][/red]")
+        raise typer.Exit(1)
+
+    from nanobot.config.loader import load_config, get_data_dir
+    from nanobot.bus.queue import MessageBus
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.cron.service import CronService
+    from nanobot.voice.pipeline import VoicePipeline
+    from loguru import logger
+
+    config = load_config()
+
+    if logs:
+        logger.enable("nanobot")
+    else:
+        logger.disable("nanobot")
+
+    bus = MessageBus()
+    provider = _make_provider(config)
+    cron_store_path = get_data_dir() / "cron" / "jobs.json"
+    cron = CronService(cron_store_path)
+
+    agent_loop = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        temperature=config.agents.defaults.temperature,
+        max_tokens=config.agents.defaults.max_tokens,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        memory_window=config.agents.defaults.memory_window,
+        brave_api_key=config.tools.web.search.api_key or None,
+        exec_config=config.tools.exec,
+        cron_service=cron,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        mcp_servers=config.tools.mcp_servers,
+        postiz_config=config.tools.postiz,
+    )
+
+    # Use config voice settings with CLI overrides
+    voice_cfg = config.voice
+    wake_word_list = [w.strip() for w in wake_words.split(",") if w.strip()] or voice_cfg.wake_words
+
+    async def agent_fn(query: str) -> str:
+        """Send user query to the agent and return the text response."""
+        response = await agent_loop.process_direct(query, session_id)
+        return response or "I'm not sure how to respond to that."
+
+    pipeline = VoicePipeline(
+        agent_fn=agent_fn,
+        wake_words=wake_word_list,
+        speaker=speaker or voice_cfg.speaker,
+        vad_threshold=voice_cfg.vad_threshold,
+        silence_duration_ms=voice_cfg.silence_duration_ms,
+        listen_timeout_s=voice_cfg.listen_timeout_s,
+    )
+
+    console.print(f"{__logo__} [bold]Voice Talk Mode[/bold]")
+    console.print(f"  Wake words: [cyan]{', '.join(wake_word_list)}[/cyan]")
+    console.print(f"  Speaker: [cyan]{speaker}[/cyan]")
+    console.print(f"  Press [bold]Ctrl+C[/bold] to stop.\n")
+
+    def _exit_on_sigint(signum, frame):
+        pipeline.stop()
+        console.print("\n[dim]Stopping voice pipeline...[/dim]")
+        os._exit(0)
+
+    signal.signal(signal.SIGINT, _exit_on_sigint)
+
+    try:
+        asyncio.run(pipeline.run())
+    except KeyboardInterrupt:
+        console.print("\nGoodbye!")
+
+
+@app.command()
+def news(
+    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show runtime logs"),
+):
+    """Run the daily news pipeline — research and write 3 Street Voices articles."""
+    from nanobot.config.loader import load_config
+    from nanobot.agents.loader import load_agents
+    from nanobot.agents.factory import ToolFactory
+    from nanobot.agents.orchestrator import Orchestrator
+    from loguru import logger
+
+    if logs:
+        logger.enable("nanobot")
+    else:
+        logger.disable("nanobot")
+
+    config = load_config()
+    provider = _make_provider(config)
+
+    # Load multi-agent system
+    teams_dir = Path(__file__).resolve().parent.parent / "agents" / "teams"
+    agent_registry = load_agents(teams_dir)
+
+    if len(agent_registry) == 0:
+        console.print("[red]Error: No agent teams found.[/red]")
+        raise typer.Exit(1)
+
+    tool_config: dict = {
+        "brave_api_key": config.tools.web.search.api_key or None,
+        "restrict_to_workspace": config.tools.restrict_to_workspace,
+        "shell": {"timeout": getattr(config.tools.exec, "timeout", 120)},
+    }
+    tool_factory = ToolFactory(
+        agent_registry,
+        workspace=config.workspace_path,
+        tool_config=tool_config,
+        provider=provider,
+    )
+    orchestrator = Orchestrator(
+        provider=provider,
+        agent_registry=agent_registry,
+        tool_factory=tool_factory,
+        default_model=config.agents.defaults.model,
+    )
+
+    pipeline_message = (
+        "Run daily news pipeline for Street Voices: research and write "
+        "one local, one national, and one international article."
+    )
+
+    console.print(f"[cyan]{__logo__} Street Voices Daily News Pipeline[/cyan]")
+    console.print("[dim]Starting research and writing for 3 categories...[/dim]\n")
+
+    async def run_pipeline():
+        result = await orchestrator.run(
+            agent_name="content_manager",
+            messages=[{"role": "user", "content": pipeline_message}],
+            session_id="news-pipeline",
+        )
+        return result
+
+    with console.status("[dim]Pipeline running...[/dim]", spinner="dots"):
+        result = asyncio.run(run_pipeline())
+
+    _print_agent_response(result.content, render_markdown=True)
+    console.print(f"[dim]Agents: {' → '.join(result.handoff_chain)}[/dim]")
+
+    # List any articles saved today
+    from datetime import date
+
+    articles_dir = config.workspace_path / "output" / "articles"
+    today = date.today().isoformat()
+    if articles_dir.exists():
+        today_articles = sorted(articles_dir.glob(f"{today}*.md"))
+        if today_articles:
+            console.print(f"\n[green]✓ {len(today_articles)} article(s) saved:[/green]")
+            for a in today_articles:
+                console.print(f"  • {a.name}")
+        else:
+            console.print(
+                "\n[yellow]⚠ No articles found for today. "
+                "Check output/articles/ for files.[/yellow]"
+            )
 
 
 if __name__ == "__main__":

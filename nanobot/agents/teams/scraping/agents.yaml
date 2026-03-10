@@ -2,7 +2,7 @@ agents:
   - name: scraping_manager
     role: lead
     description: "Coordinates web scraping operations, evaluates extraction requests, plans approaches, and ensures ethical scraping practices."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, web_scrape, file_read, file_write]
     handoffs:
       - scraping_agent
@@ -14,7 +14,7 @@ agents:
   - name: scraping_agent
     role: member
     description: "Executes web scraping tasks, data extraction, site analysis, and delivers structured datasets."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, web_scrape, html_parser, data_extractor, file_read, file_write]
     handoffs: [scraping_manager]
     system_prompt: scraping_agent.md
@@ -23,7 +23,7 @@ agents:
   - name: scraper_memory
     role: member
     description: "Background memory layer tracking site structures, extraction patterns, scraping job history, and data source registries."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write]
     handoffs: [scraping_manager]
     system_prompt: scraper_memory.md

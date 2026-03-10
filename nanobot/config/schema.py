@@ -153,9 +153,14 @@ class SlackConfig(Base):
     user_token_read_only: bool = True
     reply_in_thread: bool = True
     react_emoji: str = "eyes"
+    done_emoji: str = ""  # Reaction when response is complete (empty = disabled)
     group_policy: str = "mention"  # "mention", "open", "allowlist"
     group_allow_from: list[str] = Field(default_factory=list)  # Allowed channel IDs if allowlist
     dm: SlackDMConfig = Field(default_factory=SlackDMConfig)
+    max_message_length: int = 3900  # Chunk threshold (Slack limit ~4000)
+    reconnect_delay_s: int = 1  # Initial reconnect delay
+    max_reconnect_delay_s: int = 60  # Max backoff cap
+    health_warn_idle_s: int = 300  # Warn if no events for this long
 
 
 class QQConfig(Base):
@@ -272,9 +277,10 @@ class PostizConfig(Base):
     api_key_header: str = "Authorization"
     api_key_prefix: str = "Bearer"
     extra_headers: dict[str, str] = Field(default_factory=dict)
-    publish_path: str = "/api/v1/posts"  # Primary Postiz endpoint for publishing
+    publish_path: str = "/api/public/v1/posts"  # Primary Postiz endpoint for publishing
     request_timeout: int = 30
-    default_target_handle: str = "streetvoiceswatch"
+    default_integration_id: str = ""  # Postiz integration ID (from /api/public/v1/integrations)
+    default_target_handle: str = ""  # Kept for display purposes only
     default_platform: str = "instagram"
     default_max_caption_chars: int = 2200
 

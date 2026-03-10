@@ -2,39 +2,39 @@ agents:
   - name: content_manager
     role: lead
     description: "Runs editorial calendar and content pipeline. Coordinates research, writing, and publishing."
-    model: default
-    tools: [web_search, web_fetch, file_read, file_write]
+    model: openai-codex/gpt-5.4
+    tools: [web_search, news_search, file_read, file_write]
     handoffs:
       - article_researcher
       - article_writer
       - social_media_manager
       - ceo
     system_prompt: content_manager.md
-    max_iterations: 20
+    max_iterations: 50
 
   - name: article_researcher
     role: member
-    description: "First stage of content pipeline. Gathers research, sources, and data for articles."
-    model: default
-    tools: [web_search, web_fetch, file_read, file_write]
+    description: "First stage of content pipeline. Researches news stories for Street Voices daily articles."
+    model: openai-codex/gpt-5.4
+    tools: [web_search, web_fetch, news_search, image_search, file_read, file_write]
     handoffs: [content_manager, article_writer]
     system_prompt: article_researcher.md
-    max_iterations: 20
+    max_iterations: 30
 
   - name: article_writer
     role: member
-    description: "Transforms research briefs into polished, publication-ready articles."
-    model: default
-    tools: [web_search, file_read, file_write]
+    description: "Writes Street Voices articles from research briefs with branded images."
+    model: openai-codex/gpt-5.4
+    tools: [web_search, web_fetch, image_search, article_image, file_read, file_write]
     handoffs: [content_manager]
     system_prompt: article_writer.md
-    max_iterations: 20
+    max_iterations: 30
 
   - name: social_media_manager
     role: member
     description: "Manages social media presence. Creates posts, schedules content, and monitors engagement."
-    model: default
-    tools: [web_search, file_read, file_write]
+    model: openai-codex/gpt-5.4
+    tools: [web_search, file_read, file_write, postiz]
     handoffs: [content_manager]
     system_prompt: social_media_manager.md
     max_iterations: 15
@@ -42,7 +42,7 @@ agents:
   - name: content_memory
     role: member
     description: "Background worker capturing content lifecycle data, editorial decisions, and performance metrics."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write]
     handoffs: [content_manager]
     system_prompt: content_memory.md

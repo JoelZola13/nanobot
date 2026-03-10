@@ -5,9 +5,11 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.providers.base import LLMProvider
 from nanobot.agents.spec import AgentSpec
 from nanobot.agents.registry import AgentRegistry
 from nanobot.agents.tools.transfer import TransferToAgentTool
+from nanobot.agents.tools.delegate import DelegateToAgentTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.base import Tool
 
@@ -22,13 +24,32 @@ TOOL_CATALOG: dict[str, tuple[str, str]] = {
     "file_edit": ("nanobot.agent.tools.filesystem", "EditFileTool"),
     "list_dir": ("nanobot.agent.tools.filesystem", "ListDirTool"),
     "shell": ("nanobot.agent.tools.shell", "ExecTool"),
-    "exec": ("nanobot.agent.tools.shell", "ExecTool"),  # alias for shell
+    "exec": ("nanobot.agent.tools.shell", "ExecTool"),  # alias used in agent YAML specs
     "email_send": ("nanobot.agent.tools.email_tools", "EmailSendTool"),
     "email_read": ("nanobot.agent.tools.email_tools", "EmailReadTool"),
     "image_gen": ("nanobot.agent.tools.image_gen", "ImageGenTool"),
     "tts": ("nanobot.agent.tools.tts", "TTSTool"),
-    "postiz": ("nanobot.agent.tools.postiz", "PostizTool"),
+    "postiz": ("nanobot.agent.tools.postiz", "PostizPublishTool"),
     "article_image": ("nanobot.agent.tools.article_image", "ArticleImageTool"),
+    # ── Search & research ──
+    "news_search": ("nanobot.agent.tools.search", "NewsSearchTool"),
+    "academic_search": ("nanobot.agent.tools.search", "AcademicSearchTool"),
+    "image_search": ("nanobot.agent.tools.image_search", "ImageSearchTool"),
+    "grants_database": ("nanobot.agent.tools.grants", "GrantsDatabaseTool"),
+    # ── Scraping & data extraction ──
+    "web_scrape": ("nanobot.agent.tools.scraping", "WebScrapeTool"),
+    "html_parser": ("nanobot.agent.tools.scraping", "HtmlParserTool"),
+    "data_extractor": ("nanobot.agent.tools.scraping", "DataExtractorTool"),
+    # ── Utilities ──
+    "calculator": ("nanobot.agent.tools.calculator", "CalculatorTool"),
+    "crypto_api": ("nanobot.agent.tools.crypto", "CryptoApiTool"),
+    "invoice_generator": ("nanobot.agent.tools.finance", "InvoiceGeneratorTool"),
+    # ── Documents & spreadsheets ──
+    "spreadsheet_read": ("nanobot.agent.tools.spreadsheet", "SpreadsheetReadTool"),
+    "spreadsheet_write": ("nanobot.agent.tools.spreadsheet", "SpreadsheetWriteTool"),
+    "document_editor": ("nanobot.agent.tools.documents", "DocumentEditorTool"),
+    "calendar_read": ("nanobot.agent.tools.documents", "CalendarReadTool"),
+    "edit_file": ("nanobot.agent.tools.filesystem", "EditFileTool"),
 }
 
 
@@ -38,7 +59,8 @@ class ToolFactory:
 
     Each agent gets:
     1. The tools listed in its spec (from TOOL_CATALOG)
-    2. TransferToAgentTool instances for each allowed handoff target
+    2. DelegateToAgentTool (for lead agents delegating down) or
+       TransferToAgentTool (for member agents handing up) for each handoff target
     """
 
     def __init__(
@@ -46,10 +68,12 @@ class ToolFactory:
         agent_registry: AgentRegistry,
         workspace: Path | None = None,
         tool_config: dict[str, Any] | None = None,
+        provider: LLMProvider | None = None,
     ):
         self._agent_registry = agent_registry
         self._workspace = workspace or Path.cwd()
         self._tool_config = tool_config or {}
+        self._provider = provider
 
     def build_tools(self, spec: AgentSpec) -> ToolRegistry:
         """
@@ -73,14 +97,27 @@ class ToolFactory:
                     f"Unknown tool '{tool_name}' for agent '{spec.name}', skipping"
                 )
 
-        # 2. Add transfer tools for each handoff target
+        # 2. Add handoff tools for each target
+        # Lead agents get delegate_to_* (runs sub-agent, returns result)
+        # for all downward handoffs. Upward handoffs (to ceo) stay as transfer_to_*.
+        # Member agents always get transfer_to_* (Orchestrator handles the switch).
         for target_name in spec.handoffs:
             target_spec = self._agent_registry.get(target_name)
             description = (
                 target_spec.description if target_spec else f"Agent: {target_name}"
             )
-            transfer_tool = TransferToAgentTool(target_name, description)
-            registry.register(transfer_tool)
+            if spec.is_lead and target_name != "ceo" and self._provider is not None:
+                delegate_tool = DelegateToAgentTool(
+                    target_name,
+                    description,
+                    self._agent_registry,
+                    self._provider,
+                    self,
+                )
+                registry.register(delegate_tool)
+            else:
+                transfer_tool = TransferToAgentTool(target_name, description)
+                registry.register(transfer_tool)
 
         logger.debug(
             f"Built {len(registry)} tools for agent '{spec.name}': "
@@ -122,7 +159,7 @@ class ToolFactory:
             if self._tool_config.get("restrict_to_workspace"):
                 kwargs["allowed_dir"] = self._workspace
 
-        if tool_name in ("shell", "exec"):
+        if tool_name == "shell":
             kwargs["working_dir"] = str(self._workspace)
             shell_config = self._tool_config.get("shell", {})
             if "timeout" in shell_config:
@@ -132,5 +169,19 @@ class ToolFactory:
             api_key = self._tool_config.get("brave_api_key")
             if api_key:
                 kwargs["api_key"] = api_key
+
+        if tool_name == "postiz":
+            from nanobot.config.schema import PostizConfig
+            raw = self._tool_config.get("postiz", {})
+            kwargs["config"] = PostizConfig(**raw) if isinstance(raw, dict) else raw
+
+        if tool_name in ("news_search", "image_search"):
+            api_key = self._tool_config.get("brave_api_key")
+            if api_key:
+                kwargs["api_key"] = api_key
+
+        if tool_name in ("spreadsheet_read", "spreadsheet_write", "document_editor"):
+            if self._tool_config.get("restrict_to_workspace"):
+                kwargs["allowed_dir"] = self._workspace
 
         return kwargs

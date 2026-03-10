@@ -2,7 +2,7 @@ agents:
   - name: ceo
     role: lead
     description: "Central coordinator and Joel's direct interface. Delegates tasks to team managers, resolves cross-team conflicts, and makes strategic decisions."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, web_fetch, file_read, file_write, exec]
     handoffs:
       - communication_manager
@@ -19,7 +19,7 @@ agents:
   - name: executive_memory
     role: member
     description: "Apex memory node aggregating insights from all department memory agents. Maintains organizational knowledge graph."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write]
     handoffs: [ceo]
     system_prompt: executive_memory.md
@@ -28,7 +28,7 @@ agents:
   - name: security_compliance
     role: member
     description: "Organization-wide security oversight, access control, compliance monitoring, and threat assessment."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, web_search, exec]
     handoffs: [ceo]
     system_prompt: security_compliance.md

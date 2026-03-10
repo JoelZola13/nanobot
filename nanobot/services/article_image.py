@@ -99,10 +99,11 @@ def _draw_banner(img: Image.Image, text: str = "ARTICLE") -> None:
     txt_draw = ImageDraw.Draw(txt_img)
     bbox = txt_draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    txt_draw.text(
-        ((banner_h - tw) // 2, (banner_w - th) // 2),
-        text, fill=WHITE, font=font,
-    )
+    # Post-render nudge: align label with pre-render HTML reference
+    # (text was visually too close to the right edge of the pill).
+    text_x = (banner_h - tw) // 2
+    text_y = ((banner_w - th) // 2) - 15
+    txt_draw.text((text_x, text_y), text, fill=WHITE, font=font)
     rotated = txt_img.rotate(90, expand=True)
     rx, ry = rotated.size
     banner.paste(rotated, ((banner_w - rx) // 2, (banner_h - ry) // 2), rotated)

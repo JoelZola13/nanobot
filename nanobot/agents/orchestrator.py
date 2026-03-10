@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,11 @@ from nanobot.agents.registry import AgentRegistry
 from nanobot.agents.factory import ToolFactory
 from nanobot.agents.instance import AgentInstance, AgentResult
 from nanobot.agents.tools.transfer import parse_handoff_signal
+from nanobot.agents.tracing import Trace, emit_handoff_span
+from nanobot.agents.router import route_request
+
+# Type alias for the progress callback
+ProgressCallback = Callable[[str], Awaitable[None]] | None
 
 
 class AgentSession:
@@ -91,6 +97,7 @@ class Orchestrator:
         messages: list[dict[str, Any]],
         session_id: str | None = None,
         model_override: str | None = None,
+        on_progress: ProgressCallback = None,
     ) -> OrchestratorResult:
         """
         Run a multi-agent conversation starting from the specified agent.
@@ -111,27 +118,52 @@ class Orchestrator:
         Returns:
             OrchestratorResult with the final response and metadata.
         """
+        # ── Auto-routing: resolve "auto" to the best agent ──
+        if agent_name == "auto":
+            agent_name = route_request(
+                messages, self.registry, fallback="ceo"
+            )
+            logger.info(f"Auto-routed request to '{agent_name}'")
+            if on_progress:
+                await on_progress(f"🔀 Routed to **{agent_name}**")
+
         session_id = session_id or str(uuid.uuid4())[:12]
         session = AgentSession(session_id, agent_name)
         self._sessions[session_id] = session
 
+        # Create a trace for this run (context manager emits SDK trace)
+        trace = Trace(session_id=session_id, initial_agent=agent_name)
+        return await self._run_with_trace(trace, session, agent_name, messages, model_override, on_progress)
+
+    async def _run_with_trace(
+        self,
+        trace: Trace,
+        session: AgentSession,
+        agent_name: str,
+        messages: list[dict[str, Any]],
+        model_override: str | None,
+        on_progress: ProgressCallback = None,
+    ) -> OrchestratorResult:
+        """Inner run loop wrapped in SDK trace context."""
         current_agent = agent_name
         handoff_count = 0
-
-        # Keep a working copy of messages that flows across handoffs
         working_messages = list(messages)
+        session_id = session.session_id
 
-        while handoff_count <= self.MAX_HANDOFFS:
+        with trace:
+          while handoff_count <= self.MAX_HANDOFFS:
             # Resolve the agent spec
             spec = self.registry.get(current_agent)
             if spec is None:
                 logger.error(f"Agent '{current_agent}' not found in registry")
+                trace.finish()
                 return OrchestratorResult(
                     content=f"Error: Agent '{current_agent}' is not available.",
                     agent_name=current_agent,
                     session_id=session_id,
                     finish_reason="error",
                     handoff_chain=session.handoff_chain,
+                    trace=trace,
                 )
 
             # Build the agent's tool set
@@ -151,7 +183,13 @@ class Orchestrator:
                 f"(handoff #{handoff_count})"
             )
 
-            result: AgentResult = await instance.run(agent_messages, model)
+            if on_progress:
+                await on_progress(f"🤖 **{current_agent}** is working...")
+
+            # Start a tracing span for this agent
+            span = trace.start_agent_span(current_agent)
+
+            result: AgentResult = await instance.run(agent_messages, model, on_progress=on_progress)
             session.accumulate_usage(result.usage)
 
             if result.is_handoff:
@@ -160,12 +198,14 @@ class Orchestrator:
 
                 if not target:
                     logger.error(f"Invalid handoff signal from '{current_agent}'")
+                    trace.finish()
                     return OrchestratorResult(
                         content="An internal routing error occurred.",
                         agent_name=current_agent,
                         session_id=session_id,
                         finish_reason="error",
                         handoff_chain=session.handoff_chain,
+                        trace=trace,
                     )
 
                 # Check for handoff loops
@@ -174,6 +214,7 @@ class Orchestrator:
                         f"[{session_id}] Handoff loop detected: "
                         f"{' → '.join(session.handoff_chain)} → {target}"
                     )
+                    trace.finish()
                     # Force the current agent to respond instead
                     return OrchestratorResult(
                         content=(
@@ -184,6 +225,7 @@ class Orchestrator:
                         session_id=session_id,
                         finish_reason="loop_detected",
                         handoff_chain=session.handoff_chain,
+                        trace=trace,
                     )
 
                 logger.info(
@@ -191,6 +233,12 @@ class Orchestrator:
                     f"(reason: {reason})"
                 )
 
+                if on_progress:
+                    await on_progress(
+                        f"➡️ **{current_agent}** → **{target}** ({reason})"
+                    )
+
+                emit_handoff_span(current_agent, target)
                 session.record_handoff(target)
                 handoff_count += 1
                 current_agent = target
@@ -202,6 +250,7 @@ class Orchestrator:
                 )
 
             elif result.is_error:
+                trace.finish()
                 return OrchestratorResult(
                     content=result.content,
                     agent_name=current_agent,
@@ -209,9 +258,12 @@ class Orchestrator:
                     finish_reason="error",
                     handoff_chain=session.handoff_chain,
                     usage=session.total_usage,
+                    trace=trace,
                 )
             else:
                 # Agent produced a final response
+                trace.finish()
+                logger.info(f"[{session_id}] {trace.log_summary()}")
                 return OrchestratorResult(
                     content=result.content,
                     agent_name=current_agent,
@@ -219,12 +271,14 @@ class Orchestrator:
                     finish_reason="stop",
                     handoff_chain=session.handoff_chain,
                     usage=session.total_usage,
+                    trace=trace,
                 )
 
         # Exceeded max handoffs
         logger.error(
             f"[{session_id}] Exceeded max handoffs ({self.MAX_HANDOFFS})"
         )
+        trace.finish()
         return OrchestratorResult(
             content="I've been passed between too many agents. Let me try to help directly.",
             agent_name=current_agent,
@@ -232,6 +286,7 @@ class Orchestrator:
             finish_reason="max_handoffs",
             handoff_chain=session.handoff_chain,
             usage=session.total_usage,
+            trace=trace,
         )
 
     def _prepare_messages(
@@ -358,6 +413,7 @@ class OrchestratorResult:
         "finish_reason",
         "handoff_chain",
         "usage",
+        "trace",
     )
 
     def __init__(
@@ -368,6 +424,7 @@ class OrchestratorResult:
         finish_reason: str = "stop",
         handoff_chain: list[str] | None = None,
         usage: dict[str, int] | None = None,
+        trace: Trace | None = None,
     ):
         self.content = content
         self.agent_name = agent_name
@@ -375,6 +432,7 @@ class OrchestratorResult:
         self.finish_reason = finish_reason
         self.handoff_chain = handoff_chain or []
         self.usage = usage or {}
+        self.trace = trace
 
     def to_chat_completion(self, model: str = "agent/unknown") -> dict[str, Any]:
         """Convert to OpenAI chat completion response format."""
@@ -408,6 +466,7 @@ class OrchestratorResult:
                 "session_id": self.session_id,
                 "responding_agent": self.agent_name,
                 "handoff_chain": self.handoff_chain,
+                **({"trace": self.trace.summary()} if self.trace else {}),
             },
         }
 

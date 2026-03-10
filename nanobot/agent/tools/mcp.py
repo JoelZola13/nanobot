@@ -245,7 +245,7 @@ class MCPToolWrapper(Tool):
 
 
 async def connect_mcp_servers(
-    mcp_servers: dict, registry: ToolRegistry, stack: AsyncExitStack
+    mcp_servers: dict, registry: ToolRegistry, stack: AsyncExitStack,
 ) -> None:
     """Connect to configured MCP servers and register their tools."""
     for name, cfg in mcp_servers.items():
@@ -262,3 +262,8 @@ async def connect_mcp_servers(
             logger.info(f"MCP server '{name}': connected, {len(tools.tools)} tools registered")
         except Exception as e:
             logger.error(f"MCP server '{name}': failed to connect: {e}")
+            # Ensure partial connection is cleaned up
+            try:
+                await conn.close()
+            except Exception:
+                pass

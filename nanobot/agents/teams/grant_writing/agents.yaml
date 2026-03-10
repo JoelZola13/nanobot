@@ -2,7 +2,7 @@ agents:
   - name: grant_manager
     role: lead
     description: "Oversees the full grant lifecycle — opportunity identification, team coordination, submission management, and funder relations."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, file_read, file_write, grants_database, calendar_read]
     handoffs:
       - grant_writer
@@ -16,7 +16,7 @@ agents:
   - name: grant_writer
     role: member
     description: "Crafts compelling grant narratives, proposals, and supporting documents tailored to funder requirements and review criteria."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [web_search, file_read, file_write, document_editor]
     handoffs: [grant_manager]
     system_prompt: grant_writer.md
@@ -25,7 +25,7 @@ agents:
   - name: budget_manager
     role: member
     description: "Builds detailed grant budgets, tracks expenditures against awards, and prepares financial reports for funders."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write, spreadsheet_read, spreadsheet_write]
     handoffs: [grant_manager]
     system_prompt: budget_manager.md
@@ -34,7 +34,7 @@ agents:
   - name: project_manager
     role: member
     description: "Creates project plans, tracks milestones and deliverables, and generates progress reports for grant-funded work."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write, calendar_read, spreadsheet_read]
     handoffs: [grant_manager]
     system_prompt: project_manager.md
@@ -43,7 +43,7 @@ agents:
   - name: grant_memory
     role: member
     description: "Background worker indexing all grant activity — proposals, funder interactions, deadlines, outcomes, and institutional knowledge."
-    model: default
+    model: openai-codex/gpt-5.4
     tools: [file_read, file_write, grants_database]
     handoffs: [grant_manager]
     system_prompt: grant_memory.md

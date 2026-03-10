@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad_slack_agent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1e3a5f"/>
+    </linearGradient>
+    <radialGradient id="bg_slack_agent" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1e3a5f" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow_slack_agent" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1e3a5f" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Outer ring decoration -->
+  <circle cx="60" cy="60" r="48" fill="none" stroke="#3B82F6" stroke-width="1" opacity="0.2"/>
+
+  <!-- Main circle with gradient -->
+  <circle cx="60" cy="60" r="46" fill="url(#grad_slack_agent)" filter="url(#shadow_slack_agent)"/>
+
+  <!-- Inner highlight -->
+  <circle cx="60" cy="60" r="46" fill="url(#bg_slack_agent)"/>
+
+  <!-- Role glyph -->
+  
+
+  <!-- Initials -->
+  <text x="60" y="64"
+        text-anchor="middle" dominant-baseline="middle"
+        font-family="'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+        font-size="26" font-weight="500"
+        fill="#ffffff" letter-spacing="1.5">
+    SA
+  </text>
+</svg>

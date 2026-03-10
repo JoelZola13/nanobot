@@ -20,7 +20,7 @@ DEFAULT_ORIGINATOR = "nanobot"
 class OpenAICodexProvider(LLMProvider):
     """Use Codex OAuth to call the Responses API."""
 
-    def __init__(self, default_model: str = "openai-codex/gpt-5.1-codex"):
+    def __init__(self, default_model: str = "openai-codex/gpt-5.4"):
         super().__init__(api_key=None, api_base=None)
         self.default_model = default_model
 
@@ -60,9 +60,13 @@ class OpenAICodexProvider(LLMProvider):
             try:
                 content, tool_calls, finish_reason = await _request_codex(url, headers, body, verify=True)
             except Exception as e:
-                if "CERTIFICATE_VERIFY_FAILED" not in str(e):
+                err_str = str(e).upper()
+                is_ssl = any(kw in err_str for kw in (
+                    "CERTIFICATE_VERIFY_FAILED", "SSLV3_ALERT", "SSL", "TLS",
+                ))
+                if not is_ssl:
                     raise
-                logger.warning("SSL certificate verification failed for Codex API; retrying with verify=False")
+                logger.warning("SSL/TLS error for Codex API (%s); retrying with verify=False", e)
                 content, tool_calls, finish_reason = await _request_codex(url, headers, body, verify=False)
             return LLMResponse(
                 content=content,

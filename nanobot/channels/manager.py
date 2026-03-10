@@ -196,11 +196,13 @@ class ChannelManager:
                 channel = self.channels.get(msg.channel)
                 if channel:
                     try:
+                        logger.debug(f"Dispatching outbound to {msg.channel}:{msg.chat_id} ({len(msg.content)} chars)")
                         await channel.send(msg)
+                        logger.debug(f"Outbound sent successfully to {msg.channel}:{msg.chat_id}")
                     except Exception as e:
                         logger.error(f"Error sending to {msg.channel}: {e}")
                 else:
-                    logger.warning(f"Unknown channel: {msg.channel}")
+                    logger.warning(f"Unknown channel '{msg.channel}' — registered: {list(self.channels.keys())}")
                     
             except asyncio.TimeoutError:
                 continue
@@ -212,14 +214,17 @@ class ChannelManager:
         return self.channels.get(name)
     
     def get_status(self) -> dict[str, Any]:
-        """Get status of all channels."""
-        return {
-            name: {
+        """Get status of all channels, including health info when available."""
+        status: dict[str, Any] = {}
+        for name, channel in self.channels.items():
+            info: dict[str, Any] = {
                 "enabled": True,
-                "running": channel.is_running
+                "running": channel.is_running,
             }
-            for name, channel in self.channels.items()
-        }
+            if hasattr(channel, "health") and callable(channel.health):
+                info["health"] = channel.health()
+            status[name] = info
+        return status
     
     @property
     def enabled_channels(self) -> list[str]:

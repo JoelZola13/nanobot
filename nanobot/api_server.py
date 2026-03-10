@@ -23,6 +23,7 @@ SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
+AVATARS_DIR = Path(__file__).parent.parent / "static" / "avatars"
 
 from nanobot.config.loader import load_config
 from nanobot.bus.queue import MessageBus
@@ -237,6 +238,7 @@ async def lifespan(app):
                 agent_registry,
                 workspace=config.workspace_path,
                 tool_config=tool_config,
+                provider=provider,
             )
             _orchestrator = Orchestrator(
                 provider=provider,
@@ -244,9 +246,12 @@ async def lifespan(app):
                 tool_factory=tool_factory,
                 default_model=defaults.model,
             )
+            # Wire orchestrator into the agent loop so all channels
+            # (Slack, Telegram, etc.) route through the multi-agent system
+            _agent.orchestrator = _orchestrator
             logger.info(
                 f"Multi-agent system ready: {len(agent_registry)} agents across "
-                f"{len(agent_registry.get_teams())} teams"
+                f"{len(agent_registry.get_teams())} teams (all channels enabled)"
             )
         else:
             logger.info("No agent team definitions found — multi-agent system disabled")
@@ -535,16 +540,15 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
     if requested_model.startswith("agent/") and _orchestrator is not None:
         agent_name = requested_model.removeprefix("agent/")
 
-        # Don't pass the "agent/xxx" model name to the orchestrator —
-        # let it resolve models from agent specs + default_model instead.
-        agent_model_override = None
-
+        # Don't pass provider_model as override — each agent has its own
+        # configured model.  The "agent/auto" or "agent/ceo" name is for
+        # routing only, not a real LLM model identifier.
         if stream:
             return StreamingResponse(
                 _stream_agent_response(
                     agent_name=agent_name,
                     messages=messages,
-                    model_override=agent_model_override,
+                    model_override=None,
                     requested_model=requested_model,
                     include_usage=include_usage,
                 ),
@@ -554,8 +558,10 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
         result = await _orchestrator.run(
             agent_name=agent_name,
             messages=messages,
-            model_override=agent_model_override,
+            model_override=None,
         )
+        if result.trace:
+            logger.info(f"Multi-agent trace:\n{result.trace.log_summary()}")
         return JSONResponse(result.to_chat_completion(model=requested_model))
 
     if stream:
@@ -760,36 +766,115 @@ async def _stream_agent_response(
     requested_model: str,
     include_usage: bool,
 ):
-    """Stream a multi-agent orchestrator response as SSE chunks."""
-    result = await _orchestrator.run(
-        agent_name=agent_name,
-        messages=messages,
-        model_override=model_override,
-    )
+    """Stream a multi-agent orchestrator response as SSE chunks.
 
-    # Stream the content in a single chunk (the orchestrator doesn't support
-    # token-level streaming yet — we send the full response as one delta).
-    chunk = result.to_stream_chunk(delta_content=result.content)
-    chunk["model"] = requested_model
+    Uses an asyncio.Queue so that on_progress callbacks from the
+    orchestrator / agent instances / delegate tools stream progress
+    to the client in real-time (routing decisions, tool calls,
+    delegation events, handoffs) instead of blocking until the
+    entire multi-agent pipeline completes.
+    """
+    chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    progress_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def _on_progress(text: str) -> None:
+        """Push intermediate progress to the SSE stream."""
+        if text:
+            await progress_queue.put(text)
+
+    async def _run_orchestrator():
+        """Run the orchestrator in background; signal done when finished."""
+        try:
+            result = await _orchestrator.run(
+                agent_name=agent_name,
+                messages=messages,
+                model_override=model_override,
+                on_progress=_on_progress,
+            )
+            await progress_queue.put(None)  # Signal done
+            return result
+        except Exception as e:
+            logger.error(f"Orchestrator error: {e}")
+            await progress_queue.put(None)
+            return e
+
+    # Start orchestrator in background
+    agent_task = asyncio.create_task(_run_orchestrator())
+
+    # OpenAI-compatible stream starts with role-only assistant delta.
+    initial_chunk = {
+        "id": chat_id,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": requested_model,
+        "choices": [{
+            "index": 0,
+            "delta": {"role": "assistant"},
+            "finish_reason": None,
+        }],
+    }
+    yield f"data: {json.dumps(initial_chunk)}\n\n"
+
+    # Stream intermediate progress as it arrives
+    while True:
+        item = await progress_queue.get()
+        if item is None:
+            break
+        progress_text = f"{item}\n\n"
+        chunk = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": requested_model,
+            "choices": [{
+                "index": 0,
+                "delta": {"content": progress_text},
+                "finish_reason": None,
+            }],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+
+    # Get final result
+    result = await agent_task
+
+    if isinstance(result, Exception):
+        content = f"Error: {result}"
+        usage = {}
+        session_id = "error"
+    else:
+        # Log the trace
+        if result.trace:
+            logger.info(f"Multi-agent trace:\n{result.trace.log_summary()}")
+        content = result.content
+        usage = result.usage or {}
+        session_id = result.session_id
+
+    # Send the final response content
+    chunk = {
+        "id": chat_id,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": requested_model,
+        "choices": [{
+            "index": 0,
+            "delta": {"content": content},
+            "finish_reason": "stop",
+        }],
+    }
     yield f"data: {json.dumps(chunk)}\n\n"
 
-    # Send the finish chunk
-    finish_chunk = result.to_stream_chunk(delta_content="")
-    finish_chunk["model"] = requested_model
-    yield f"data: {json.dumps(finish_chunk)}\n\n"
-
     # Usage packet if requested
-    if include_usage and result.usage:
+    if include_usage and usage:
         usage_chunk = {
-            "id": f"chatcmpl-{result.session_id}",
+            "id": chat_id,
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": requested_model,
             "choices": [],
             "usage": {
-                "prompt_tokens": result.usage.get("prompt_tokens", 0),
-                "completion_tokens": result.usage.get("completion_tokens", 0),
-                "total_tokens": result.usage.get("total_tokens", 0),
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "total_tokens": usage.get("total_tokens", 0),
             },
         }
         yield f"data: {json.dumps(usage_chunk)}\n\n"
@@ -800,13 +885,13 @@ async def _stream_agent_response(
 async def list_models(request: Request) -> JSONResponse:
     """Handle GET /v1/models."""
     now = int(time.time())
-    default_model = _agent.model if _agent else "gpt-5.1"
+    default_model = _agent.model if _agent else "gpt-5.4"
     model_ids = [
         default_model,
         default_model.removeprefix("openai-codex/"),
     ]
     # Keep popular aliases for clients that request openai-style names.
-    model_ids.extend(["gpt-5.1", "gpt-5"])
+    model_ids.extend(["gpt-5.4", "gpt-5"])
     deduped = []
     for model_id in model_ids:
         if model_id and model_id not in deduped:
@@ -819,6 +904,13 @@ async def list_models(request: Request) -> JSONResponse:
 
     # Append multi-agent models if the orchestrator is available
     if _orchestrator is not None:
+        # Auto-router model — routes by intent, no CEO bottleneck
+        models.insert(0, {
+            "id": "agent/auto",
+            "object": "model",
+            "created": now,
+            "owned_by": "nanobot",
+        })
         models.extend(_orchestrator.list_agents())
 
     return JSONResponse({"object": "list", "data": models})
@@ -835,6 +927,17 @@ async def serve_screenshot(request: Request) -> FileResponse | JSONResponse:
     if not filepath.exists() or not filepath.is_file():
         return JSONResponse({"error": "Not found"}, status_code=404)
     return FileResponse(filepath, media_type="image/png")
+
+
+async def serve_avatar(request: Request) -> FileResponse | JSONResponse:
+    """Serve a generated agent avatar SVG."""
+    filename = request.path_params["filename"]
+    filepath = AVATARS_DIR / filename
+    if ".." in filename or not filepath.resolve().is_relative_to(AVATARS_DIR.resolve()):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return FileResponse(filepath, media_type="image/svg+xml")
 
 
 async def serve_audio(request: Request) -> FileResponse | JSONResponse:
@@ -1084,6 +1187,7 @@ app = Starlette(
         Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
         Route("/videos/{filename:path}", serve_video, methods=["GET"]),
         Route("/audio/{filename:path}", serve_audio, methods=["GET"]),
+        Route("/avatars/{filename:path}", serve_avatar, methods=["GET"]),
         Route("/api/cron/jobs", cron_list_jobs, methods=["GET"]),
         Route("/api/cron/jobs/{job_id}/toggle", cron_toggle_job, methods=["POST"]),
         Route("/api/cron/jobs/{job_id}/run", cron_run_job, methods=["POST"]),
