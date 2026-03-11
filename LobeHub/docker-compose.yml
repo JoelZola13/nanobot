@@ -1,0 +1,109 @@
+services:
+  # ─── LobeHub (Main App) ───────────────────────────────────────────
+  lobehub:
+    image: lobehub/lobe-chat-database
+    container_name: streetvoices-lobehub
+    ports:
+      - "3181:3210"
+    env_file: .env
+    user: root
+    entrypoint: ["/bin/sh", "-c", "cp /etc/hosts /tmp/h && grep -v -e '^127\\.0\\.0\\.1' -e '^::1' /tmp/h > /etc/hosts && exec /bin/node /app/startServer.js"]
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      rustfs:
+        condition: service_started
+      casdoor:
+        condition: service_started
+    extra_hosts:
+      - "localhost:host-gateway"
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+  # ─── PostgreSQL + PGVector ────────────────────────────────────────
+  postgresql:
+    image: pgvector/pgvector:pg17
+    container_name: streetvoices-postgresql
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: lobehub
+      POSTGRES_USER: lobehub
+      POSTGRES_PASSWORD: lobehub_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./casdoor/init-db.sh:/docker-entrypoint-initdb.d/init-casdoor-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lobehub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+  # ─── SeaweedFS (S3-compatible storage) ────────────────────────────
+  rustfs:
+    image: chrislusf/seaweedfs
+    container_name: streetvoices-rustfs
+    ports:
+      - "8333:8333"
+    command: 'server -s3 -dir=/data'
+    volumes:
+      - seaweedfs_data:/data
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+  # ─── Casdoor (Auth / SSO) ─────────────────────────────────────────
+  casdoor:
+    image: casbin/casdoor
+    container_name: streetvoices-casdoor
+    ports:
+      - "8380:8000"
+    environment:
+      RUNNING_IN_DOCKER: "true"
+    volumes:
+      - ./casdoor/init_data.json:/init_data.json
+      - ./casdoor/app.conf:/conf/app.conf
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+  # ─── Redis (Session Cache) ───────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: streetvoices-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+  # ─── Agent Index (Custom Marketplace) ─────────────────────────────
+  agent-index:
+    image: nginx:alpine
+    container_name: streetvoices-agent-index
+    ports:
+      - "8381:80"
+    volumes:
+      - ./agent-index:/usr/share/nginx/html:ro
+      - ./agent-index/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    networks:
+      - streetvoices
+
+volumes:
+  pgdata:
+  seaweedfs_data:
+  redis_data:
+
+networks:
+  streetvoices:
+    driver: bridge
