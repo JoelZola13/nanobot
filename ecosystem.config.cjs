@@ -21,7 +21,7 @@ module.exports = {
         NANOBOT_TOOLS__POSTIZ__API_KEY: "b0cdba1a151dba58aaa9055368a9e8a96b98e857a6e78513d848a6de6d77a9ea",
         NANOBOT_TOOLS__POSTIZ__API_KEY_PREFIX: "",
         NANOBOT_TOOLS__POSTIZ__PUBLISH_PATH: "/api/public/v1/posts",
-        NANOBOT_TOOLS__POSTIZ__DEFAULT_INTEGRATION_ID: "cmlus86vx0005mg83ye5lei7a",
+        NANOBOT_TOOLS__POSTIZ__DEFAULT_INTEGRATION_ID: "cmius86vx0005mg83ye5lei7a",
       },
       autorestart: true,
       max_restarts: 50,

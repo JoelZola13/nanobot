@@ -29,7 +29,8 @@ class PostizPublishTool(Tool):
     def description(self) -> str:
         return (
             "Publish a post via Postiz to social media (e.g. Instagram). "
-            "If no caption is provided, the tool can draft one from a source URL."
+            "If no caption is provided, the tool can draft one from a source URL. "
+            "Useful for social workflows into Instagram accounts configured in Postiz."
         )
 
     @property
@@ -46,6 +47,16 @@ class PostizPublishTool(Tool):
                     "type": "string",
                     "description": "Postiz integration ID to post to.",
                     "default": self.config.default_integration_id,
+                },
+                "targetHandle": {
+                    "type": "string",
+                    "description": "Instagram handle or target name in Postiz.",
+                    "default": self.config.default_target_handle,
+                },
+                "platform": {
+                    "type": "string",
+                    "description": "Target platform slug (e.g. instagram).",
+                    "default": self.config.default_platform,
                 },
                 "mediaUrls": {
                     "type": "array",
@@ -73,7 +84,9 @@ class PostizPublishTool(Tool):
                     "type": "string",
                     "description": "ISO 8601 datetime for scheduled posts (required when scheduleType=schedule).",
                 },
+                "publish": {"type": "boolean", "description": "Publish immediately (default true).", "default": True},
                 "path": {"type": "string", "description": "Override path relative to Postiz base URL."},
+                "method": {"type": "string", "enum": ["POST", "PATCH", "PUT"], "default": "POST"},
                 "payload": {
                     "type": "object",
                     "description": "Send a custom payload instead of the default auto payload.",
@@ -94,12 +107,16 @@ class PostizPublishTool(Tool):
         caption: str | None = None,
         sourceUrl: str | None = None,
         integrationId: str | None = None,
+        targetHandle: str | None = None,
+        platform: str | None = None,
         mediaUrls: list[str] | None = None,
         hashtags: list[str] | None = None,
         postType: str = "post",
         scheduleType: str = "now",
         scheduleDate: str | None = None,
+        publish: bool = True,
         path: str | None = None,
+        method: str = "POST",
         payload: dict[str, Any] | None = None,
         dryRun: bool = False,
         timeoutSeconds: int | None = None,
@@ -118,6 +135,9 @@ class PostizPublishTool(Tool):
         if not final_caption:
             return "Error: caption is required when sourceUrl is not provided."
 
+        # Build defaults and normalize
+        target_handle = (targetHandle or self.config.default_target_handle or "").strip()
+        platform_value = (platform or self.config.default_platform or "instagram").strip().lower()
         max_chars = getattr(self.config, "default_max_caption_chars", 2200)
         final_caption = self._trim_caption(final_caption, max_chars)
         if hashtags:
@@ -128,59 +148,72 @@ class PostizPublishTool(Tool):
         final_path = path or self.config.publish_path
         endpoint = self._join_url(self.config.base_url, final_path)
         timeout = timeoutSeconds or getattr(self.config, "request_timeout", 30)
+        method = method.upper()
         headers = self._build_headers()
 
         if payload is not None and isinstance(payload, Mapping):
             request_body = dict(payload)
+            if "caption" not in request_body and final_caption:
+                request_body["caption"] = final_caption
+            request_body.setdefault("platform", platform_value)
+            if target_handle:
+                request_body.setdefault("targetHandle", target_handle)
+            request_body.setdefault("publish", bool(publish))
         else:
             integration_id = (integrationId or self.config.default_integration_id or "").strip()
-            if not integration_id:
-                return (
-                    "Error: integrationId is required. "
-                    "Set tools.postiz.default_integration_id in config or pass integrationId explicitly. "
-                    "You can list integrations at GET /api/public/v1/integrations."
-                )
 
-            # Build media list — upload each URL to Postiz first to get id/path/name
-            images = []
-            if mediaUrls:
-                upload_errors = []
-                for url in mediaUrls:
-                    result = await self._upload_url_to_postiz(url, headers, float(timeout))
-                    if isinstance(result, str):
-                        upload_errors.append(result)
-                    else:
-                        images.append(result)
-                if upload_errors:
-                    return "Error uploading media:\n" + "\n".join(upload_errors)
+            if integration_id:
+                # Use the Postiz public API v1 format with integration IDs
+                # Upload media first if provided
+                images = []
+                if mediaUrls:
+                    upload_errors = []
+                    for url in mediaUrls:
+                        result = await self._upload_url_to_postiz(url, headers, float(timeout))
+                        if isinstance(result, str):
+                            upload_errors.append(result)
+                        else:
+                            images.append(result)
+                    if upload_errors:
+                        return "Error uploading media:\n" + "\n".join(upload_errors)
 
-            # Build the Postiz public API payload
-            date_str = scheduleDate or datetime.now(timezone.utc).isoformat()
-            request_body = {
-                "type": scheduleType,
-                "shortLink": False,
-                "tags": [],
-                "date": date_str,
-                "posts": [
-                    {
-                        "integration": {"id": integration_id},
-                        "value": [
-                            {
-                                "type": "image",
-                                "content": final_caption,
-                                "image": images,
-                            }
-                        ],
-                        "settings": {"post_type": postType},
-                    }
-                ],
-            }
+                date_str = scheduleDate or datetime.now(timezone.utc).isoformat()
+                request_body = {
+                    "type": scheduleType,
+                    "shortLink": False,
+                    "tags": [],
+                    "date": date_str,
+                    "posts": [
+                        {
+                            "integration": {"id": integration_id},
+                            "value": [
+                                {
+                                    "type": "image",
+                                    "content": final_caption,
+                                    "image": images,
+                                }
+                            ],
+                            "settings": {"post_type": postType},
+                        }
+                    ],
+                }
+            else:
+                # Fallback: simple payload format (legacy / non-integration mode)
+                request_body = {
+                    "caption": final_caption,
+                    "platform": platform_value,
+                    "publish": bool(publish),
+                }
+                if target_handle:
+                    request_body["targetHandle"] = target_handle
+                if mediaUrls:
+                    request_body["mediaUrls"] = mediaUrls
 
         if dryRun:
             return json.dumps(
                 {
                     "status": "dry_run",
-                    "method": "POST",
+                    "method": method,
                     "endpoint": endpoint,
                     "headers": self._redact_headers(headers),
                     "payload": request_body,
@@ -189,9 +222,12 @@ class PostizPublishTool(Tool):
                 indent=2,
             )
 
+        if method not in {"POST", "PATCH", "PUT"}:
+            return "Error: method must be one of POST, PATCH, PUT"
+
         try:
             async with httpx.AsyncClient(timeout=float(timeout)) as client:
-                response = await client.post(endpoint, json=request_body, headers=headers)
+                response = await client.request(method, endpoint, json=request_body, headers=headers)
                 response.raise_for_status()
         except httpx.ConnectError as e:
             return (

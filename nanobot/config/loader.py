@@ -88,6 +88,7 @@ def _migrate_config(data: dict) -> dict:
                     "extraHeaders": {},
                     "publishPath": "/api/public/v1/posts",
                     "requestTimeout": 30,
+                    "defaultTargetHandle": "streetvoiceswatch",
                     "defaultPlatform": "instagram",
                     "defaultMaxCaptionChars": 2200,
                 }

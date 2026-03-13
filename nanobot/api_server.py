@@ -911,7 +911,6 @@ async def _stream_agent_response(
             },
         }
         yield f"data: {json.dumps(usage_chunk)}\n\n"
-
     yield "data: [DONE]\n\n"
 
 
@@ -924,7 +923,7 @@ async def list_models(request: Request) -> JSONResponse:
         default_model.removeprefix("openai-codex/"),
     ]
     # Keep popular aliases for clients that request openai-style names.
-    model_ids.extend(["gpt-5.4", "gpt-5"])
+    model_ids.extend(["gpt-5.4", "gpt-5.1", "gpt-5"])
     deduped = []
     for model_id in model_ids:
         if model_id and model_id not in deduped:
@@ -971,6 +970,7 @@ async def serve_avatar(request: Request) -> FileResponse | JSONResponse:
     if not filepath.exists() or not filepath.is_file():
         return JSONResponse({"error": "Not found"}, status_code=404)
     return FileResponse(filepath, media_type="image/svg+xml")
+
 
 
 async def serve_audio(request: Request) -> FileResponse | JSONResponse:
@@ -1101,6 +1101,7 @@ async def agents_status(request: Request) -> JSONResponse:
     except Exception as e:
         logger.error(f"agents_status error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
 
 
 async def generate_article_image(request: Request) -> JSONResponse:
@@ -1292,6 +1293,7 @@ async def embeddings(request: Request) -> JSONResponse:
             "total_tokens": sum(len(t.split()) for t in texts),
         },
     })
+
 
 
 app = Starlette(

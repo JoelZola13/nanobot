@@ -280,7 +280,7 @@ class PostizConfig(Base):
     publish_path: str = "/api/public/v1/posts"  # Primary Postiz endpoint for publishing
     request_timeout: int = 30
     default_integration_id: str = ""  # Postiz integration ID (from /api/public/v1/integrations)
-    default_target_handle: str = ""  # Kept for display purposes only
+    default_target_handle: str = "streetvoiceswatch"  # Instagram handle or target name in Postiz
     default_platform: str = "instagram"
     default_max_caption_chars: int = 2200
 
