@@ -15,7 +15,7 @@ agents:
     role: member
     description: "Executes web scraping tasks, data extraction, site analysis, and delivers structured datasets."
     model: openai-codex/gpt-5.4
-    tools: [web_search, web_fetch, web_scrape, html_parser, data_extractor, file_read, file_write]
+    tools: [web_search, web_fetch, web_scrape, html_parser, data_extractor, file_read, file_write, "mcp_playwright_*"]
     handoffs: [scraping_manager]
     system_prompt: scraping_agent.md
     max_iterations: 25

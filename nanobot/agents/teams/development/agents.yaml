@@ -3,7 +3,7 @@ agents:
     role: lead
     description: "Team lead for all software development and infrastructure. Coordinates backend, frontend, database, and DevOps work."
     model: openai-codex/gpt-5.4
-    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file]
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file, "mcp_github_*"]
     handoffs:
       - backend_developer
       - frontend_developer
@@ -17,7 +17,7 @@ agents:
     role: member
     description: "Server-side code, APIs, services, and business logic implementation."
     model: openai-codex/gpt-5.4
-    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file]
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file, "mcp_github_*"]
     handoffs: [development_manager, database_manager]
     system_prompt: backend_developer.md
     max_iterations: 25
@@ -35,7 +35,7 @@ agents:
     role: member
     description: "Schema design, migrations, query optimization, and data integrity."
     model: openai-codex/gpt-5.4
-    tools: [web_search, file_read, file_write, exec]
+    tools: [web_search, file_read, file_write, exec, list_dir, edit_file]
     handoffs: [development_manager, backend_developer]
     system_prompt: database_manager.md
     max_iterations: 20
@@ -44,7 +44,7 @@ agents:
     role: member
     description: "Infrastructure, CI/CD, deployment, monitoring, and system reliability."
     model: openai-codex/gpt-5.4
-    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir]
+    tools: [web_search, web_fetch, file_read, file_write, exec, list_dir, edit_file, "mcp_github_*"]
     handoffs: [development_manager]
     system_prompt: devops.md
     max_iterations: 20

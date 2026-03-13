@@ -17,7 +17,7 @@ agents:
     role: member
     description: "Manages email communications via Gmail. Drafts, sends, reads, and organizes email."
     model: openai-codex/gpt-5.4
-    tools: [web_search, file_read]
+    tools: [web_search, file_read, email_send, email_read]
     handoffs: [communication_manager]
     system_prompt: email_agent.md
     max_iterations: 15
@@ -44,7 +44,7 @@ agents:
     role: member
     description: "Manages scheduling, availability, meetings, and deadline tracking across all calendars."
     model: openai-codex/gpt-5.4
-    tools: [web_search, file_read]
+    tools: [web_search, file_read, "mcp_google-calendar_*"]
     handoffs: [communication_manager]
     system_prompt: calendar_agent.md
     max_iterations: 15

@@ -1,0 +1,187 @@
+{
+  "b48adf9c-890e-4b57-98be-57ca3c79c726": {
+    "nanobotName": "ceo",
+    "team": "executive",
+    "role": "ceo"
+  },
+  "249b5a5c-c92e-449e-963c-a91cddee98cd": {
+    "nanobotName": "executive_memory",
+    "team": "executive",
+    "role": "researcher"
+  },
+  "a9e36a5b-fa9c-4245-bb4d-454bdebba6bf": {
+    "nanobotName": "security_compliance",
+    "team": "executive",
+    "role": "qa"
+  },
+  "dba70b73-2e38-4620-a4a9-f446beb48842": {
+    "nanobotName": "communication_manager",
+    "team": "communication",
+    "role": "pm"
+  },
+  "4655bb05-c368-454e-9004-760174be16b3": {
+    "nanobotName": "email_agent",
+    "team": "communication",
+    "role": "general"
+  },
+  "4cbfdd25-c9f6-4c40-bbf6-07a944e9beda": {
+    "nanobotName": "slack_agent",
+    "team": "communication",
+    "role": "general"
+  },
+  "ae372450-6ce2-4ca1-9efb-102e18b75db8": {
+    "nanobotName": "whatsapp_agent",
+    "team": "communication",
+    "role": "general"
+  },
+  "7db86bbe-74b1-4b91-b4a6-a8535206501a": {
+    "nanobotName": "calendar_agent",
+    "team": "communication",
+    "role": "general"
+  },
+  "f8c87a70-babe-4c49-9b71-f4d83768f89c": {
+    "nanobotName": "communication_memory",
+    "team": "communication",
+    "role": "researcher"
+  },
+  "447822b8-3866-4f90-8a71-aa123318efe7": {
+    "nanobotName": "content_manager",
+    "team": "content",
+    "role": "cmo"
+  },
+  "3ed093f1-67dd-4d02-bae2-67dcac59830d": {
+    "nanobotName": "article_researcher",
+    "team": "content",
+    "role": "researcher"
+  },
+  "dbe2665b-6264-4ce7-a055-03f1b4d56f07": {
+    "nanobotName": "article_writer",
+    "team": "content",
+    "role": "general"
+  },
+  "18d6e5d4-0461-405f-941b-3d431dd2a554": {
+    "nanobotName": "social_media_manager",
+    "team": "content",
+    "role": "general"
+  },
+  "704cc222-8543-427b-aac9-306d06861ef6": {
+    "nanobotName": "content_memory",
+    "team": "content",
+    "role": "researcher"
+  },
+  "fc6cba2d-ea5e-40b4-9c49-1893081c649c": {
+    "nanobotName": "development_manager",
+    "team": "development",
+    "role": "cto"
+  },
+  "e36a5fd4-6bc6-4790-ad9f-82865c22ec37": {
+    "nanobotName": "backend_developer",
+    "team": "development",
+    "role": "engineer"
+  },
+  "78c8d7a3-034b-4785-9c76-e9a927c3cb11": {
+    "nanobotName": "frontend_developer",
+    "team": "development",
+    "role": "engineer"
+  },
+  "f631311d-0d94-49cf-88c0-e3af242bdfee": {
+    "nanobotName": "database_manager",
+    "team": "development",
+    "role": "engineer"
+  },
+  "f7230bc4-90e8-443b-bcf9-e76fbfecc894": {
+    "nanobotName": "devops",
+    "team": "development",
+    "role": "devops"
+  },
+  "ea12ac62-9257-4922-8d55-e4cc90dd290a": {
+    "nanobotName": "development_memory",
+    "team": "development",
+    "role": "researcher"
+  },
+  "53e0dade-08db-4c6f-a5ab-52eb3be7d242": {
+    "nanobotName": "finance_manager",
+    "team": "finance",
+    "role": "cfo"
+  },
+  "21808ba2-28e6-4ab5-88e9-3ebc54517d7f": {
+    "nanobotName": "accounting_agent",
+    "team": "finance",
+    "role": "general"
+  },
+  "f4276237-102c-422f-b62b-d732830aa71a": {
+    "nanobotName": "crypto_agent",
+    "team": "finance",
+    "role": "general"
+  },
+  "298036a2-0967-4b23-a0e5-d692c774457e": {
+    "nanobotName": "finance_memory",
+    "team": "finance",
+    "role": "researcher"
+  },
+  "3e48569f-dad2-4017-83f9-a1b1fac158ba": {
+    "nanobotName": "grant_manager",
+    "team": "grant_writing",
+    "role": "pm"
+  },
+  "b31b844b-8852-4657-bc0a-999f67265282": {
+    "nanobotName": "grant_writer",
+    "team": "grant_writing",
+    "role": "general"
+  },
+  "a5b1c36a-7332-4bf7-acc1-c13d273a5e5b": {
+    "nanobotName": "budget_manager",
+    "team": "grant_writing",
+    "role": "general"
+  },
+  "5aa104ca-d518-45bc-aad7-ccc17a523f27": {
+    "nanobotName": "project_manager",
+    "team": "grant_writing",
+    "role": "pm"
+  },
+  "d3372ba7-c065-4f05-bb83-a4ec04d15423": {
+    "nanobotName": "grant_memory",
+    "team": "grant_writing",
+    "role": "researcher"
+  },
+  "2332d212-5faf-4b47-ae67-bc8bd93441ea": {
+    "nanobotName": "research_manager",
+    "team": "research",
+    "role": "researcher"
+  },
+  "bfa77cb5-e579-4fbd-8ecf-f7d852f941fc": {
+    "nanobotName": "media_platform_researcher",
+    "team": "research",
+    "role": "researcher"
+  },
+  "e592efa0-e7fd-4628-91b7-accea90fd73f": {
+    "nanobotName": "media_program_researcher",
+    "team": "research",
+    "role": "researcher"
+  },
+  "7209c320-d2bc-414d-8679-1d51981ae47b": {
+    "nanobotName": "street_bot_researcher",
+    "team": "research",
+    "role": "researcher"
+  },
+  "ef1b3e53-0b86-4841-b891-7d28802f0e0f": {
+    "nanobotName": "research_memory",
+    "team": "research",
+    "role": "researcher"
+  },
+  "4aa2586c-55e5-4787-b792-9697cb8fe3e6": {
+    "nanobotName": "scraping_manager",
+    "team": "scraping",
+    "role": "engineer"
+  },
+  "92a9feca-6db5-43b5-a1f5-8eb342481ee2": {
+    "nanobotName": "scraping_agent",
+    "team": "scraping",
+    "role": "engineer"
+  },
+  "ace6bec1-9983-4a5b-a654-bd952705791c": {
+    "nanobotName": "scraper_memory",
+    "team": "scraping",
+    "role": "researcher"
+  }
+}

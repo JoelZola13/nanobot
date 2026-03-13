@@ -419,6 +419,7 @@ def gateway(
                 "shell": {
                     "timeout": getattr(config.tools.exec, "timeout", 120),
                 },
+                "postiz": config.tools.postiz.model_dump(),
             }
             tool_factory = ToolFactory(
                 agent_registry,
@@ -1181,6 +1182,7 @@ def news(
         "brave_api_key": config.tools.web.search.api_key or None,
         "restrict_to_workspace": config.tools.restrict_to_workspace,
         "shell": {"timeout": getattr(config.tools.exec, "timeout", 120)},
+        "postiz": config.tools.postiz.model_dump(),
     }
     tool_factory = ToolFactory(
         agent_registry,

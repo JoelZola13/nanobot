@@ -1,5 +1,6 @@
 """Tool factory for building per-agent tool sets."""
 
+import fnmatch
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +28,8 @@ TOOL_CATALOG: dict[str, tuple[str, str]] = {
     "exec": ("nanobot.agent.tools.shell", "ExecTool"),  # alias used in agent YAML specs
     "email_send": ("nanobot.agent.tools.email_tools", "EmailSendTool"),
     "email_read": ("nanobot.agent.tools.email_tools", "EmailReadTool"),
-    "image_gen": ("nanobot.agent.tools.image_gen", "ImageGenTool"),
-    "tts": ("nanobot.agent.tools.tts", "TTSTool"),
+    "image_gen": ("nanobot.agent.tools.image_gen", "QwenImageGenTool"),
+    "tts": ("nanobot.agent.tools.tts", "QwenTTSTool"),
     "postiz": ("nanobot.agent.tools.postiz", "PostizPublishTool"),
     "article_image": ("nanobot.agent.tools.article_image", "ArticleImageTool"),
     # ── Search & research ──
@@ -69,11 +70,14 @@ class ToolFactory:
         workspace: Path | None = None,
         tool_config: dict[str, Any] | None = None,
         provider: LLMProvider | None = None,
+        mcp_tools: dict[str, Tool] | None = None,
     ):
         self._agent_registry = agent_registry
         self._workspace = workspace or Path.cwd()
         self._tool_config = tool_config or {}
         self._provider = provider
+        # MCP tools keyed by their full name (e.g. "mcp_airtable_list_records")
+        self._mcp_tools: dict[str, Tool] = mcp_tools or {}
 
     def build_tools(self, spec: AgentSpec) -> ToolRegistry:
         """
@@ -89,6 +93,23 @@ class ToolFactory:
 
         # 1. Add capability tools from spec
         for tool_name in spec.tools:
+            # Wildcard MCP patterns like "mcp_airtable_*" or "mcp_google-calendar_*"
+            if "*" in tool_name and tool_name.startswith("mcp_"):
+                matched = 0
+                for mcp_name, mcp_tool in self._mcp_tools.items():
+                    if fnmatch.fnmatch(mcp_name, tool_name):
+                        registry.register(mcp_tool)
+                        matched += 1
+                if matched == 0:
+                    logger.warning(
+                        f"MCP wildcard '{tool_name}' matched 0 tools for agent '{spec.name}'"
+                    )
+                else:
+                    logger.debug(
+                        f"MCP wildcard '{tool_name}' matched {matched} tools for '{spec.name}'"
+                    )
+                continue
+
             tool = self._create_tool(tool_name)
             if tool:
                 registry.register(tool)
@@ -127,10 +148,15 @@ class ToolFactory:
 
     def _create_tool(self, tool_name: str) -> Tool | None:
         """
-        Create a tool instance by name from the catalog.
+        Create a tool instance by name from the catalog or MCP pool.
 
         Uses lazy importing to avoid importing unused tool modules.
+        Falls back to MCP tools if not found in the static catalog.
         """
+        # Check MCP tools first for exact matches (e.g. "mcp_airtable_list_records")
+        if tool_name in self._mcp_tools:
+            return self._mcp_tools[tool_name]
+
         if tool_name not in TOOL_CATALOG:
             return None
 
@@ -183,5 +209,24 @@ class ToolFactory:
         if tool_name in ("spreadsheet_read", "spreadsheet_write", "document_editor"):
             if self._tool_config.get("restrict_to_workspace"):
                 kwargs["allowed_dir"] = self._workspace
+
+        if tool_name == "tts":
+            kwargs["audio_dir"] = self._workspace / "remotion" / "public" / "audio"
+
+        # Email tools need IMAP/SMTP credentials from config
+        if tool_name == "email_read":
+            email_cfg = self._tool_config.get("email", {})
+            kwargs["imap_host"] = email_cfg.get("imap_host", "")
+            kwargs["imap_port"] = email_cfg.get("imap_port", 993)
+            kwargs["username"] = email_cfg.get("imap_username", "")
+            kwargs["password"] = email_cfg.get("imap_password", "")
+
+        if tool_name == "email_send":
+            email_cfg = self._tool_config.get("email", {})
+            kwargs["smtp_host"] = email_cfg.get("smtp_host", "")
+            kwargs["smtp_port"] = email_cfg.get("smtp_port", 587)
+            kwargs["username"] = email_cfg.get("smtp_username", "")
+            kwargs["password"] = email_cfg.get("smtp_password", "")
+            kwargs["from_addr"] = email_cfg.get("from_addr", email_cfg.get("smtp_username", ""))
 
         return kwargs

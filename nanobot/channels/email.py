@@ -74,9 +74,11 @@ class EmailChannel(BaseChannel):
         logger.info("Starting Email channel (IMAP polling mode)...")
 
         poll_seconds = max(5, int(self.config.poll_interval_seconds))
+        _consecutive_errors = 0
         while self._running:
             try:
                 inbound_items = await asyncio.to_thread(self._fetch_new_messages)
+                _consecutive_errors = 0  # reset on success
                 for item in inbound_items:
                     sender = item["sender"]
                     subject = item.get("subject", "")
@@ -94,7 +96,14 @@ class EmailChannel(BaseChannel):
                         metadata=item.get("metadata", {}),
                     )
             except Exception as e:
-                logger.error(f"Email polling error: {e}")
+                _consecutive_errors += 1
+                backoff = min(poll_seconds * (2 ** _consecutive_errors), 300)
+                logger.error(
+                    f"Email polling error ({_consecutive_errors}x): {e} "
+                    f"— backing off {backoff:.0f}s"
+                )
+                await asyncio.sleep(backoff)
+                continue
 
             await asyncio.sleep(poll_seconds)
 

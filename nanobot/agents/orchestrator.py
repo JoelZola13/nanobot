@@ -189,8 +189,17 @@ class Orchestrator:
             # Start a tracing span for this agent
             span = trace.start_agent_span(current_agent)
 
-            result: AgentResult = await instance.run(agent_messages, model, on_progress=on_progress)
+            result: AgentResult = await instance.run(agent_messages, model, on_progress=on_progress, span=span)
             session.accumulate_usage(result.usage)
+
+            # ── Observability: log per-agent outcome ──
+            logger.info(
+                f"[{session_id}] Agent '{current_agent}' finished: "
+                f"reason={result.finish_reason}, "
+                f"content_len={len(result.content)}, "
+                f"usage={result.usage}"
+            )
+            span.finish(result.finish_reason)
 
             if result.is_handoff:
                 # Parse the handoff signal

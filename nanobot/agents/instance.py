@@ -1,6 +1,7 @@
 """Agent instance — runtime execution loop for a single agent."""
 
 import json
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -13,6 +14,11 @@ from nanobot.providers.base import LLMProvider, LLMResponse
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agents.spec import AgentSpec
 from nanobot.agents.tools.transfer import is_handoff_signal
+from nanobot.agents.tracing import AgentSpan
+
+# ── Dedup / drift detection constants ────────────────────────────
+DEDUP_COOLDOWN_SECS = 5        # suppress identical tool call within N seconds
+DRIFT_REPEAT_THRESHOLD = 3     # consecutive identical calls → bail out
 
 
 class AgentInstance:
@@ -43,6 +49,7 @@ class AgentInstance:
         messages: list[dict[str, Any]],
         model: str | None = None,
         on_progress: ProgressCallback = None,
+        span: AgentSpan | None = None,
     ) -> "AgentResult":
         """
         Execute the agent loop until it produces a response or handoff.
@@ -52,6 +59,7 @@ class AgentInstance:
                       be prepended by the Orchestrator).
             model: Override model (defaults to spec.model resolved by Orchestrator).
             on_progress: Async callback for streaming progress updates.
+            span: Optional AgentSpan for structured tracing/observability.
 
         Returns:
             AgentResult with either a text response or a handoff signal.
@@ -63,6 +71,12 @@ class AgentInstance:
         tool_defs = self.tools.get_definitions() if len(self.tools) > 0 else None
         iteration = 0
 
+        # ── Dedup / drift state ──────────────────────────────────
+        # Maps (tool_name, args_json) → last_call_timestamp
+        _recent_calls: dict[tuple[str, str], float] = {}
+        # Tracks last N call signatures for drift detection
+        _call_history: list[tuple[str, str]] = []
+
         while iteration < self.spec.max_iterations:
             iteration += 1
             logger.debug(
@@ -70,6 +84,7 @@ class AgentInstance:
             )
 
             try:
+                llm_t0 = time.monotonic()
                 response: LLMResponse = await self.provider.chat(
                     messages=messages,
                     tools=tool_defs,
@@ -77,6 +92,21 @@ class AgentInstance:
                     max_tokens=self.spec.max_tokens,
                     temperature=self.spec.temperature,
                 )
+                llm_ms = (time.monotonic() - llm_t0) * 1000
+                logger.info(
+                    f"Agent '{self.spec.name}' LLM call [{llm_ms:.0f}ms] "
+                    f"iter={iteration} has_tools={response.has_tool_calls} "
+                    f"usage={response.usage}"
+                )
+                if span:
+                    span.record_llm_call(
+                        model=resolved_model,
+                        iteration=iteration,
+                        duration_ms=llm_ms,
+                        usage=response.usage,
+                        has_tool_calls=response.has_tool_calls,
+                        tool_call_names=[tc.name for tc in response.tool_calls] if response.has_tool_calls else [],
+                    )
             except Exception as e:
                 logger.error(f"Agent '{self.spec.name}' LLM error: {e}")
                 return AgentResult(
@@ -108,12 +138,69 @@ class AgentInstance:
 
                 # Execute each tool call
                 for tc in response.tool_calls:
+                    args_json = json.dumps(tc.arguments, sort_keys=True)
+                    call_sig = (tc.name, args_json)
+
                     logger.debug(
                         f"Agent '{self.spec.name}' calling tool: {tc.name}"
                     )
                     logger.debug(
-                        f"  Tool args: {json.dumps(tc.arguments)[:200]}"
+                        f"  Tool args: {args_json[:200]}"
                     )
+
+                    # ── Dedup: skip if identical call within cooldown ─────
+                    now = time.monotonic()
+                    last_ts = _recent_calls.get(call_sig)
+                    if last_ts is not None and (now - last_ts) < DEDUP_COOLDOWN_SECS:
+                        logger.warning(
+                            f"Agent '{self.spec.name}' dedup: skipping repeated "
+                            f"'{tc.name}' call within {DEDUP_COOLDOWN_SECS}s"
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "name": tc.name,
+                                "content": (
+                                    "[DEDUP] This identical tool call was just executed. "
+                                    "Use the previous result instead of calling again."
+                                ),
+                            }
+                        )
+                        continue
+                    _recent_calls[call_sig] = now
+
+                    # ── Drift detection: bail if same call repeated N times ─
+                    _call_history.append(call_sig)
+                    if len(_call_history) >= DRIFT_REPEAT_THRESHOLD:
+                        tail = _call_history[-DRIFT_REPEAT_THRESHOLD:]
+                        if all(s == tail[0] for s in tail):
+                            logger.warning(
+                                f"Agent '{self.spec.name}' drift detected: "
+                                f"'{tc.name}' called {DRIFT_REPEAT_THRESHOLD}x "
+                                f"consecutively with same args — aborting loop"
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc.id,
+                                    "name": tc.name,
+                                    "content": (
+                                        "[DRIFT] This tool has been called repeatedly "
+                                        "with the same arguments. Stopping to avoid "
+                                        "an infinite loop."
+                                    ),
+                                }
+                            )
+                            return AgentResult(
+                                agent_name=self.spec.name,
+                                content=(
+                                    "I detected a repeating pattern and stopped to "
+                                    "avoid wasting resources. Here's what I have so far."
+                                ),
+                                finish_reason="drift",
+                                messages=messages,
+                            )
 
                     # Stream tool call progress
                     if on_progress:
@@ -127,11 +214,32 @@ class AgentInstance:
                     if tool_impl and hasattr(tool_impl, '_on_progress'):
                         tool_impl._on_progress = on_progress
 
-                    result = await self.tools.execute(tc.name, tc.arguments)
+                    t0 = time.monotonic()
+                    try:
+                        result = await self.tools.execute(tc.name, tc.arguments)
+                    except Exception as tool_err:
+                        logger.error(
+                            f"Agent '{self.spec.name}' tool '{tc.name}' "
+                            f"raised: {tool_err}"
+                        )
+                        result = (
+                            f"[TOOL_ERROR] {tc.name} failed: {tool_err}\n"
+                            "The tool encountered an error. You can try a "
+                            "different approach or inform the user."
+                        )
+                    elapsed_ms = (time.monotonic() - t0) * 1000
                     logger.info(
-                        f"  Tool '{tc.name}' result ({len(result)} chars): "
-                        f"{result[:300]}"
+                        f"  Tool '{tc.name}' [{elapsed_ms:.0f}ms] "
+                        f"({len(result)} chars): {result[:300]}"
                     )
+                    if span:
+                        span.record_tool_call(
+                            name=tc.name,
+                            arguments=tc.arguments,
+                            result=result,
+                            duration_ms=elapsed_ms,
+                            is_handoff=is_handoff_signal(result),
+                        )
 
                     # Check if the tool result is a handoff signal
                     if is_handoff_signal(result):

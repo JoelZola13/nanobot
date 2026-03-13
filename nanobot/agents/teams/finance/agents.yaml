@@ -3,7 +3,7 @@ agents:
     role: lead
     description: "Oversees all financial operations — bookkeeping, crypto, reporting. Owns the organization's complete financial picture and coordinates unified views across traditional and crypto assets."
     model: openai-codex/gpt-5.4
-    tools: [web_search, file_read, file_write, calculator, spreadsheet_read]
+    tools: [web_search, file_read, file_write, calculator, spreadsheet_read, spreadsheet_write]
     handoffs:
       - accounting_agent
       - crypto_agent

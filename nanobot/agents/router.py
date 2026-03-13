@@ -39,6 +39,8 @@ ROUTING_RULES: list[tuple[str, list[str], str]] = [
             "reply", "forward", "inbox", "notification",
             "telegram", "sms", "text message", "call",
             "contact", "outreach", "respond",
+            "calendar", "meeting", "schedule", "availability",
+            "appointment", "event", "reminder", "rsvp",
         ],
         "communication",
     ),
@@ -75,6 +77,11 @@ ROUTING_RULES: list[tuple[str, list[str], str]] = [
             "funder", "foundation", "nonprofit funding",
             "grant writing", "letter of intent", "loi",
             "grant report", "grant deadline",
+            "canada council", "arts council", "trillium",
+            "sshrc", "canadian heritage", "rfp",
+            "request for proposals", "grant opportunity",
+            "grant budget", "grant narrative", "grant pipeline",
+            "concept note", "matching funds", "in-kind",
         ],
         "grants",
     ),
@@ -86,7 +93,8 @@ ROUTING_RULES: list[tuple[str, list[str], str]] = [
             "investigate", "study", "data", "statistics",
             "survey", "findings", "literature review",
             "intelligence", "briefing", "competitor",
-            "market", "trend",
+            "market", "trend", "airtable", "look up",
+            "records", "crm", "web search",
         ],
         "research",
     ),
@@ -168,6 +176,18 @@ def route_request(
     # Sort by score descending, pick the winner
     scores.sort(key=lambda x: x[1], reverse=True)
     winner, score, desc = scores[0]
+
+    # Confidence threshold: require ≥2 keyword hits for routing.
+    # A single keyword match is too ambiguous (e.g. "send" alone).
+    # Exception: if only one agent matched, 1 hit is fine — it's unambiguous.
+    MIN_SCORE = 2
+    if score < MIN_SCORE and len(scores) > 1:
+        logger.info(
+            f"Router: best match '{winner}' has score={score} "
+            f"(below threshold {MIN_SCORE} with {len(scores)} candidates), "
+            f"falling back to '{fallback}'"
+        )
+        return fallback
 
     # Verify the agent exists in registry
     if not registry.has(winner):

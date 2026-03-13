@@ -3,7 +3,7 @@ agents:
     role: lead
     description: "Runs editorial calendar and content pipeline. Coordinates research, writing, and publishing."
     model: openai-codex/gpt-5.4
-    tools: [web_search, news_search, file_read, file_write]
+    tools: [web_search, news_search, file_read, file_write, "mcp_google-drive_*"]
     handoffs:
       - article_researcher
       - article_writer
@@ -34,7 +34,7 @@ agents:
     role: member
     description: "Manages social media presence. Creates posts, schedules content, and monitors engagement."
     model: openai-codex/gpt-5.4
-    tools: [web_search, file_read, file_write, postiz]
+    tools: [web_search, file_read, file_write, postiz, "mcp_canva_*"]
     handoffs: [content_manager]
     system_prompt: social_media_manager.md
     max_iterations: 15

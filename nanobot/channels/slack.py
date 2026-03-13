@@ -310,14 +310,27 @@ class SlackChannel(BaseChannel):
     # ------------------------------------------------------------------
 
     async def _health_loop(self) -> None:
-        """Periodically check connection health."""
+        """Periodically check connection health and auto-reconnect if stale."""
+        _warned = False
         while self._running:
             await asyncio.sleep(60)
             if not self._connected:
+                _warned = False
                 continue
             idle = time.monotonic() - self._last_event_time
-            if idle > self.config.health_warn_idle_s:
+            if idle > self.config.health_warn_idle_s * 2:
+                # Stale beyond 2x threshold — force reconnect
+                logger.warning(
+                    f"Slack: no events for {idle:.0f}s "
+                    f"(>{self.config.health_warn_idle_s * 2}s), "
+                    f"forcing reconnect"
+                )
+                self._connected = False  # triggers reconnect in start()
+                _warned = False
+            elif idle > self.config.health_warn_idle_s and not _warned:
+                # Warn once per idle stretch, don't spam
                 logger.warning(f"Slack: no events received for {idle:.0f}s")
+                _warned = True
 
     def health(self) -> dict[str, Any]:
         """Return connection health info."""
