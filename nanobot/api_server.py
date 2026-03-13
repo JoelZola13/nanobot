@@ -1168,13 +1168,76 @@ async def audio_speech(request: Request) -> StreamingResponse | JSONResponse:
         return _openai_error("TTS produced no output file", status_code=500)
 
     audio_bytes = wav_path.read_bytes()
+
+    # Convert WAV to MP3 for LobeHub compatibility
+    response_format = body.get("response_format", "mp3")
+    if response_format == "mp3":
+        import subprocess
+        mp3_path = wav_path.with_suffix(".mp3")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(wav_path), "-q:a", "2", str(mp3_path)],
+                capture_output=True, check=True,
+            )
+            audio_bytes = mp3_path.read_bytes()
+            mp3_path.unlink(missing_ok=True)
+            media_type = "audio/mpeg"
+            filename = "speech.mp3"
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            logger.warning(f"ffmpeg WAV→MP3 conversion failed, returning WAV: {e}")
+            media_type = "audio/wav"
+            filename = "speech.wav"
+    else:
+        media_type = "audio/wav"
+        filename = "speech.wav"
+
     wav_path.unlink(missing_ok=True)
 
     return StreamingResponse(
         content=iter([audio_bytes]),
-        media_type="audio/wav",
-        headers={"Content-Disposition": f'inline; filename="speech.wav"'},
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
+
+
+# ─── Embeddings endpoint (for LobeHub Knowledge Base / RAG) ──────────────
+_embedding_model = None
+
+
+async def embeddings(request: Request) -> JSONResponse:
+    """OpenAI-compatible embeddings endpoint using local sentence-transformers."""
+    global _embedding_model
+    try:
+        body = await request.json()
+    except Exception:
+        return _openai_error("Invalid JSON body", status_code=400)
+
+    texts = body.get("input", "")
+    if isinstance(texts, str):
+        texts = [texts]
+    if not texts:
+        return _openai_error("Missing required field: input", param="input")
+
+    if _embedding_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        logger.info("Loaded embedding model: all-MiniLM-L6-v2")
+
+    vectors = _embedding_model.encode(texts, normalize_embeddings=True)
+
+    data = [
+        {"object": "embedding", "embedding": v.tolist(), "index": i}
+        for i, v in enumerate(vectors)
+    ]
+    return JSONResponse({
+        "object": "list",
+        "data": data,
+        "model": body.get("model", "all-MiniLM-L6-v2"),
+        "usage": {
+            "prompt_tokens": sum(len(t.split()) for t in texts),
+            "total_tokens": sum(len(t.split()) for t in texts),
+        },
+    })
 
 
 app = Starlette(
@@ -1183,6 +1246,7 @@ app = Starlette(
         Route("/v1/models", list_models, methods=["GET"]),
         Route("/v1/audio/transcriptions", audio_transcriptions, methods=["POST"]),
         Route("/v1/audio/speech", audio_speech, methods=["POST"]),
+        Route("/v1/embeddings", embeddings, methods=["POST"]),
         Route("/health", health, methods=["GET"]),
         Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
         Route("/videos/{filename:path}", serve_video, methods=["GET"]),
