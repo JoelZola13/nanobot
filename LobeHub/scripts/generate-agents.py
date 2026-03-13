@@ -363,9 +363,11 @@ def main():
         agents_json.append(agent_json)
 
         # Write individual file at root level (LobeHub expects {baseUrl}/{id}.json)
-        out_file = AGENTS_OUT / f"{agent_json['identifier']}.json"
-        with open(out_file, "w") as f:
-            json.dump(agent_json, f, indent=2, ensure_ascii=False)
+        # Also write locale-specific version ({id}.en-US.json) which LobeHub fetches
+        for suffix in ("", ".en-US"):
+            out_file = AGENTS_OUT / f"{agent_json['identifier']}{suffix}.json"
+            with open(out_file, "w") as f:
+                json.dump(agent_json, f, indent=2, ensure_ascii=False)
 
     print(f"Generated {len(agents_json)} agent JSON files")
 
