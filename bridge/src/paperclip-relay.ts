@@ -389,13 +389,10 @@ async function handleDispatch(
 
     console.log(`[relay] created issue ${issue.identifier}: "${issue.title}"`);
 
-    // 2. Wake the agent so it picks up the issue immediately
-    try {
-      await pcPost(`/agents/${paperclipId}/wakeup`, {});
-      console.log(`[relay] 🔔 woke ${mapping.nanobotName}`);
-    } catch (err) {
-      console.warn(`[relay] wakeup failed (agent will pick up on next heartbeat):`, err);
-    }
+    // 2. Paperclip auto-wakes the agent on assignment (with issue context).
+    //    Do NOT call /wakeup manually — it creates a second run with empty
+    //    context, which triggers the "No project workspace" STDERR warning.
+    console.log(`[relay] ✅ ${mapping.nanobotName} will wake automatically via assignment trigger`);
 
     jsonResp(res, 201, {
       status: "dispatched",
@@ -453,19 +450,12 @@ async function handleBatchDispatch(
         assignee: mapping.nanobotName,
         status: "created",
       });
-      agentsToWake.add(paperclipId);
     } catch (err: any) {
       results.push({ title: task.title, error: err.message });
     }
   }
 
-  // Wake all assigned agents
-  for (const agentId of Array.from(agentsToWake)) {
-    try {
-      await pcPost(`/agents/${agentId}/wakeup`, {});
-    } catch {}
-  }
-
+  // Paperclip auto-wakes agents on assignment — no manual wakeup needed
   jsonResp(res, 201, { dispatched: results.length, results });
 }
 
