@@ -24,6 +24,7 @@ const RELAY_PORT = 3050;
 const NANOBOT_API = "http://127.0.0.1:18790";
 const PAPERCLIP_API = "http://127.0.0.1:3100/api";
 const COMPANY_ID = "78940514-fbb0-4c2d-8cee-09bcfd5399a4";
+const PROJECT_ID = "645c5cd9-caa1-46c7-be50-da6e6001df14"; // "Nanobot" project with workspace
 
 // Cost per 1K tokens (cents) — adjust for your model pricing
 const INPUT_COST_PER_1K = 0.3; // ¢
@@ -376,12 +377,13 @@ async function handleDispatch(
   console.log(`[relay] 📬 dispatch: "${title}" → ${mapping.nanobotName}`);
 
   try {
-    // 1. Create the issue
+    // 1. Create the issue (linked to project so workspace resolves)
     const issue = await pcPost(`/companies/${COMPANY_ID}/issues`, {
       title,
       description: description || "",
       priority: priority || "medium",
       assigneeAgentId: paperclipId,
+      projectId: PROJECT_ID,
       status: "todo",
     });
 
@@ -442,6 +444,7 @@ async function handleBatchDispatch(
         description: task.description || "",
         priority: task.priority || "medium",
         assigneeAgentId: paperclipId,
+        projectId: PROJECT_ID,
         status: "todo",
       });
       results.push({
