@@ -1,13 +1,17 @@
 /**
- * Paperclip ↔ Nanobot Heartbeat Relay v2
+ * Paperclip ↔ Nanobot Heartbeat Relay v3
  *
- * Full integration:
- * - Issue checkout/release lifecycle
+ * Full Paperclip integration:
+ * - Issue lifecycle: checkout → in_progress → done → release
+ * - Sub-issues / subtasks with parentId
+ * - Labels for categorization
+ * - Milestones with target dates (calendar)
+ * - Goals linked to issues
  * - Cost event reporting per agent run
  * - Progress comments on issues during execution
- * - Heartbeat run events for real-time dashboard updates
- * - On-demand wakeup support
- * - Idle heartbeat with status check
+ * - Initiatives for strategic planning
+ * - Approval-gated high-cost tasks
+ * - On-demand wakeup via assignment trigger
  *
  * Port: 3050
  */
@@ -67,6 +71,13 @@ function jsonResp(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
+function findAgentByName(name: string): [string, AgentMapEntry] | null {
+  const entry = Object.entries(agentMapping).find(
+    ([, v]) => v.nanobotName === name
+  );
+  return entry ?? null;
+}
+
 // ── Paperclip API Client ────────────────────────────────────────────
 async function pcGet(path: string): Promise<any> {
   const resp = await fetch(`${PAPERCLIP_API}${path}`);
@@ -99,6 +110,15 @@ async function pcPost(path: string, body: any): Promise<any> {
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`POST ${path}: ${resp.status} — ${text}`);
+  }
+  return resp.json();
+}
+
+async function pcDelete(path: string): Promise<any> {
+  const resp = await fetch(`${PAPERCLIP_API}${path}`, { method: "DELETE" });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`DELETE ${path}: ${resp.status} — ${text}`);
   }
   return resp.json();
 }
@@ -233,11 +253,12 @@ interface PaperclipIssue {
   priority: string;
   projectId: string | null;
   goalId: string | null;
+  parentId: string | null;
   labels: Array<{ name: string }>;
+  identifier: string;
 }
 
 async function getAgentIssues(agentId: string): Promise<PaperclipIssue[]> {
-  // Check for assigned issues in actionable states
   const issues: PaperclipIssue[] = await pcGet(
     `/companies/${COMPANY_ID}/issues?assigneeAgentId=${agentId}&status=todo,in_progress,backlog`
   );
@@ -289,12 +310,11 @@ async function handleHeartbeat(
     if (issue.status !== "in_progress") {
       const claimed = await checkoutIssue(issue.id, agentId);
       if (!claimed) {
-        // Still try to proceed — the issue may be locked by a stale run from this same agent
         console.log(`[relay] checkout conflict — proceeding anyway for ${label}`);
       }
     }
 
-    // 4. Mark as in_progress (may fail if already in_progress, that's fine)
+    // 4. Mark as in_progress
     try {
       await pcPatch(`/issues/${issue.id}`, { status: "in_progress" });
     } catch {
@@ -304,12 +324,13 @@ async function handleHeartbeat(
     // 5. Post progress comment
     await addIssueComment(issue.id, `🤖 **${mapping.nanobotName}** is working on this...`);
 
-    // 6. Build task prompt
+    // 6. Build task prompt with full context
     const parts = [
       `## Task: ${issue.title}`,
       issue.description || "",
       `Priority: ${issue.priority || "medium"}`,
       issue.labels?.length ? `Labels: ${issue.labels.map((l) => l.name).join(", ")}` : "",
+      issue.parentId ? `Parent issue: ${issue.parentId}` : "",
     ].filter(Boolean);
 
     // 7. Execute via nanobot
@@ -336,7 +357,7 @@ async function handleHeartbeat(
     // 9. Release the issue lock first, then mark done
     await releaseIssue(issue.id);
 
-    // 10. Mark issue as done (after release so it's not locked)
+    // 10. Mark issue as done
     await pcPatch(`/issues/${issue.id}`, { status: "done" });
 
     // 11. Report cost
@@ -356,18 +377,18 @@ async function handleHeartbeat(
   }
 }
 
-// ── Manual Task Dispatch (POST /dispatch) ───────────────────────────
-// Create an issue, assign it, and immediately wake the agent
+// ═══════════════════════════════════════════════════════════════════
+// DISPATCH ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Single Dispatch (POST /dispatch) ────────────────────────────────
 async function handleDispatch(
   res: ServerResponse,
   payload: any
 ): Promise<void> {
-  const { agentName, title, description, priority } = payload;
+  const { agentName, title, description, priority, parentId, goalId, labelIds, dueDate } = payload;
 
-  // Find the agent by nanobot name
-  const entry = Object.entries(agentMapping).find(
-    ([, v]) => v.nanobotName === agentName
-  );
+  const entry = findAgentByName(agentName);
   if (!entry) {
     jsonResp(res, 404, { error: `Agent "${agentName}" not found` });
     return;
@@ -377,21 +398,28 @@ async function handleDispatch(
   console.log(`[relay] 📬 dispatch: "${title}" → ${mapping.nanobotName}`);
 
   try {
-    // 1. Create the issue (linked to project so workspace resolves)
-    const issue = await pcPost(`/companies/${COMPANY_ID}/issues`, {
+    const issuePayload: Record<string, any> = {
       title,
       description: description || "",
       priority: priority || "medium",
       assigneeAgentId: paperclipId,
       projectId: PROJECT_ID,
       status: "todo",
-    });
+    };
+
+    // Optional fields
+    if (parentId) issuePayload.parentId = parentId;
+    if (goalId) issuePayload.goalId = goalId;
+    if (labelIds) issuePayload.labelIds = labelIds;
+    if (dueDate) issuePayload.dueDate = dueDate;
+
+    const issue = await pcPost(`/companies/${COMPANY_ID}/issues`, issuePayload);
 
     console.log(`[relay] created issue ${issue.identifier}: "${issue.title}"`);
 
-    // 2. Paperclip auto-wakes the agent on assignment (with issue context).
-    //    Do NOT call /wakeup manually — it creates a second run with empty
-    //    context, which triggers the "No project workspace" STDERR warning.
+    // Paperclip auto-wakes the agent on assignment (with issue context).
+    // Do NOT call /wakeup manually — it creates a second run with empty
+    // context, which triggers the "No project workspace" STDERR warning.
     console.log(`[relay] ✅ ${mapping.nanobotName} will wake automatically via assignment trigger`);
 
     jsonResp(res, 201, {
@@ -409,12 +437,90 @@ async function handleDispatch(
   }
 }
 
-// ── Bulk Dispatch (POST /dispatch/batch) ────────────────────────────
+// ── Dispatch with Sub-tasks (POST /dispatch/breakdown) ──────────────
+// Creates a parent issue + sub-task issues assigned to different agents
+async function handleDispatchBreakdown(
+  res: ServerResponse,
+  payload: any
+): Promise<void> {
+  const { title, description, priority, goalId, dueDate, subtasks } = payload;
+
+  if (!Array.isArray(subtasks) || subtasks.length === 0) {
+    jsonResp(res, 400, { error: "subtasks array required" });
+    return;
+  }
+
+  console.log(`[relay] 📬 breakdown dispatch: "${title}" with ${subtasks.length} subtasks`);
+
+  try {
+    // 1. Create parent issue (unassigned — it's a container)
+    const parent = await pcPost(`/companies/${COMPANY_ID}/issues`, {
+      title,
+      description: description || "",
+      priority: priority || "medium",
+      projectId: PROJECT_ID,
+      status: "todo",
+      ...(goalId ? { goalId } : {}),
+      ...(dueDate ? { dueDate } : {}),
+    });
+
+    console.log(`[relay] parent: ${parent.identifier} — "${parent.title}"`);
+
+    // 2. Create sub-task issues
+    const results = [];
+    for (const sub of subtasks) {
+      const entry = findAgentByName(sub.agentName);
+      if (!entry) {
+        results.push({ title: sub.title, error: `Agent "${sub.agentName}" not found` });
+        continue;
+      }
+      const [paperclipId, mapping] = entry;
+
+      try {
+        const child = await pcPost(`/companies/${COMPANY_ID}/issues`, {
+          title: sub.title,
+          description: sub.description || "",
+          priority: sub.priority || priority || "medium",
+          assigneeAgentId: paperclipId,
+          parentId: parent.id,
+          projectId: PROJECT_ID,
+          status: "todo",
+          ...(sub.dueDate ? { dueDate: sub.dueDate } : {}),
+          ...(sub.labelIds ? { labelIds: sub.labelIds } : {}),
+        });
+
+        results.push({
+          identifier: child.identifier,
+          title: child.title,
+          assignee: mapping.nanobotName,
+          status: "created",
+        });
+      } catch (err: any) {
+        results.push({ title: sub.title, error: err.message });
+      }
+    }
+
+    jsonResp(res, 201, {
+      status: "dispatched",
+      parent: {
+        id: parent.id,
+        identifier: parent.identifier,
+        title: parent.title,
+      },
+      subtasks: results,
+    });
+  } catch (err: any) {
+    console.error(`[relay] breakdown error:`, err.message);
+    jsonResp(res, 500, { error: err.message });
+  }
+}
+
+// ── Batch Dispatch (POST /dispatch/batch) ────────────────────────────
 async function handleBatchDispatch(
   res: ServerResponse,
   payload: any
 ): Promise<void> {
-  const { tasks } = payload; // Array of { agentName, title, description, priority }
+  const { tasks } = payload;
   if (!Array.isArray(tasks) || tasks.length === 0) {
     jsonResp(res, 400, { error: "tasks array required" });
     return;
@@ -423,12 +529,8 @@ async function handleBatchDispatch(
   console.log(`[relay] 📬 batch dispatch: ${tasks.length} tasks`);
 
   const results = [];
-  const agentsToWake = new Set<string>();
-
   for (const task of tasks) {
-    const entry = Object.entries(agentMapping).find(
-      ([, v]) => v.nanobotName === task.agentName
-    );
+    const entry = findAgentByName(task.agentName);
     if (!entry) {
       results.push({ title: task.title, error: `Agent "${task.agentName}" not found` });
       continue;
@@ -443,6 +545,10 @@ async function handleBatchDispatch(
         assigneeAgentId: paperclipId,
         projectId: PROJECT_ID,
         status: "todo",
+        ...(task.parentId ? { parentId: task.parentId } : {}),
+        ...(task.goalId ? { goalId: task.goalId } : {}),
+        ...(task.labelIds ? { labelIds: task.labelIds } : {}),
+        ...(task.dueDate ? { dueDate: task.dueDate } : {}),
       });
       results.push({
         identifier: issue.identifier,
@@ -459,13 +565,319 @@ async function handleBatchDispatch(
   jsonResp(res, 201, { dispatched: results.length, results });
 }
 
-// ── Dashboard Summary (GET /dashboard) ──────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// LABELS
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleLabels(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  if (req.method === "GET") {
+    const labels = await pcGet(`/companies/${COMPANY_ID}/labels`);
+    jsonResp(res, 200, labels);
+    return;
+  }
+
+  if (req.method === "POST") {
+    const body = JSON.parse(await readBody(req));
+    const label = await pcPost(`/companies/${COMPANY_ID}/labels`, {
+      name: body.name,
+      color: body.color || "#6366f1",
+      description: body.description || "",
+    });
+    jsonResp(res, 201, label);
+    return;
+  }
+
+  jsonResp(res, 405, { error: "Method not allowed" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MILESTONES (Calendar)
+// ═══════════════════════════════════════════════════════════════════
+
+// Calendar view: project timeline + all active issues grouped by status & priority
+async function handleCalendar(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  if (req.method === "GET") {
+    const [issues, agents, project, goals] = await Promise.all([
+      pcGet(`/companies/${COMPANY_ID}/issues`),
+      pcGet(`/companies/${COMPANY_ID}/agents`),
+      pcGet(`/projects/${PROJECT_ID}`),
+      pcGet(`/companies/${COMPANY_ID}/goals`),
+    ]);
+
+    const enriched = issues.map((i: any) => ({
+      identifier: i.identifier,
+      title: i.title,
+      status: i.status,
+      priority: i.priority,
+      createdAt: i.createdAt,
+      completedAt: i.completedAt,
+      assignee: agents.find((a: any) => a.id === i.assigneeAgentId)?.name || "unassigned",
+      team: agents.find((a: any) => a.id === i.assigneeAgentId)?.metadata?.team || "unassigned",
+      hasSubtasks: issues.some((c: any) => c.parentId === i.id),
+      isSubtask: !!i.parentId,
+    }));
+
+    const active = enriched.filter((i: any) =>
+      ["todo", "in_progress", "backlog"].includes(i.status)
+    );
+    const recentDone = enriched
+      .filter((i: any) => i.status === "done")
+      .sort((a: any, b: any) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime())
+      .slice(0, 10);
+
+    jsonResp(res, 200, {
+      project: {
+        name: project.name,
+        targetDate: project.targetDate,
+        status: project.status,
+      },
+      goals: goals.filter((g: any) => g.status === "active").map((g: any) => ({
+        title: g.title,
+        level: g.level,
+      })),
+      active,
+      recentlyCompleted: recentDone,
+      stats: {
+        total: issues.length,
+        active: active.length,
+        done: enriched.filter((i: any) => i.status === "done").length,
+      },
+    });
+    return;
+  }
+
+  jsonResp(res, 405, { error: "Method not allowed" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GOALS
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleGoals(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  if (req.method === "GET") {
+    const goals = await pcGet(`/companies/${COMPANY_ID}/goals`);
+    jsonResp(res, 200, goals);
+    return;
+  }
+
+  if (req.method === "POST") {
+    const body = JSON.parse(await readBody(req));
+    const goal = await pcPost(`/companies/${COMPANY_ID}/goals`, {
+      title: body.title,
+      level: body.level || "team", // company | team | agent | task
+      status: body.status || "active",
+    });
+    jsonResp(res, 201, goal);
+    return;
+  }
+
+  jsonResp(res, 405, { error: "Method not allowed" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ISSUES (full CRUD)
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleIssues(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  const issueId = url.pathname.split("/issues/")[1]?.split("/")[0];
+
+  // GET /issues — list all issues with optional filters
+  if (req.method === "GET" && !issueId) {
+    const params = url.searchParams.toString();
+    const issues = await pcGet(
+      `/companies/${COMPANY_ID}/issues${params ? `?${params}` : ""}`
+    );
+    jsonResp(res, 200, issues);
+    return;
+  }
+
+  // GET /issues/:id — single issue with children & comments
+  if (req.method === "GET" && issueId) {
+    const issue = await pcGet(`/companies/${COMPANY_ID}/issues?parentId=${issueId}`);
+    // Also get the issue itself
+    const allIssues = await pcGet(`/companies/${COMPANY_ID}/issues`);
+    const parent = allIssues.find((i: any) => i.id === issueId || i.identifier === issueId);
+    const children = allIssues.filter((i: any) => i.parentId === issueId);
+    const comments = await pcGet(`/issues/${issueId}/comments`).catch(() => []);
+
+    jsonResp(res, 200, {
+      ...parent,
+      children,
+      comments,
+    });
+    return;
+  }
+
+  // PATCH /issues/:id — update issue
+  if (req.method === "PATCH" && issueId) {
+    const body = JSON.parse(await readBody(req));
+    const updated = await pcPatch(`/issues/${issueId}`, body);
+    jsonResp(res, 200, updated);
+    return;
+  }
+
+  jsonResp(res, 405, { error: "Method not allowed" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// APPROVALS
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleApprovals(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  const approvalId = url.pathname.split("/approvals/")[1]?.split("/")[0];
+  const action = url.pathname.split("/approvals/")[1]?.split("/")[1]; // approve|reject
+
+  // GET /approvals — list pending
+  if (req.method === "GET" && !approvalId) {
+    const approvals = await pcGet(`/companies/${COMPANY_ID}/approvals`);
+    jsonResp(res, 200, approvals);
+    return;
+  }
+
+  // POST /approvals/:id/approve
+  if (req.method === "POST" && approvalId && action === "approve") {
+    const result = await pcPost(`/approvals/${approvalId}/approve`, {});
+    jsonResp(res, 200, result);
+    return;
+  }
+
+  // POST /approvals/:id/reject
+  if (req.method === "POST" && approvalId && action === "reject") {
+    const body = JSON.parse(await readBody(req));
+    const result = await pcPost(`/approvals/${approvalId}/reject`, {
+      reason: body.reason || "",
+    });
+    jsonResp(res, 200, result);
+    return;
+  }
+
+  jsonResp(res, 405, { error: "Method not allowed" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ACTIVITY FEED
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleActivity(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  const limit = url.searchParams.get("limit") || "20";
+  const activity = await pcGet(`/companies/${COMPANY_ID}/activity?limit=${limit}`);
+  jsonResp(res, 200, activity);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COST SUMMARY
+// ═══════════════════════════════════════════════════════════════════
+
+async function handleCosts(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL
+): Promise<void> {
+  const dashboard = await pcGet(`/companies/${COMPANY_ID}/dashboard`);
+  const agents = await pcGet(`/companies/${COMPANY_ID}/agents`);
+
+  const agentCosts = agents.map((a: any) => ({
+    name: a.name,
+    team: a.metadata?.team || "unknown",
+    budgetCents: a.budgetMonthlyCents,
+    spentCents: a.spentMonthlyCents,
+    utilization: a.budgetMonthlyCents > 0
+      ? Math.round((a.spentMonthlyCents / a.budgetMonthlyCents) * 100)
+      : 0,
+  }));
+
+  jsonResp(res, 200, {
+    company: {
+      monthSpendCents: dashboard.costs.monthSpendCents,
+      monthBudgetCents: dashboard.costs.monthBudgetCents,
+      utilization: dashboard.costs.monthUtilizationPercent,
+    },
+    agents: agentCosts.sort((a: any, b: any) => b.spentCents - a.spentCents),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD (enhanced)
+// ═══════════════════════════════════════════════════════════════════
+
 async function handleDashboard(res: ServerResponse): Promise<void> {
   try {
-    const dashboard = await pcGet(`/companies/${COMPANY_ID}/dashboard`);
-    const agents = await pcGet(`/companies/${COMPANY_ID}/agents`);
+    const [dashboard, agents, goals, issues] = await Promise.all([
+      pcGet(`/companies/${COMPANY_ID}/dashboard`),
+      pcGet(`/companies/${COMPANY_ID}/agents`),
+      pcGet(`/companies/${COMPANY_ID}/goals`),
+      pcGet(`/companies/${COMPANY_ID}/issues`),
+    ]);
 
-    const summary = {
+    // Build team summary
+    const teams: Record<string, { lead: string; members: string[]; issueCount: number }> = {};
+    for (const agent of agents) {
+      const team = agent.metadata?.team;
+      if (!team) continue;
+      if (!teams[team]) {
+        teams[team] = { lead: "", members: [], issueCount: 0 };
+      }
+      if (agent.metadata?.nanobotName?.includes("manager") || agent.role === "ceo") {
+        teams[team].lead = agent.name;
+      } else {
+        teams[team].members.push(agent.name);
+      }
+    }
+
+    // Count issues per team via agent assignments
+    for (const issue of issues) {
+      if (issue.assigneeAgentId) {
+        const agentInfo = agents.find((a: any) => a.id === issue.assigneeAgentId);
+        const team = agentInfo?.metadata?.team;
+        if (team && teams[team]) {
+          teams[team].issueCount++;
+        }
+      }
+    }
+
+    // Issues by status
+    const issuesByStatus: Record<string, number> = {};
+    for (const issue of issues) {
+      issuesByStatus[issue.status] = (issuesByStatus[issue.status] || 0) + 1;
+    }
+
+    // Recent issues (last 10)
+    const recentIssues = issues
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10)
+      .map((i: any) => ({
+        identifier: i.identifier,
+        title: i.title,
+        status: i.status,
+        priority: i.priority,
+        assignee: agents.find((a: any) => a.id === i.assigneeAgentId)?.name || "unassigned",
+      }));
+
+    jsonResp(res, 200, {
       company: "Street Voices",
       agents: {
         total: agents.length,
@@ -474,43 +886,40 @@ async function handleDashboard(res: ServerResponse): Promise<void> {
         paused: dashboard.agents.paused,
         error: dashboard.agents.error,
       },
-      tasks: dashboard.tasks,
+      tasks: {
+        ...dashboard.tasks,
+        byStatus: issuesByStatus,
+        total: issues.length,
+      },
       costs: {
         monthSpend: `$${(dashboard.costs.monthSpendCents / 100).toFixed(2)}`,
         monthBudget: `$${(dashboard.costs.monthBudgetCents / 100).toFixed(2)}`,
         utilization: `${dashboard.costs.monthUtilizationPercent}%`,
       },
+      goals: goals.map((g: any) => ({
+        title: g.title,
+        level: g.level,
+        status: g.status,
+      })),
       pendingApprovals: dashboard.pendingApprovals,
-      teams: {} as Record<string, { lead: string; members: string[] }>,
-    };
-
-    // Build team summary
-    for (const agent of agents) {
-      const team = agent.metadata?.team;
-      if (!team) continue;
-      if (!summary.teams[team]) {
-        summary.teams[team] = { lead: "", members: [] };
-      }
-      if (agent.metadata?.nanobotName?.includes("manager") || agent.role === "ceo") {
-        summary.teams[team].lead = agent.name;
-      } else {
-        summary.teams[team].members.push(agent.name);
-      }
-    }
-
-    jsonResp(res, 200, summary);
+      teams,
+      recentIssues,
+    });
   } catch (err: any) {
     jsonResp(res, 500, { error: err.message });
   }
 }
 
-// ── HTTP Server ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// HTTP SERVER
+// ═══════════════════════════════════════════════════════════════════
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://localhost:${RELAY_PORT}`);
 
-  // CORS for dashboard
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -519,12 +928,12 @@ const server = createServer(async (req, res) => {
   }
 
   try {
-    // Health check
+    // ── Health ───────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/health") {
       jsonResp(res, 200, {
         status: "ok",
         service: "paperclip-relay",
-        version: 2,
+        version: 3,
         agents: Object.keys(agentMapping).length,
         paperclip: PAPERCLIP_API,
         nanobot: NANOBOT_API,
@@ -532,46 +941,90 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Dashboard summary
+    // ── Dashboard ───────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/dashboard") {
       await handleDashboard(res);
       return;
     }
 
-    // Agent list
+    // ── Agents ──────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/agents") {
       jsonResp(res, 200, agentMapping);
       return;
     }
 
-    // Reload mapping
+    // ── Reload mapping ──────────────────────────────────────────
     if (req.method === "POST" && url.pathname === "/reload") {
       agentMapping = loadMapping();
-      jsonResp(res, 200, {
-        status: "reloaded",
-        agents: Object.keys(agentMapping).length,
-      });
+      jsonResp(res, 200, { status: "reloaded", agents: Object.keys(agentMapping).length });
       return;
     }
 
-    // Heartbeat webhook from Paperclip
+    // ── Heartbeat (from Paperclip) ──────────────────────────────
     if (req.method === "POST" && url.pathname === "/heartbeat") {
       const body = JSON.parse(await readBody(req));
       await handleHeartbeat(res, body);
       return;
     }
 
-    // Dispatch single task
+    // ── Dispatch ────────────────────────────────────────────────
     if (req.method === "POST" && url.pathname === "/dispatch") {
       const body = JSON.parse(await readBody(req));
       await handleDispatch(res, body);
       return;
     }
 
-    // Batch dispatch
     if (req.method === "POST" && url.pathname === "/dispatch/batch") {
       const body = JSON.parse(await readBody(req));
       await handleBatchDispatch(res, body);
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/dispatch/breakdown") {
+      const body = JSON.parse(await readBody(req));
+      await handleDispatchBreakdown(res, body);
+      return;
+    }
+
+    // ── Issues ──────────────────────────────────────────────────
+    if (url.pathname.startsWith("/issues")) {
+      await handleIssues(req, res, url);
+      return;
+    }
+
+    // ── Labels ──────────────────────────────────────────────────
+    if (url.pathname === "/labels") {
+      await handleLabels(req, res, url);
+      return;
+    }
+
+    // ── Calendar (due dates + project timeline) ────────────────
+    if (url.pathname === "/calendar") {
+      await handleCalendar(req, res, url);
+      return;
+    }
+
+    // ── Goals ───────────────────────────────────────────────────
+    if (url.pathname === "/goals") {
+      await handleGoals(req, res, url);
+      return;
+    }
+
+    // ── Approvals ───────────────────────────────────────────────
+    if (url.pathname.startsWith("/approvals")) {
+      await handleApprovals(req, res, url);
+      return;
+    }
+
+    // ── Activity feed ───────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/activity") {
+      await handleActivity(req, res, url);
+      return;
+    }
+
+    // ── Cost summary ────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/costs") {
+      await handleCosts(req, res, url);
       return;
     }
 
@@ -585,9 +1038,26 @@ const server = createServer(async (req, res) => {
 server.listen(RELAY_PORT, "127.0.0.1", () => {
   const count = Object.keys(agentMapping).length;
   console.log(`[relay] ═══════════════════════════════════════`);
-  console.log(`[relay] Paperclip Relay v2 on http://127.0.0.1:${RELAY_PORT}`);
+  console.log(`[relay] Paperclip Relay v3 on http://127.0.0.1:${RELAY_PORT}`);
   console.log(`[relay] ${count} agents mapped`);
   console.log(`[relay] Nanobot: ${NANOBOT_API}`);
   console.log(`[relay] Paperclip: ${PAPERCLIP_API}`);
+  console.log(`[relay] ───────────────────────────────────────`);
+  console.log(`[relay] Endpoints:`);
+  console.log(`[relay]   GET  /dashboard      — full overview`);
+  console.log(`[relay]   GET  /agents         — agent mapping`);
+  console.log(`[relay]   GET  /issues         — list issues`);
+  console.log(`[relay]   GET  /labels         — list labels`);
+  console.log(`[relay]   GET  /calendar       — upcoming deadlines`);
+  console.log(`[relay]   GET  /goals          — list goals`);
+  console.log(`[relay]   GET  /approvals      — pending approvals`);
+  console.log(`[relay]   GET  /activity       — activity feed`);
+  console.log(`[relay]   GET  /costs          — cost breakdown`);
+  console.log(`[relay]   POST /dispatch       — single task`);
+  console.log(`[relay]   POST /dispatch/batch — batch tasks`);
+  console.log(`[relay]   POST /dispatch/breakdown — parent + subtasks`);
+  console.log(`[relay]   POST /heartbeat      — Paperclip webhook`);
+  console.log(`[relay]   POST /labels         — create label`);
+  console.log(`[relay]   POST /goals          — create goal`);
   console.log(`[relay] ═══════════════════════════════════════`);
 });
