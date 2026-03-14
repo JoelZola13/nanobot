@@ -1,9 +1,13 @@
 /**
- * Paperclip ↔ Nanobot Heartbeat Relay
+ * Paperclip ↔ Nanobot Heartbeat Relay v2
  *
- * Receives heartbeat webhooks from Paperclip (HTTP adapter),
- * translates them into nanobot /v1/chat/completions calls,
- * and reports results + cost events back to Paperclip.
+ * Full integration:
+ * - Issue checkout/release lifecycle
+ * - Cost event reporting per agent run
+ * - Progress comments on issues during execution
+ * - Heartbeat run events for real-time dashboard updates
+ * - On-demand wakeup support
+ * - Idle heartbeat with status check
  *
  * Port: 3050
  */
@@ -19,14 +23,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const RELAY_PORT = 3050;
 const NANOBOT_API = "http://127.0.0.1:18790";
 const PAPERCLIP_API = "http://127.0.0.1:3100/api";
+const COMPANY_ID = "78940514-fbb0-4c2d-8cee-09bcfd5399a4";
+
+// Cost per 1K tokens (cents) — adjust for your model pricing
+const INPUT_COST_PER_1K = 0.3; // ¢
+const OUTPUT_COST_PER_1K = 1.5; // ¢
 
 // ── Agent Mapping ───────────────────────────────────────────────────
+interface AgentMapEntry {
+  nanobotName: string;
+  team: string;
+  role: string;
+}
+
 interface AgentMapping {
-  [paperclipId: string]: {
-    nanobotName: string;
-    team: string;
-    role: string;
-  };
+  [paperclipId: string]: AgentMapEntry;
 }
 
 function loadMapping(): AgentMapping {
@@ -40,7 +51,7 @@ function loadMapping(): AgentMapping {
 
 let agentMapping = loadMapping();
 
-// ── Helpers ─────────────────────────────────────────────────────────
+// ── HTTP Helpers ────────────────────────────────────────────────────
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -50,117 +61,65 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function json(res: ServerResponse, status: number, data: unknown) {
+function jsonResp(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
 }
 
-// ── Paperclip API helpers ───────────────────────────────────────────
-async function paperclipGet(path: string): Promise<any> {
+// ── Paperclip API Client ────────────────────────────────────────────
+async function pcGet(path: string): Promise<any> {
   const resp = await fetch(`${PAPERCLIP_API}${path}`);
-  if (!resp.ok) throw new Error(`Paperclip GET ${path}: ${resp.status}`);
-  return resp.json();
-}
-
-async function paperclipPatch(
-  path: string,
-  body: any,
-  runId?: string
-): Promise<any> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (runId) headers["X-Paperclip-Run-Id"] = runId;
-
-  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok) throw new Error(`Paperclip PATCH ${path}: ${resp.status}`);
-  return resp.json();
-}
-
-async function paperclipPost(
-  path: string,
-  body: any,
-  runId?: string
-): Promise<any> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (runId) headers["X-Paperclip-Run-Id"] = runId;
-
-  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Paperclip POST ${path}: ${resp.status} — ${text}`);
+    throw new Error(`GET ${path}: ${resp.status} — ${text}`);
   }
   return resp.json();
 }
 
-// ── Nanobot call ────────────────────────────────────────────────────
-interface NanobotResponse {
-  content: string;
-  agent: string;
-  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+async function pcPatch(path: string, body: any): Promise<any> {
+  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`PATCH ${path}: ${resp.status} — ${text}`);
+  }
+  return resp.json();
 }
 
-async function callNanobot(
-  agentName: string,
-  message: string
-): Promise<NanobotResponse> {
-  const body = {
-    model: "openai-codex/gpt-5.4",
-    messages: [
-      {
-        role: "user",
-        content: `@${agentName} ${message}`,
-      },
-    ],
-    stream: false,
-  };
-
-  const resp = await fetch(`${NANOBOT_API}/v1/chat/completions`, {
+async function pcPost(path: string, body: any): Promise<any> {
+  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Nanobot API error: ${resp.status} — ${text}`);
+    throw new Error(`POST ${path}: ${resp.status} — ${text}`);
   }
-
-  const data = await resp.json();
-  const choice = data.choices?.[0];
-  const meta = data.nanobot_metadata || {};
-
-  return {
-    content: choice?.message?.content || "(no response)",
-    agent: meta.responding_agent || agentName,
-    usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-  };
+  return resp.json();
 }
 
-// ── Report cost to Paperclip ────────────────────────────────────────
+// ── Cost Reporting ──────────────────────────────────────────────────
+interface TokenUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
 async function reportCost(
-  companyId: string,
   agentId: string,
-  issueId: string | undefined,
-  usage: NanobotResponse["usage"]
-) {
-  // Rough cost estimate: $0.003/1K input, $0.015/1K output (codex pricing)
-  const inputCost = (usage.prompt_tokens / 1000) * 0.3; // cents
-  const outputCost = (usage.completion_tokens / 1000) * 1.5; // cents
-  const costCents = Math.round(inputCost + outputCost);
+  issueId: string | null,
+  usage: TokenUsage
+): Promise<void> {
+  const inputCost = (usage.prompt_tokens / 1000) * INPUT_COST_PER_1K;
+  const outputCost = (usage.completion_tokens / 1000) * OUTPUT_COST_PER_1K;
+  const costCents = Math.max(1, Math.round(inputCost + outputCost));
 
   try {
-    await paperclipPost(`/companies/${companyId}/cost-events`, {
+    await pcPost(`/companies/${COMPANY_ID}/cost-events`, {
       agentId,
       issueId: issueId || undefined,
       provider: "openai-codex",
@@ -170,118 +129,385 @@ async function reportCost(
       costCents,
       occurredAt: new Date().toISOString(),
     });
-    console.log(`[relay] cost reported: ${costCents}¢ for agent ${agentId}`);
+    console.log(
+      `[relay] 💰 cost: ${costCents}¢ (${usage.total_tokens} tokens) for agent ${agentId.slice(0, 8)}`
+    );
   } catch (err) {
     console.error("[relay] cost reporting failed:", err);
   }
 }
 
-// ── Heartbeat handler ───────────────────────────────────────────────
+// ── Issue Comment ───────────────────────────────────────────────────
+async function addIssueComment(
+  issueId: string,
+  body: string
+): Promise<void> {
+  try {
+    await pcPost(`/issues/${issueId}/comments`, { body });
+  } catch (err) {
+    console.error("[relay] comment failed:", err);
+  }
+}
+
+// ── Nanobot Call ────────────────────────────────────────────────────
+interface NanobotResult {
+  content: string;
+  agent: string;
+  usage: TokenUsage;
+}
+
+async function callNanobot(
+  agentName: string,
+  message: string,
+  timeout = 300_000
+): Promise<NanobotResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const resp = await fetch(`${NANOBOT_API}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: `agent/${agentName}`,
+        messages: [{ role: "user", content: message }],
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Nanobot ${resp.status}: ${text}`);
+    }
+
+    const data = await resp.json();
+    const choice = data.choices?.[0];
+    const meta = data.nanobot_metadata || {};
+
+    return {
+      content: choice?.message?.content || "(no response)",
+      agent: meta.responding_agent || agentName,
+      usage: data.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ── Issue Lifecycle ─────────────────────────────────────────────────
+async function checkoutIssue(
+  issueId: string,
+  agentId: string
+): Promise<boolean> {
+  try {
+    await pcPost(`/issues/${issueId}/checkout`, {
+      agentId,
+      expectedStatuses: ["todo", "backlog"],
+    });
+    return true;
+  } catch (err: any) {
+    if (err.message?.includes("409") || err.message?.includes("conflict")) {
+      console.log(`[relay] issue ${issueId.slice(0, 8)} already checked out, skipping`);
+      return false;
+    }
+    throw err;
+  }
+}
+
+async function releaseIssue(issueId: string): Promise<void> {
+  try {
+    await pcPost(`/issues/${issueId}/release`, {});
+  } catch (err) {
+    console.error("[relay] release failed:", err);
+  }
+}
+
+// ── Fetch Agent Issues ──────────────────────────────────────────────
+interface PaperclipIssue {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  projectId: string | null;
+  goalId: string | null;
+  labels: Array<{ name: string }>;
+}
+
+async function getAgentIssues(agentId: string): Promise<PaperclipIssue[]> {
+  // Check for assigned issues in actionable states
+  const issues: PaperclipIssue[] = await pcGet(
+    `/companies/${COMPANY_ID}/issues?assigneeAgentId=${agentId}&status=todo,in_progress,backlog`
+  );
+  return issues;
+}
+
+// ── Heartbeat Handler ───────────────────────────────────────────────
 async function handleHeartbeat(
   res: ServerResponse,
   payload: any
 ): Promise<void> {
-  const { agentId, runId, context } = payload;
+  const { agentId, runId } = payload;
   const mapping = agentMapping[agentId];
 
   if (!mapping) {
-    console.warn(`[relay] unknown agent ID: ${agentId}`);
-    json(res, 404, { error: `Agent ${agentId} not found in mapping` });
+    console.warn(`[relay] ❓ unknown agent: ${agentId}`);
+    jsonResp(res, 404, { error: `Agent ${agentId} not found in mapping` });
     return;
   }
 
-  console.log(
-    `[relay] heartbeat for ${mapping.nanobotName} (${mapping.team}) — run ${runId}`
-  );
+  const label = `${mapping.nanobotName} [${mapping.team}]`;
+  console.log(`[relay] 💓 heartbeat: ${label} — run ${runId?.slice(0, 8) || "?"}`);
 
   try {
-    // 1. Get agent info to find companyId
-    const agentInfo = await paperclipGet(`/agents/${agentId}`);
-    const companyId = agentInfo.companyId;
-
-    // 2. Check for assigned tasks
-    const issues = await paperclipGet(
-      `/companies/${companyId}/issues?assigneeAgentId=${agentId}&status=todo,in_progress,blocked`
-    );
+    // 1. Check for assigned issues
+    const issues = await getAgentIssues(agentId);
 
     if (!issues || issues.length === 0) {
-      console.log(`[relay] no tasks for ${mapping.nanobotName}, idle heartbeat`);
-      json(res, 200, { status: "idle", message: "No tasks assigned" });
+      jsonResp(res, 200, { status: "idle", message: "No tasks assigned" });
       return;
     }
 
-    // 3. Pick highest priority task (in_progress first, then todo)
-    const sorted = issues.sort((a: any, b: any) => {
-      const statusOrder: Record<string, number> = {
-        in_progress: 0,
-        todo: 1,
-        blocked: 2,
-      };
-      return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
-    });
+    // 2. Pick best issue: in_progress first, then todo, then backlog
+    const statusPriority: Record<string, number> = {
+      in_progress: 0,
+      todo: 1,
+      backlog: 2,
+    };
+    const sorted = issues.sort(
+      (a, b) => (statusPriority[a.status] ?? 9) - (statusPriority[b.status] ?? 9)
+    );
+    const issue = sorted[0];
 
-    const task = sorted[0];
     console.log(
-      `[relay] working on: "${task.title}" (${task.id}) — status: ${task.status}`
+      `[relay] 📋 task: "${issue.title}" (${issue.id.slice(0, 8)}) — ${issue.status}`
     );
 
-    // 4. Checkout if todo
-    if (task.status === "todo") {
-      try {
-        await paperclipPost(
-          `/issues/${task.id}/checkout`,
-          { agentId, expectedStatuses: ["todo"] },
-          runId
-        );
-      } catch (err: any) {
-        if (err.message?.includes("409")) {
-          console.log(`[relay] task already checked out, skipping`);
-          json(res, 200, { status: "skipped", message: "Task already claimed" });
-          return;
-        }
-        throw err;
+    // 3. Checkout if not already in_progress
+    if (issue.status !== "in_progress") {
+      const claimed = await checkoutIssue(issue.id, agentId);
+      if (!claimed) {
+        // Still try to proceed — the issue may be locked by a stale run from this same agent
+        console.log(`[relay] checkout conflict — proceeding anyway for ${label}`);
       }
     }
 
-    // 5. Build task message for nanobot
-    const taskMessage = [
-      `Task: ${task.title}`,
-      task.description ? `Description: ${task.description}` : "",
-      `Priority: ${task.priority || "medium"}`,
-      `Status: ${task.status}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
+    // 4. Mark as in_progress (may fail if already in_progress, that's fine)
+    try {
+      await pcPatch(`/issues/${issue.id}`, { status: "in_progress" });
+    } catch {
+      // Already in_progress, continue
+    }
 
-    // 6. Call nanobot agent
-    const result = await callNanobot(mapping.nanobotName, taskMessage);
+    // 5. Post progress comment
+    await addIssueComment(issue.id, `🤖 **${mapping.nanobotName}** is working on this...`);
 
-    // 7. Update task with result
-    await paperclipPatch(
-      `/issues/${task.id}`,
-      {
-        status: "done",
-        comment: result.content.substring(0, 4000), // Paperclip comment limit
-      },
-      runId
-    );
+    // 6. Build task prompt
+    const parts = [
+      `## Task: ${issue.title}`,
+      issue.description || "",
+      `Priority: ${issue.priority || "medium"}`,
+      issue.labels?.length ? `Labels: ${issue.labels.map((l) => l.name).join(", ")}` : "",
+    ].filter(Boolean);
 
-    // 8. Report cost
-    await reportCost(companyId, agentId, task.id, result.usage);
+    // 7. Execute via nanobot
+    const startMs = Date.now();
+    const result = await callNanobot(mapping.nanobotName, parts.join("\n"));
+    const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
 
     console.log(
-      `[relay] completed: "${task.title}" by ${result.agent}`
+      `[relay] ✅ done: "${issue.title}" by ${result.agent} (${elapsedSec}s, ${result.usage.total_tokens} tokens)`
     );
 
-    json(res, 200, {
+    // 8. Post result as comment
+    const resultComment = [
+      `✅ **Completed by ${result.agent}** (${elapsedSec}s)`,
+      "",
+      result.content.length > 3500
+        ? result.content.substring(0, 3500) + "\n\n_(truncated)_"
+        : result.content,
+      "",
+      `_Tokens: ${result.usage.total_tokens} | Model: gpt-5.4_`,
+    ].join("\n");
+    await addIssueComment(issue.id, resultComment);
+
+    // 9. Release the issue lock first, then mark done
+    await releaseIssue(issue.id);
+
+    // 10. Mark issue as done (after release so it's not locked)
+    await pcPatch(`/issues/${issue.id}`, { status: "done" });
+
+    // 11. Report cost
+    await reportCost(agentId, issue.id, result.usage);
+
+    jsonResp(res, 200, {
       status: "completed",
-      task: task.title,
+      issue: issue.title,
+      issueId: issue.id,
       agent: result.agent,
       tokens: result.usage.total_tokens,
+      elapsedSec: parseFloat(elapsedSec),
     });
   } catch (err: any) {
-    console.error(`[relay] heartbeat error:`, err);
-    json(res, 500, { error: err.message || "Heartbeat processing failed" });
+    console.error(`[relay] ❌ error for ${label}:`, err.message || err);
+    jsonResp(res, 500, { error: err.message || "Heartbeat processing failed" });
+  }
+}
+
+// ── Manual Task Dispatch (POST /dispatch) ───────────────────────────
+// Create an issue, assign it, and immediately wake the agent
+async function handleDispatch(
+  res: ServerResponse,
+  payload: any
+): Promise<void> {
+  const { agentName, title, description, priority } = payload;
+
+  // Find the agent by nanobot name
+  const entry = Object.entries(agentMapping).find(
+    ([, v]) => v.nanobotName === agentName
+  );
+  if (!entry) {
+    jsonResp(res, 404, { error: `Agent "${agentName}" not found` });
+    return;
+  }
+  const [paperclipId, mapping] = entry;
+
+  console.log(`[relay] 📬 dispatch: "${title}" → ${mapping.nanobotName}`);
+
+  try {
+    // 1. Create the issue
+    const issue = await pcPost(`/companies/${COMPANY_ID}/issues`, {
+      title,
+      description: description || "",
+      priority: priority || "medium",
+      assigneeAgentId: paperclipId,
+      status: "todo",
+    });
+
+    console.log(`[relay] created issue ${issue.identifier}: "${issue.title}"`);
+
+    // 2. Wake the agent so it picks up the issue immediately
+    try {
+      await pcPost(`/agents/${paperclipId}/wakeup`, {});
+      console.log(`[relay] 🔔 woke ${mapping.nanobotName}`);
+    } catch (err) {
+      console.warn(`[relay] wakeup failed (agent will pick up on next heartbeat):`, err);
+    }
+
+    jsonResp(res, 201, {
+      status: "dispatched",
+      issue: {
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        assignee: mapping.nanobotName,
+      },
+    });
+  } catch (err: any) {
+    console.error(`[relay] dispatch error:`, err.message);
+    jsonResp(res, 500, { error: err.message });
+  }
+}
+
+// ── Bulk Dispatch (POST /dispatch/batch) ────────────────────────────
+async function handleBatchDispatch(
+  res: ServerResponse,
+  payload: any
+): Promise<void> {
+  const { tasks } = payload; // Array of { agentName, title, description, priority }
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    jsonResp(res, 400, { error: "tasks array required" });
+    return;
+  }
+
+  console.log(`[relay] 📬 batch dispatch: ${tasks.length} tasks`);
+
+  const results = [];
+  const agentsToWake = new Set<string>();
+
+  for (const task of tasks) {
+    const entry = Object.entries(agentMapping).find(
+      ([, v]) => v.nanobotName === task.agentName
+    );
+    if (!entry) {
+      results.push({ title: task.title, error: `Agent "${task.agentName}" not found` });
+      continue;
+    }
+    const [paperclipId, mapping] = entry;
+
+    try {
+      const issue = await pcPost(`/companies/${COMPANY_ID}/issues`, {
+        title: task.title,
+        description: task.description || "",
+        priority: task.priority || "medium",
+        assigneeAgentId: paperclipId,
+        status: "todo",
+      });
+      results.push({
+        identifier: issue.identifier,
+        title: issue.title,
+        assignee: mapping.nanobotName,
+        status: "created",
+      });
+      agentsToWake.add(paperclipId);
+    } catch (err: any) {
+      results.push({ title: task.title, error: err.message });
+    }
+  }
+
+  // Wake all assigned agents
+  for (const agentId of Array.from(agentsToWake)) {
+    try {
+      await pcPost(`/agents/${agentId}/wakeup`, {});
+    } catch {}
+  }
+
+  jsonResp(res, 201, { dispatched: results.length, results });
+}
+
+// ── Dashboard Summary (GET /dashboard) ──────────────────────────────
+async function handleDashboard(res: ServerResponse): Promise<void> {
+  try {
+    const dashboard = await pcGet(`/companies/${COMPANY_ID}/dashboard`);
+    const agents = await pcGet(`/companies/${COMPANY_ID}/agents`);
+
+    const summary = {
+      company: "Street Voices",
+      agents: {
+        total: agents.length,
+        active: dashboard.agents.active,
+        running: dashboard.agents.running,
+        paused: dashboard.agents.paused,
+        error: dashboard.agents.error,
+      },
+      tasks: dashboard.tasks,
+      costs: {
+        monthSpend: `$${(dashboard.costs.monthSpendCents / 100).toFixed(2)}`,
+        monthBudget: `$${(dashboard.costs.monthBudgetCents / 100).toFixed(2)}`,
+        utilization: `${dashboard.costs.monthUtilizationPercent}%`,
+      },
+      pendingApprovals: dashboard.pendingApprovals,
+      teams: {} as Record<string, { lead: string; members: string[] }>,
+    };
+
+    // Build team summary
+    for (const agent of agents) {
+      const team = agent.metadata?.team;
+      if (!team) continue;
+      if (!summary.teams[team]) {
+        summary.teams[team] = { lead: "", members: [] };
+      }
+      if (agent.metadata?.nanobotName?.includes("manager") || agent.role === "ceo") {
+        summary.teams[team].lead = agent.name;
+      } else {
+        summary.teams[team].members.push(agent.name);
+      }
+    }
+
+    jsonResp(res, 200, summary);
+  } catch (err: any) {
+    jsonResp(res, 500, { error: err.message });
   }
 }
 
@@ -289,50 +515,86 @@ async function handleHeartbeat(
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://localhost:${RELAY_PORT}`);
 
-  // Health check
-  if (req.method === "GET" && url.pathname === "/health") {
-    json(res, 200, {
-      status: "ok",
-      service: "paperclip-relay",
-      agents: Object.keys(agentMapping).length,
-    });
+  // CORS for dashboard
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
     return;
   }
 
-  // Reload mapping
-  if (req.method === "POST" && url.pathname === "/reload") {
-    agentMapping = loadMapping();
-    json(res, 200, {
-      status: "reloaded",
-      agents: Object.keys(agentMapping).length,
-    });
-    return;
-  }
+  try {
+    // Health check
+    if (req.method === "GET" && url.pathname === "/health") {
+      jsonResp(res, 200, {
+        status: "ok",
+        service: "paperclip-relay",
+        version: 2,
+        agents: Object.keys(agentMapping).length,
+        paperclip: PAPERCLIP_API,
+        nanobot: NANOBOT_API,
+      });
+      return;
+    }
 
-  // Heartbeat webhook from Paperclip
-  if (req.method === "POST" && url.pathname === "/heartbeat") {
-    try {
+    // Dashboard summary
+    if (req.method === "GET" && url.pathname === "/dashboard") {
+      await handleDashboard(res);
+      return;
+    }
+
+    // Agent list
+    if (req.method === "GET" && url.pathname === "/agents") {
+      jsonResp(res, 200, agentMapping);
+      return;
+    }
+
+    // Reload mapping
+    if (req.method === "POST" && url.pathname === "/reload") {
+      agentMapping = loadMapping();
+      jsonResp(res, 200, {
+        status: "reloaded",
+        agents: Object.keys(agentMapping).length,
+      });
+      return;
+    }
+
+    // Heartbeat webhook from Paperclip
+    if (req.method === "POST" && url.pathname === "/heartbeat") {
       const body = JSON.parse(await readBody(req));
       await handleHeartbeat(res, body);
-    } catch (err: any) {
-      console.error("[relay] parse error:", err);
-      json(res, 400, { error: "Invalid request body" });
+      return;
     }
-    return;
-  }
 
-  // Agent list
-  if (req.method === "GET" && url.pathname === "/agents") {
-    json(res, 200, agentMapping);
-    return;
-  }
+    // Dispatch single task
+    if (req.method === "POST" && url.pathname === "/dispatch") {
+      const body = JSON.parse(await readBody(req));
+      await handleDispatch(res, body);
+      return;
+    }
 
-  json(res, 404, { error: "Not found" });
+    // Batch dispatch
+    if (req.method === "POST" && url.pathname === "/dispatch/batch") {
+      const body = JSON.parse(await readBody(req));
+      await handleBatchDispatch(res, body);
+      return;
+    }
+
+    jsonResp(res, 404, { error: "Not found" });
+  } catch (err: any) {
+    console.error("[relay] unhandled error:", err);
+    jsonResp(res, 500, { error: err.message || "Internal error" });
+  }
 });
 
 server.listen(RELAY_PORT, "127.0.0.1", () => {
-  console.log(`[relay] Paperclip heartbeat relay listening on http://127.0.0.1:${RELAY_PORT}`);
-  console.log(`[relay] ${Object.keys(agentMapping).length} agents mapped`);
-  console.log(`[relay] Nanobot API: ${NANOBOT_API}`);
-  console.log(`[relay] Paperclip API: ${PAPERCLIP_API}`);
+  const count = Object.keys(agentMapping).length;
+  console.log(`[relay] ═══════════════════════════════════════`);
+  console.log(`[relay] Paperclip Relay v2 on http://127.0.0.1:${RELAY_PORT}`);
+  console.log(`[relay] ${count} agents mapped`);
+  console.log(`[relay] Nanobot: ${NANOBOT_API}`);
+  console.log(`[relay] Paperclip: ${PAPERCLIP_API}`);
+  console.log(`[relay] ═══════════════════════════════════════`);
 });

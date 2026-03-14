@@ -39,9 +39,9 @@ module.exports = {
     },
     {
       name: "paperclip-relay",
-      script: "dist/paperclip-relay.js",
+      script: "src/paperclip-relay.ts",
       cwd: "/Users/joel/Projects/Nanobot/bridge",
-      interpreter: "node",
+      interpreter: "/Users/joel/Projects/Nanobot/bridge/node_modules/.bin/tsx",
       autorestart: true,
       max_restarts: 50,
       restart_delay: 5000,
