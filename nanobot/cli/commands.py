@@ -610,6 +610,53 @@ def agent(
         asyncio.run(run_interactive())
 
 
+@app.command()
+def task(
+    agent_name: str = typer.Argument(..., help="Target agent name"),
+    description: str = typer.Argument(..., help="Task description"),
+    priority: str = typer.Option("medium", "--priority", help="Paperclip task priority"),
+):
+    """Create a Paperclip issue via the relay dispatch endpoint."""
+    import httpx
+    from nanobot.config.loader import load_config
+
+    config = load_config()
+    relay_base = config.tools.relay_base_url or os.getenv("NANOBOT_RELAY_BASE_URL") or os.getenv("RELAY_BASE_URL") or "http://localhost:3000"
+    relay_token = config.tools.relay_token or os.getenv("NANOBOT_RELAY_TOKEN") or os.getenv("RELAY_TOKEN")
+
+    url = f"{relay_base.rstrip('/')}/dispatch"
+    payload = {
+        "agent": agent_name,
+        "task": description,
+        "priority": priority,
+    }
+    headers = {"Content-Type": "application/json"}
+    if relay_token:
+        headers["Authorization"] = f"Bearer {relay_token}"
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            try:
+                data = response.json()
+            except Exception:
+                data = {}
+    except httpx.HTTPStatusError as exc:
+        console.print(f"[red]Dispatch failed ({exc.response.status_code}): {exc.response.text}[/red]")
+        raise typer.Exit(1)
+    except httpx.HTTPError as exc:
+        console.print(f"[red]Dispatch request failed: {exc}[/red]")
+        raise typer.Exit(1)
+
+    issue_id = data.get("id") or data.get("issue_id") or data.get("issueId")
+    status = data.get("status") or "queued"
+    if issue_id:
+        console.print(f"[green]✓[/green] Created Paperclip task [cyan]{issue_id}[/cyan] for agent [cyan]{agent_name}[/cyan] ({status})")
+    else:
+        console.print(f"[green]✓[/green] Dispatched task for agent [cyan]{agent_name}[/cyan] ({status})")
+
+
 # ============================================================================
 # Channel Commands
 # ============================================================================

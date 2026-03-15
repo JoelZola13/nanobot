@@ -293,6 +293,8 @@ class ToolsConfig(Base):
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     postiz: PostizConfig = Field(default_factory=PostizConfig)
+    relay_base_url: str = "http://localhost:3000"
+    relay_token: str = ""
 
 
 class Config(BaseSettings):

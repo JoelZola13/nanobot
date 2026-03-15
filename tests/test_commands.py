@@ -1,11 +1,12 @@
 import shutil
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from nanobot.cli.commands import app
+from nanobot.config.schema import Config
 
 runner = CliRunner()
 
@@ -90,3 +91,55 @@ def test_onboard_existing_workspace_safe_create(mock_paths):
     assert "Created workspace" not in result.stdout
     assert "Created AGENTS.md" in result.stdout
     assert (workspace_dir / "AGENTS.md").exists()
+
+
+def test_task_dispatch_success():
+    config = Config()
+    config.tools.relay_base_url = "http://relay.test"
+    config.tools.relay_token = "secret"
+
+    response = MagicMock()
+    response.json.return_value = {"id": "pc-123", "status": "queued"}
+    response.raise_for_status.return_value = None
+
+    client = MagicMock()
+    client.__enter__.return_value = client
+    client.post.return_value = response
+
+    with patch("nanobot.config.loader.load_config", return_value=config), \
+         patch("httpx.Client", return_value=client):
+        result = runner.invoke(app, ["task", "dev_manager", "Fix the API", "--priority", "low"])
+
+    assert result.exit_code == 0
+    client.post.assert_called_once_with(
+        "http://relay.test/dispatch",
+        json={"agent": "dev_manager", "task": "Fix the API", "priority": "low"},
+        headers={"Content-Type": "application/json", "Authorization": "Bearer secret"},
+    )
+    assert "Created Paperclip task" in result.stdout
+    assert "pc-123" in result.stdout
+
+
+def test_task_dispatch_http_error():
+    import httpx
+
+    config = Config()
+    config.tools.relay_base_url = "http://relay.test"
+
+    response = MagicMock()
+    response.status_code = 500
+    response.text = "boom"
+
+    request = httpx.Request("POST", "http://relay.test/dispatch")
+    error = httpx.HTTPStatusError("error", request=request, response=response)
+
+    client = MagicMock()
+    client.__enter__.return_value = client
+    client.post.side_effect = error
+
+    with patch("nanobot.config.loader.load_config", return_value=config), \
+         patch("httpx.Client", return_value=client):
+        result = runner.invoke(app, ["task", "dev_manager", "Fix the API"])
+
+    assert result.exit_code == 1
+    assert "Dispatch failed (500): boom" in result.stdout
