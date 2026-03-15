@@ -1,0 +1,725 @@
+{
+  "schemaVersion": 1,
+  "agents": [
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-auto",
+      "meta": {
+        "avatar": "http://localhost:8381/a/auto.svg",
+        "tags": [
+          "executive",
+          "leadership",
+          "strategy",
+          "team-lead"
+        ],
+        "title": "Auto",
+        "description": "Routes requests directly to the right team. Instant keyword-based dispatch with no CEO bottleneck.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-communication-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/communication_manager.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels",
+          "team-lead"
+        ],
+        "title": "Communication Manager",
+        "description": "Coordinates all cross-channel communication. Routes messages, manages channel priorities, and ensures consistent messaging.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-email-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/email_agent.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels"
+        ],
+        "title": "Email Agent",
+        "description": "Manages email communications via Gmail. Drafts, sends, reads, and organizes email.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-slack-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/slack_agent.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels"
+        ],
+        "title": "Slack Agent",
+        "description": "Manages Slack workspace communications. Monitors channels, sends messages, and handles notifications.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-whatsapp-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/whatsapp_agent.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels"
+        ],
+        "title": "Whatsapp Agent",
+        "description": "Manages WhatsApp messaging. Handles personal and group conversations.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-calendar-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/calendar_agent.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels"
+        ],
+        "title": "Calendar Agent",
+        "description": "Manages scheduling, availability, meetings, and deadline tracking across all calendars.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-communication-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/communication_memory.svg",
+        "tags": [
+          "communication",
+          "messaging",
+          "channels"
+        ],
+        "title": "Communication Memory",
+        "description": "Background worker capturing all conversation data, contact patterns, and communication history.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-content-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/content_manager.svg",
+        "tags": [
+          "content",
+          "writing",
+          "media",
+          "team-lead"
+        ],
+        "title": "Content Manager",
+        "description": "Runs editorial calendar and content pipeline. Coordinates research, writing, and publishing.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-article-researcher",
+      "meta": {
+        "avatar": "http://localhost:8381/a/article_researcher.svg",
+        "tags": [
+          "content",
+          "writing",
+          "media"
+        ],
+        "title": "Article Researcher",
+        "description": "First stage of content pipeline. Researches news stories for Street Voices daily articles.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-article-writer",
+      "meta": {
+        "avatar": "http://localhost:8381/a/article_writer.svg",
+        "tags": [
+          "content",
+          "writing",
+          "media"
+        ],
+        "title": "Article Writer",
+        "description": "Writes Street Voices articles from research briefs with branded images.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-social-media-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/social_media_manager.svg",
+        "tags": [
+          "content",
+          "writing",
+          "media"
+        ],
+        "title": "Social Media Manager",
+        "description": "Manages social media presence. Creates posts, schedules content, and monitors engagement.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-content-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/content_memory.svg",
+        "tags": [
+          "content",
+          "writing",
+          "media"
+        ],
+        "title": "Content Memory",
+        "description": "Background worker capturing content lifecycle data, editorial decisions, and performance metrics.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-development-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/development_manager.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code",
+          "team-lead"
+        ],
+        "title": "Development Manager",
+        "description": "Team lead for all software development and infrastructure. Coordinates backend, frontend, database, and DevOps work.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-backend-developer",
+      "meta": {
+        "avatar": "http://localhost:8381/a/backend_developer.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code"
+        ],
+        "title": "Backend Developer",
+        "description": "Server-side code, APIs, services, and business logic implementation.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-frontend-developer",
+      "meta": {
+        "avatar": "http://localhost:8381/a/frontend_developer.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code"
+        ],
+        "title": "Frontend Developer",
+        "description": "Client-side UI, interactive experiences, and frontend architecture.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-database-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/database_manager.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code"
+        ],
+        "title": "Database Manager",
+        "description": "Schema design, migrations, query optimization, and data integrity.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-devops",
+      "meta": {
+        "avatar": "http://localhost:8381/a/devops.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code"
+        ],
+        "title": "Devops",
+        "description": "Infrastructure, CI/CD, deployment, monitoring, and system reliability.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-development-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/development_memory.svg",
+        "tags": [
+          "development",
+          "engineering",
+          "code"
+        ],
+        "title": "Development Memory",
+        "description": "Background worker capturing architecture decisions, bugs, deployments, and technical debt.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-ceo",
+      "meta": {
+        "avatar": "http://localhost:8381/a/ceo.svg",
+        "tags": [
+          "executive",
+          "leadership",
+          "strategy",
+          "team-lead"
+        ],
+        "title": "Ceo",
+        "description": "Central coordinator and Joel's direct interface. Delegates tasks to team managers, resolves cross-team conflicts, and makes strategic decisions.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-executive-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/executive_memory.svg",
+        "tags": [
+          "executive",
+          "leadership",
+          "strategy"
+        ],
+        "title": "Executive Memory",
+        "description": "Apex memory node aggregating insights from all department memory agents. Maintains organizational knowledge graph.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-security-compliance",
+      "meta": {
+        "avatar": "http://localhost:8381/a/security_compliance.svg",
+        "tags": [
+          "executive",
+          "leadership",
+          "strategy"
+        ],
+        "title": "Security Compliance",
+        "description": "Organization-wide security oversight, access control, compliance monitoring, and threat assessment.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-finance-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/finance_manager.svg",
+        "tags": [
+          "finance",
+          "accounting",
+          "crypto",
+          "team-lead"
+        ],
+        "title": "Finance Manager",
+        "description": "Oversees all financial operations — bookkeeping, crypto, reporting. Owns the organization's complete financial picture and coordinates unified views across traditional and crypto assets.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-accounting-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/accounting_agent.svg",
+        "tags": [
+          "finance",
+          "accounting",
+          "crypto"
+        ],
+        "title": "Accounting Agent",
+        "description": "Manages bookkeeping, transaction tracking, financial reporting, invoicing, and tax preparation across all business activities.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-crypto-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/crypto_agent.svg",
+        "tags": [
+          "finance",
+          "accounting",
+          "crypto"
+        ],
+        "title": "Crypto Agent",
+        "description": "Manages cryptocurrency portfolio tracking, wallet monitoring, market analysis, DeFi operations, and crypto tax reporting.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-finance-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/finance_memory.svg",
+        "tags": [
+          "finance",
+          "accounting",
+          "crypto"
+        ],
+        "title": "Finance Memory",
+        "description": "Passive background worker capturing all financial events, transaction histories, budget decisions, and commitment deadlines.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-grant-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/grant_manager.svg",
+        "tags": [
+          "grants",
+          "proposals",
+          "funding",
+          "team-lead"
+        ],
+        "title": "Grant Manager",
+        "description": "Oversees the full grant lifecycle — opportunity identification, team coordination, submission management, and funder relations.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-grant-writer",
+      "meta": {
+        "avatar": "http://localhost:8381/a/grant_writer.svg",
+        "tags": [
+          "grants",
+          "proposals",
+          "funding"
+        ],
+        "title": "Grant Writer",
+        "description": "Crafts compelling grant narratives, proposals, and supporting documents tailored to funder requirements and review criteria.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-budget-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/budget_manager.svg",
+        "tags": [
+          "grants",
+          "proposals",
+          "funding"
+        ],
+        "title": "Budget Manager",
+        "description": "Builds detailed grant budgets, tracks expenditures against awards, and prepares financial reports for funders.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-project-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/project_manager.svg",
+        "tags": [
+          "grants",
+          "proposals",
+          "funding"
+        ],
+        "title": "Project Manager",
+        "description": "Creates project plans, tracks milestones and deliverables, and generates progress reports for grant-funded work.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-grant-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/grant_memory.svg",
+        "tags": [
+          "grants",
+          "proposals",
+          "funding"
+        ],
+        "title": "Grant Memory",
+        "description": "Background worker indexing all grant activity — proposals, funder interactions, deadlines, outcomes, and institutional knowledge.",
+        "category": "copywriting"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-research-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/research_manager.svg",
+        "tags": [
+          "research",
+          "analysis",
+          "intelligence",
+          "team-lead"
+        ],
+        "title": "Research Manager",
+        "description": "Coordinates research operations, prioritizes requests, synthesizes findings, and delivers intelligence briefs across all research domains.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-media-platform-researcher",
+      "meta": {
+        "avatar": "http://localhost:8381/a/media_platform_researcher.svg",
+        "tags": [
+          "research",
+          "analysis",
+          "intelligence"
+        ],
+        "title": "Media Platform Researcher",
+        "description": "Analyzes social media platforms, content distribution networks, algorithm changes, and digital media ecosystems.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-media-program-researcher",
+      "meta": {
+        "avatar": "http://localhost:8381/a/media_program_researcher.svg",
+        "tags": [
+          "research",
+          "analysis",
+          "intelligence"
+        ],
+        "title": "Media Program Researcher",
+        "description": "Researches media programs, grants, fellowships, residencies, and institutional opportunities in media and arts.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-street-bot-researcher",
+      "meta": {
+        "avatar": "http://localhost:8381/a/street_bot_researcher.svg",
+        "tags": [
+          "research",
+          "analysis",
+          "intelligence"
+        ],
+        "title": "Street Bot Researcher",
+        "description": "Street-level research specialist gathering hyperlocal intelligence, community data, and urban environment information for Street Bot Pro.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-research-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/research_memory.svg",
+        "tags": [
+          "research",
+          "analysis",
+          "intelligence"
+        ],
+        "title": "Research Memory",
+        "description": "Background memory layer indexing all research activity, tracking source reliability, and surfacing prior findings on demand.",
+        "category": "general"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-scraping-manager",
+      "meta": {
+        "avatar": "http://localhost:8381/a/scraping_manager.svg",
+        "tags": [
+          "scraping",
+          "data-extraction",
+          "web",
+          "team-lead"
+        ],
+        "title": "Scraping Manager",
+        "description": "Coordinates web scraping operations, evaluates extraction requests, plans approaches, and ensures ethical scraping practices.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-scraping-agent",
+      "meta": {
+        "avatar": "http://localhost:8381/a/scraping_agent.svg",
+        "tags": [
+          "scraping",
+          "data-extraction",
+          "web"
+        ],
+        "title": "Scraping Agent",
+        "description": "Executes web scraping tasks, data extraction, site analysis, and delivers structured datasets.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    },
+    {
+      "author": "Street Voices",
+      "createdAt": "2026-03-11",
+      "homepage": "https://streetvoices.ca",
+      "identifier": "streetvoices-scraper-memory",
+      "meta": {
+        "avatar": "http://localhost:8381/a/scraper_memory.svg",
+        "tags": [
+          "scraping",
+          "data-extraction",
+          "web"
+        ],
+        "title": "Scraper Memory",
+        "description": "Background memory layer tracking site structures, extraction patterns, scraping job history, and data source registries.",
+        "category": "programming"
+      },
+      "schemaVersion": 1
+    }
+  ],
+  "tags": [
+    "accounting",
+    "analysis",
+    "channels",
+    "code",
+    "communication",
+    "content",
+    "crypto",
+    "data-extraction",
+    "development",
+    "engineering",
+    "executive",
+    "finance",
+    "funding",
+    "grants",
+    "intelligence",
+    "leadership",
+    "media",
+    "messaging",
+    "proposals",
+    "research",
+    "scraping",
+    "strategy",
+    "team-lead",
+    "web",
+    "writing"
+  ]
+}

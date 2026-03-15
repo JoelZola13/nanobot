@@ -1296,6 +1296,7 @@ async def embeddings(request: Request) -> JSONResponse:
 
 
 
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
