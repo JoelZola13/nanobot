@@ -1,0 +1,84 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-bg text-text-primary font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-muted;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent text-white font-medium px-4 py-2 rounded-lg
+           hover:bg-accent-hover transition-colors duration-150
+           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-bg;
+  }
+
+  .btn-ghost {
+    @apply text-text-secondary px-3 py-2 rounded-lg
+           hover:bg-bg-hover hover:text-text-primary transition-colors duration-150;
+  }
+
+  .input-field {
+    @apply bg-bg-surface border border-border rounded-lg px-3 py-2
+           text-text-primary placeholder-text-muted
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+           transition-colors duration-150;
+  }
+
+  .channel-message {
+    @apply px-4 py-1.5 hover:bg-bg-surface/50 transition-colors duration-75;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm
+           text-text-secondary hover:bg-bg-hover hover:text-text-primary
+           transition-all duration-150 cursor-pointer;
+  }
+
+  .sidebar-item.active {
+    @apply bg-accent-muted text-accent;
+  }
+
+  .avatar {
+    @apply rounded-full bg-bg-elevated flex items-center justify-center
+           text-text-secondary font-heading font-semibold shrink-0;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium;
+  }
+
+  .badge-accent {
+    @apply badge bg-accent-muted text-accent;
+  }
+
+  .badge-teal {
+    @apply badge bg-teal-muted text-teal;
+  }
+}

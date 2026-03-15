@@ -1,0 +1,169 @@
+{
+  "organizations": [
+    {
+      "owner": "admin",
+      "name": "streetvoices",
+      "createdTime": "2026-03-11T00:00:00Z",
+      "displayName": "Street Voices",
+      "websiteUrl": "https://streetvoices.ca",
+      "favicon": "",
+      "passwordType": "argon2id",
+      "passwordOptions": ["AtLeast6"],
+      "countryCodes": ["US", "CA"],
+      "defaultAvatar": "https://cdn.casbin.org/img/casbin.svg",
+      "tags": [],
+      "languages": ["en"],
+      "enableSoftDeletion": false,
+      "isProfilePublic": false
+    }
+  ],
+  "applications": [
+    {
+      "owner": "admin",
+      "name": "lobehub-app",
+      "createdTime": "2026-03-11T00:00:00Z",
+      "displayName": "Street Voices AI",
+      "logo": "",
+      "homepageUrl": "http://localhost:3181",
+      "organization": "streetvoices",
+      "enablePassword": true,
+      "enableSignUp": true,
+      "enableAutoSignin": false,
+      "clientId": "lobehub-app",
+      "clientSecret": "lobehub-casdoor-secret-2026",
+      "redirectUris": [
+        "http://localhost:3181/api/auth/callback/casdoor"
+      ],
+      "tokenFormat": "JWT",
+      "expireInHours": 168,
+      "signinUrl": "",
+      "signupUrl": "",
+      "forgetUrl": "",
+      "grantTypes": ["authorization_code"],
+      "cert": "cert-built-in"
+    },
+    {
+      "owner": "admin",
+      "name": "social-app",
+      "createdTime": "2026-03-11T00:00:00Z",
+      "displayName": "Street Voices Social",
+      "logo": "",
+      "homepageUrl": "http://localhost:3182",
+      "organization": "streetvoices",
+      "enablePassword": true,
+      "enableSignUp": true,
+      "enableAutoSignin": false,
+      "clientId": "social-app",
+      "clientSecret": "social-casdoor-secret-2026",
+      "redirectUris": [
+        "http://localhost:3182/api/auth/callback/casdoor"
+      ],
+      "tokenFormat": "JWT",
+      "expireInHours": 168,
+      "grantTypes": ["authorization_code"],
+      "cert": "cert-built-in"
+    }
+  ],
+  "users": [
+    {
+      "owner": "streetvoices",
+      "name": "joel",
+      "createdTime": "2026-03-11T00:00:00Z",
+      "displayName": "Joel",
+      "email": "joel@streetvoices.ca",
+      "password": "street2020",
+      "isAdmin": true,
+      "type": "normal-user",
+      "signupApplication": "lobehub-app",
+      "groups": [
+        "streetvoices/executive",
+        "streetvoices/communication",
+        "streetvoices/content",
+        "streetvoices/development",
+        "streetvoices/finance",
+        "streetvoices/grant",
+        "streetvoices/research",
+        "streetvoices/scraping"
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "owner": "streetvoices",
+      "name": "executive",
+      "displayName": "Executive",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "communication",
+      "displayName": "Communication",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "content",
+      "displayName": "Content",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "development",
+      "displayName": "Development",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "finance",
+      "displayName": "Finance",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "grant",
+      "displayName": "Grant",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "research",
+      "displayName": "Research",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    },
+    {
+      "owner": "streetvoices",
+      "name": "scraping",
+      "displayName": "Scraping",
+      "type": "Virtual",
+      "parentId": "streetvoices",
+      "isEnabled": true
+    }
+  ],
+  "certs": [
+    {
+      "owner": "admin",
+      "name": "cert-built-in",
+      "createdTime": "2026-03-11T00:00:00Z",
+      "displayName": "Built-in Cert",
+      "scope": "JWT",
+      "type": "x509",
+      "cryptoAlgorithm": "RS256",
+      "bitSize": 4096,
+      "expireInYears": 20
+    }
+  ]
+}

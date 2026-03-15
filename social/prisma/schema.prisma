@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Users (extended profiles, linked to Casdoor) ──────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  casdoorId       String    @unique @map("casdoor_id")
+  username        String    @unique
+  displayName     String    @map("display_name")
+  email           String    @unique
+  avatarUrl       String?   @map("avatar_url")
+  bannerUrl       String?   @map("banner_url")
+  bio             String?
+  location        String?
+  website         String?
+  isAgent         Boolean   @default(false) @map("is_agent")
+  agentModel      String?   @map("agent_model")
+  status          String    @default("offline")
+  lastSeenAt      DateTime? @map("last_seen_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  channelMembers   ChannelMember[]
+  messages         Message[]
+  reactions        Reaction[]
+  feedPosts        FeedPost[]
+  feedComments     FeedComment[]
+  feedLikes        FeedLike[]
+  sentRequests     Connection[]  @relation("sentRequests")
+  receivedRequests Connection[]  @relation("receivedRequests")
+  readReceipts     ReadReceipt[]
+
+  @@map("users")
+}
+
+// ─── Channels ─────────────────────────────────────────────────────
+
+enum ChannelType {
+  PUBLIC
+  PRIVATE
+  DM
+  GROUP_DM
+}
+
+model Channel {
+  id          String      @id @default(cuid())
+  name        String?
+  slug        String?     @unique
+  description String?
+  type        ChannelType @default(PUBLIC)
+  iconEmoji   String?     @map("icon_emoji")
+  avatarUrl   String?     @map("avatar_url")
+  createdById String?     @map("created_by_id")
+  isArchived  Boolean     @default(false) @map("is_archived")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  members     ChannelMember[]
+  messages    Message[]
+
+  @@map("channels")
+}
+
+model ChannelMember {
+  id        String    @id @default(cuid())
+  channelId String    @map("channel_id")
+  userId    String    @map("user_id")
+  role      String    @default("member")
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  mutedAt   DateTime? @map("muted_at")
+
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@map("channel_members")
+}
+
+// ─── Messages (with threads) ──────────────────────────────────────
+
+model Message {
+  id            String    @id @default(cuid())
+  channelId     String    @map("channel_id")
+  authorId      String    @map("author_id")
+  content       String
+  parentId      String?   @map("parent_id")
+  isEdited      Boolean   @default(false) @map("is_edited")
+  isPinned      Boolean   @default(false) @map("is_pinned")
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  channel       Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author        User      @relation(fields: [authorId], references: [id])
+  parent        Message?  @relation("ThreadReplies", fields: [parentId], references: [id])
+  replies       Message[] @relation("ThreadReplies")
+  reactions     Reaction[]
+  attachments   Attachment[]
+  readReceipts  ReadReceipt[]
+
+  @@index([channelId, createdAt])
+  @@index([parentId])
+  @@map("messages")
+}
+
+model Attachment {
+  id          String  @id @default(cuid())
+  messageId   String  @map("message_id")
+  fileName    String  @map("file_name")
+  fileSize    Int     @map("file_size")
+  mimeType    String  @map("mime_type")
+  s3Key       String  @map("s3_key")
+  url         String
+  width       Int?
+  height      Int?
+
+  message     Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model Reaction {
+  id        String  @id @default(cuid())
+  messageId String  @map("message_id")
+  userId    String  @map("user_id")
+  emoji     String
+
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+  @@map("reactions")
+}
+
+model ReadReceipt {
+  id        String   @id @default(cuid())
+  channelId String   @map("channel_id")
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at")
+
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channelId])
+  @@map("read_receipts")
+}
+
+// ─── Feed (social posts) ──────────────────────────────────────────
+
+model FeedPost {
+  id          String    @id @default(cuid())
+  authorId    String    @map("author_id")
+  content     String
+  visibility  String    @default("public")
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  author      User          @relation(fields: [authorId], references: [id])
+  comments    FeedComment[]
+  likes       FeedLike[]
+  media       FeedMedia[]
+
+  @@index([authorId, createdAt])
+  @@map("feed_posts")
+}
+
+model FeedMedia {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  s3Key     String   @map("s3_key")
+  url       String
+  mimeType  String   @map("mime_type")
+  width     Int?
+  height    Int?
+  order     Int      @default(0)
+
+  post      FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("feed_media")
+}
+
+model FeedComment {
+  id        String    @id @default(cuid())
+  postId    String    @map("post_id")
+  authorId  String    @map("author_id")
+  content   String
+  parentId  String?   @map("parent_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  post      FeedPost     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User         @relation(fields: [authorId], references: [id])
+  parent    FeedComment? @relation("NestedComments", fields: [parentId], references: [id])
+  children  FeedComment[] @relation("NestedComments")
+
+  @@map("feed_comments")
+}
+
+model FeedLike {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post      FeedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@map("feed_likes")
+}
+
+// ─── Connections (friendships) ────────────────────────────────────
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model Connection {
+  id          String           @id @default(cuid())
+  requesterId String           @map("requester_id")
+  addresseeId String           @map("addressee_id")
+  status      ConnectionStatus @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  requester   User @relation("sentRequests", fields: [requesterId], references: [id])
+  addressee   User @relation("receivedRequests", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+  @@map("connections")
+}
