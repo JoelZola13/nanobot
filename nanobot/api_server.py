@@ -24,6 +24,7 @@ VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
 AVATARS_DIR = Path(__file__).parent.parent / "static" / "avatars"
+SHARED_ASSETS_DIR = Path(__file__).parent.parent / "LibreChat" / "client" / "public"
 
 from nanobot.config.loader import load_config
 from nanobot.bus.queue import MessageBus
@@ -35,6 +36,7 @@ from nanobot.cron.service import CronService
 _agent: AgentLoop | None = None
 _cron: CronService | None = None
 _orchestrator: Any = None  # Orchestrator | None — lazy import to avoid circular deps
+_harness: Any = None  # DeepAgentHarness | None — deepagents-powered engine
 
 
 def _make_provider(config):
@@ -285,6 +287,37 @@ async def lifespan(app):
             logger.info("No agent team definitions found — multi-agent system disabled")
     except Exception as exc:
         logger.warning(f"Multi-agent system not available: {exc}")
+
+    # ── Deep Agent Harness initialization ──
+    try:
+        from nanobot.harness import DeepAgentHarness
+        global _harness
+
+        _harness = DeepAgentHarness(
+            workspace=config.workspace_path,
+            config=config.to_dict() if hasattr(config, 'to_dict') else {},
+        )
+        # Collect MCP tools from the agent loop for bridging
+        mcp_tool_dict = {}
+        for tool_name in _agent.tools.tool_names:
+            tool = _agent.tools.get(tool_name)
+            if tool:
+                mcp_tool_dict[tool_name] = tool
+
+        await _harness.initialize(
+            tool_registry=_agent.tools,
+            mcp_tools=mcp_tool_dict,
+            teams_dir=Path(__file__).parent / "agents" / "teams",
+        )
+        logger.info(
+            f"Deep Agent Harness ready: {_harness.agent_count} agents, "
+            f"universal memory enabled"
+        )
+    except Exception as exc:
+        _harness = None
+        logger.warning(f"Deep Agent Harness not available: {exc}")
+        import traceback
+        traceback.print_exc()
 
     logger.info("Nanobot API server ready")
     yield
@@ -949,7 +982,29 @@ async def list_models(request: Request) -> JSONResponse:
 
 
 async def health(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "ok"})
+    agent_count = 0
+    teams = []
+    if _orchestrator is not None:
+        try:
+            agent_count = len(_orchestrator.registry.agent_names)
+            teams = list(_orchestrator.registry.get_teams())
+        except Exception:
+            pass
+    harness_info = {}
+    if _harness is not None:
+        harness_info = {
+            "engine": "deepagents",
+            "agents": _harness.agent_count,
+            "initialized": _harness.is_initialized,
+            "universal_memory": True,
+        }
+    return JSONResponse({
+        "status": "ok",
+        "agents": agent_count,
+        "teams": len(teams),
+        "orchestrator": _orchestrator is not None,
+        "harness": harness_info if harness_info else None,
+    })
 
 
 async def serve_screenshot(request: Request) -> FileResponse | JSONResponse:
@@ -1100,6 +1155,71 @@ async def agents_status(request: Request) -> JSONResponse:
         return JSONResponse({"agents": agents, "count": len(agents)})
     except Exception as e:
         logger.error(f"agents_status error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def serve_shared_asset(request: Request) -> FileResponse | JSONResponse:
+    """Serve shared JS/CSS assets that need to be loaded across all apps."""
+    filename = request.path_params["filename"]
+    # Only allow .js and .css files
+    if not filename.endswith((".js", ".css")):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    filepath = SHARED_ASSETS_DIR / filename
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    media_type = "application/javascript" if filename.endswith(".js") else "text/css"
+    return FileResponse(filepath, media_type=media_type)
+
+
+async def agents_list(request: Request) -> JSONResponse:
+    """GET /v1/agents/list — Cross-app agent discovery endpoint.
+
+    Returns detailed agent info for all registered agents.
+    Used by SV Social (@mention autocomplete), LobeHub (agent catalog),
+    and Mission Control (dispatch agent picker).
+    """
+    if _orchestrator is None:
+        return JSONResponse({"error": "Orchestrator not initialized"}, status_code=503)
+    try:
+        agents = []
+        teams_set: set[str] = set()
+        for name in _orchestrator.registry.agent_names:
+            spec = _orchestrator.registry.get(name)
+            team = getattr(spec, "team", "unknown")
+            role = getattr(spec, "role", "member")
+            description = getattr(spec, "description", "")
+            handoffs = list(getattr(spec, "handoffs", []) or [])
+            tools = list(getattr(spec, "tools", []) or [])
+            teams_set.add(team)
+
+            # Build chat URL for deep linking from any app
+            chat_url = f"http://localhost:3180/?agentModel=agent/{name}"
+
+            agents.append({
+                "name": name,
+                "displayName": name.replace("_", " ").title(),
+                "team": team,
+                "role": role,
+                "description": description,
+                "model": f"agent/{name}",
+                "status": "available",
+                "chatUrl": chat_url,
+                "handoffs": handoffs,
+                "toolCount": len(tools),
+            })
+
+        # Sort: leads first, then alphabetically by team then name
+        role_order = {"lead": 0, "memory": 2}
+        agents.sort(key=lambda a: (role_order.get(a["role"], 1), a["team"], a["name"]))
+
+        return JSONResponse({
+            "agents": agents,
+            "count": len(agents),
+            "teams": sorted(teams_set),
+            "teamCount": len(teams_set),
+        })
+    except Exception as e:
+        logger.error(f"agents_list error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -1297,6 +1417,84 @@ async def embeddings(request: Request) -> JSONResponse:
 
 
 
+async def memory_api(request: Request) -> JSONResponse:
+    """GET/POST /v1/memory — Universal shared memory API.
+
+    GET: Returns full memory snapshot (shared, contacts, decisions, projects, agents, topics)
+    POST: Write to memory (target, content, name, mode)
+    """
+    if not _harness:
+        return JSONResponse({"error": "Deep Agent Harness not initialized"}, status_code=503)
+
+    from nanobot.harness.api import handle_memory
+    return await handle_memory(request, _harness)
+
+
+async def memory_context_api(request: Request) -> JSONResponse:
+    """GET /v1/memory/context/{agent_name} — Get the scoped context an agent sees."""
+    if not _harness:
+        return JSONResponse({"error": "Deep Agent Harness not initialized"}, status_code=503)
+
+    agent_name = request.path_params.get("agent_name", "ceo")
+    # Resolve team from agent spec for scoped context
+    agent_spec = _harness._agents.get(agent_name, {})
+    agent_team = agent_spec.get("team")
+
+    context = _harness.memory.build_context_for_agent(agent_name, team=agent_team)
+    return JSONResponse({
+        "agent": agent_name,
+        "team": agent_team,
+        "context": context,
+        "context_length": len(context),
+    })
+
+
+async def agent_sessions_api(request: Request) -> JSONResponse:
+    """GET /v1/agents/{agent_name}/sessions — Get an agent's recent conversation summaries.
+
+    This is how frontends can show conversation history per agent.
+    The CEO gets all agents' sessions; individual agents get only their own.
+    """
+    if not _harness:
+        return JSONResponse({"error": "Deep Agent Harness not initialized"}, status_code=503)
+
+    agent_name = request.path_params.get("agent_name", "ceo")
+    limit = int(request.query_params.get("limit", "10"))
+
+    if agent_name == "ceo":
+        sessions = _harness.memory._get_recent_sessions(limit=limit, agent_name=None)
+    else:
+        sessions = _harness.memory._get_recent_sessions(limit=limit, agent_name=agent_name)
+
+    return JSONResponse({
+        "agent": agent_name,
+        "sessions": sessions,
+        "count": len(sessions),
+    })
+
+
+async def harness_status(request: Request) -> JSONResponse:
+    """GET /v1/harness/status — Deep Agent Harness status and diagnostics."""
+    if not _harness:
+        return JSONResponse({
+            "status": "not_initialized",
+            "engine": "deepagents",
+            "agents": 0,
+        })
+
+    return JSONResponse({
+        "status": "ready" if _harness.is_initialized else "initializing",
+        "engine": "deepagents",
+        "agents": _harness.agent_count,
+        "memory": {
+            "shared_size": len(_harness.memory.get_shared_context()),
+            "contacts_size": len(_harness.memory.get_contacts()),
+            "decisions_size": len(_harness.memory.get_decisions()),
+            "projects_size": len(_harness.memory.get_projects()),
+        },
+    })
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
@@ -1314,8 +1512,15 @@ app = Starlette(
         Route("/api/cron/jobs/{job_id}/run", cron_run_job, methods=["POST"]),
         Route("/api/cron/jobs/{job_id}", cron_delete_job, methods=["DELETE"]),
         Route("/v1/agents/status", agents_status, methods=["GET"]),
+        Route("/v1/agents/list", agents_list, methods=["GET"]),
+        Route("/shared/{filename:path}", serve_shared_asset, methods=["GET"]),
         Route("/api/article-image/generate", generate_article_image, methods=["POST"]),
         Route("/article-images/{filename:path}", serve_article_image, methods=["GET"]),
+        # ── Deep Agent Harness endpoints ──
+        Route("/v1/memory", memory_api, methods=["GET", "POST"]),
+        Route("/v1/memory/context/{agent_name}", memory_context_api, methods=["GET"]),
+        Route("/v1/agents/{agent_name}/sessions", agent_sessions_api, methods=["GET"]),
+        Route("/v1/harness/status", harness_status, methods=["GET"]),
     ],
     middleware=[
         Middleware(
