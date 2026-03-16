@@ -362,12 +362,14 @@ class DeepAgentHarness:
             model = self._resolve_agent_model(agent)
 
             # Build per-agent skill sources
-            agent_skill_dir = SKILLS_DIR / f"agent-{name}"
+            # Skill dir names use hyphens per Agent Skills spec
+            skill_dir_name = f"agent-{name.replace('_', '-')}"
+            agent_skill_dir = SKILLS_DIR / skill_dir_name
             skill_sources = []
             if SKILLS_DIR.exists():
                 skill_sources.append("/skills/")
             if agent_skill_dir.exists():
-                skill_sources.append(f"/skills/agent-{name}/")
+                skill_sources.append(f"/skills/{skill_dir_name}/")
 
             # Build per-agent memory sources
             memory_sources = ["/memory/AGENTS.md"]
@@ -526,33 +528,34 @@ class DeepAgentHarness:
             f"- Save important facts to memory\n"
         )
 
-    def _resolve_model(self) -> str:
-        """Resolve the CEO model."""
+    def _resolve_model(self) -> Any:
+        """Resolve the CEO model — returns a CodexChatModel instance."""
         ceo_model = self._agents.get("ceo", {}).get("model", "default")
         return self._map_model(ceo_model)
 
-    def _resolve_agent_model(self, agent_spec: dict[str, Any]) -> str:
+    def _resolve_agent_model(self, agent_spec: dict[str, Any]) -> Any:
         """Resolve a specific agent's model."""
         model = agent_spec.get("model", "default")
         return self._map_model(model)
 
     @staticmethod
-    def _map_model(model: str) -> str:
-        """Map nanobot model names to LangChain format."""
+    def _map_model(model: str) -> Any:
+        """Map nanobot model names to a CodexChatModel instance.
+
+        Since Joel uses Codex OAuth (not standard OpenAI API keys),
+        we return a CodexChatModel that wraps the codex provider.
+        """
+        from nanobot.harness.codex_model import CodexChatModel
+
+        # Extract the actual model name
         if model == "default" or not model:
-            return "openai:gpt-4o"
+            model_name = "gpt-5.1-codex"
+        elif "/" in model:
+            _, model_name = model.split("/", 1)
+        else:
+            model_name = model
 
-        if "/" in model:
-            provider, model_name = model.split("/", 1)
-            provider_map = {
-                "openai-codex": "openai",
-                "openai": "openai",
-                "anthropic": "anthropic",
-            }
-            lc_provider = provider_map.get(provider, provider)
-            return f"{lc_provider}:{model_name}"
-
-        return model
+        return CodexChatModel(model_name=model_name)
 
     # ── Session summarization ────────────────────────────────────
 
@@ -579,9 +582,9 @@ class DeepAgentHarness:
 
         try:
             from langchain_core.messages import HumanMessage
-            from langchain.chat_models import init_chat_model
+            from nanobot.harness.codex_model import CodexChatModel
 
-            summarizer = init_chat_model("openai:gpt-4o-mini")
+            summarizer = CodexChatModel(model_name="gpt-5.1-codex")
             result = await summarizer.ainvoke([HumanMessage(content=(
                 "Summarize this conversation in 2-4 bullet points. Focus on:\n"
                 "- What the user asked for\n"
@@ -781,21 +784,26 @@ class DeepAgentHarness:
 
         try:
             collected_content = ""
+            prev_len = 0
             async for event in self._agent_graph.astream(
                 {"messages": lc_messages}, config=config,
-                stream_mode="updates",
+                stream_mode="values",
             ):
-                for node_name, state_update in event.items():
-                    if "messages" in state_update:
-                        for msg in state_update["messages"]:
-                            if hasattr(msg, "content") and msg.content:
-                                from langchain_core.messages import AIMessage as AIM
-                                if isinstance(msg, AIM) and not getattr(msg, "tool_calls", None):
-                                    delta = msg.content
-                                    collected_content += delta
-                                    yield _make_chunk(session_id, agent_name, delta)
-                                    if on_progress:
-                                        await on_progress(delta)
+                msgs = event.get("messages", []) if isinstance(event, dict) else []
+                if not msgs:
+                    continue
+                # Only look at new messages since last event
+                new_msgs = msgs[prev_len:]
+                prev_len = len(msgs)
+                for msg in new_msgs:
+                    if hasattr(msg, "content") and msg.content:
+                        from langchain_core.messages import AIMessage as AIM
+                        if isinstance(msg, AIM) and not getattr(msg, "tool_calls", None):
+                            delta = msg.content
+                            collected_content += delta
+                            yield _make_chunk(session_id, agent_name, delta)
+                            if on_progress:
+                                await on_progress(delta)
 
             yield _make_chunk(session_id, agent_name, "", finish=True)
 

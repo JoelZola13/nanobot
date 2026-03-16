@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import tempfile
 import time
 import uuid
@@ -600,6 +601,49 @@ async def chat_completions(request: Request) -> JSONResponse | StreamingResponse
     if not messages or not all(isinstance(msg, dict) for msg in messages):
         return _openai_error("Invalid message format", code="invalid_request_error")
 
+    # ── Deep Agent Harness routing ──
+    # If model is "deepagents" or "harness", route through the deepagents harness
+    if requested_model.lower() in ("deepagents", "harness") and _harness is not None:
+        harness_session = session_key or "librechat-default"
+        if stream:
+            async def _harness_stream():
+                try:
+                    async for chunk in _harness.run_stream(
+                        agent_name="ceo",
+                        messages=messages,
+                        session_id=harness_session,
+                    ):
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+                except Exception as e:
+                    logger.error(f"Harness stream error: {e}")
+                    err_chunk = {
+                        "id": f"chatcmpl-err",
+                        "object": "chat.completion.chunk",
+                        "choices": [{"index": 0, "delta": {"content": f"Error: {e}"}, "finish_reason": "error"}],
+                    }
+                    yield f"data: {json.dumps(err_chunk)}\n\n"
+                    yield "data: [DONE]\n\n"
+            return StreamingResponse(_harness_stream(), media_type="text/event-stream")
+
+        result = await _harness.run(
+            agent_name="ceo",
+            messages=messages,
+            session_id=harness_session,
+        )
+        return JSONResponse({
+            "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": "deepagents",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": result.content},
+                "finish_reason": result.finish_reason,
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        })
+
     # ── Multi-agent routing ──
     # If the requested model starts with "agent/", route to the Orchestrator
     # instead of the single-agent AgentLoop.
@@ -966,6 +1010,15 @@ async def list_models(request: Request) -> JSONResponse:
         {"id": model_id, "object": "model", "created": now, "owned_by": "nanobot"}
         for model_id in deduped
     ]
+
+    # Append deepagents harness model if available
+    if _harness is not None and _harness.is_initialized:
+        models.insert(0, {
+            "id": "deepagents",
+            "object": "model",
+            "created": now,
+            "owned_by": "nanobot-deepagents",
+        })
 
     # Append multi-agent models if the orchestrator is available
     if _orchestrator is not None:

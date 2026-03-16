@@ -2,7 +2,7 @@ agents:
   - name: communication_manager
     role: lead
     description: "Coordinates all cross-channel communication. Routes messages, manages channel priorities, and ensures consistent messaging."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, file_read, file_write]
     handoffs:
       - email_agent
@@ -16,7 +16,7 @@ agents:
   - name: email_agent
     role: member
     description: "Manages email communications via Gmail. Drafts, sends, reads, and organizes email."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, file_read, email_send, email_read]
     handoffs: [communication_manager]
     system_prompt: email_agent.md
@@ -25,7 +25,7 @@ agents:
   - name: slack_agent
     role: member
     description: "Manages Slack workspace communications. Monitors channels, sends messages, and handles notifications."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, file_read]
     handoffs: [communication_manager]
     system_prompt: slack_agent.md
@@ -34,7 +34,7 @@ agents:
   - name: whatsapp_agent
     role: member
     description: "Manages WhatsApp messaging. Handles personal and group conversations."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [file_read]
     handoffs: [communication_manager]
     system_prompt: whatsapp_agent.md
@@ -43,7 +43,7 @@ agents:
   - name: calendar_agent
     role: member
     description: "Manages scheduling, availability, meetings, and deadline tracking across all calendars."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, file_read, "mcp_google-calendar_*"]
     handoffs: [communication_manager]
     system_prompt: calendar_agent.md
@@ -52,7 +52,7 @@ agents:
   - name: communication_memory
     role: member
     description: "Background worker capturing all conversation data, contact patterns, and communication history."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [file_read, file_write]
     handoffs: [communication_manager]
     system_prompt: communication_memory.md

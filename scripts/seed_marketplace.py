@@ -29,7 +29,7 @@ TEAMS_DIR = Path(__file__).resolve().parent.parent / "nanobot" / "agents" / "tea
 
 # Provider/model that LibreChat will show (these are display values)
 PROVIDER = "Nanobot"
-MODEL = "openai-codex/gpt-5.4"
+MODEL = "openai-codex/gpt-5.1-codex"
 
 # MDI icon CDN base URL (matches librechat.yaml iconURL fields)
 MDI_BASE = "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg"
