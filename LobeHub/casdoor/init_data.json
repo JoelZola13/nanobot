@@ -62,6 +62,27 @@
       "expireInHours": 168,
       "grantTypes": ["authorization_code"],
       "cert": "cert-built-in"
+    },
+    {
+      "owner": "admin",
+      "name": "librechat-app",
+      "createdTime": "2026-03-15T00:00:00Z",
+      "displayName": "Street Voices Chat",
+      "logo": "",
+      "homepageUrl": "http://localhost:3180",
+      "organization": "streetvoices",
+      "enablePassword": true,
+      "enableSignUp": true,
+      "enableAutoSignin": false,
+      "clientId": "librechat-app",
+      "clientSecret": "librechat-casdoor-secret-2026",
+      "redirectUris": [
+        "http://localhost:3180/oauth/openid/callback"
+      ],
+      "tokenFormat": "JWT",
+      "expireInHours": 168,
+      "grantTypes": ["authorization_code"],
+      "cert": "cert-built-in"
     }
   ],
   "users": [
