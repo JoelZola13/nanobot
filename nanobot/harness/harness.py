@@ -105,8 +105,10 @@ class DeepAgentHarness:
 
         logger.info("Initializing Deep Agent Harness (full feature mode)...")
 
-        # ── 1. Checkpointer for conversation persistence ──────────
+        # ── 1. Checkpointer + Store for persistence ────────────────
         self._checkpointer = MemorySaver()
+        from langgraph.store.memory import InMemoryStore
+        self._store = InMemoryStore()  # cross-thread searchable knowledge
 
         # ── 2. Bridge nanobot tools → LangChain ───────────────────
         self._lc_tools = []
@@ -210,6 +212,7 @@ class DeepAgentHarness:
             system_prompt=ceo_prompt,
             subagents=self._subagent_specs,
             checkpointer=self._checkpointer,
+            store=self._store,
             backend=self._backend,
             memory=memory_sources,
             skills=skill_sources if skill_sources else None,
