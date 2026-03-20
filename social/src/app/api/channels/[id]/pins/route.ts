@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-
-function getIO() {
-  return (globalThis as Record<string, unknown>).__socketio as
-    | { to: (room: string) => { emit: (event: string, data: unknown) => void } }
-    | undefined;
-}
+import { getIO } from "@/lib/socketServer";
 
 // GET /api/channels/[id]/pins — list pinned messages
 export async function GET(

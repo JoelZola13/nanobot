@@ -7,7 +7,7 @@ let socket: Socket | null = null;
 export function getSocket(userId?: string): Socket {
   if (!socket) {
     socket = io({
-      path: "/api/socketio",
+      path: "/ws-social",
       auth: { userId },
       autoConnect: false,
     });

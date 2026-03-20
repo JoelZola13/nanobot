@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { MessageSquare, MapPin, Bot } from "lucide-react";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface Person {
   id: string;
@@ -30,7 +31,7 @@ export default function PeopleList({
   const startDM = async (userId: string) => {
     setStarting(userId);
     try {
-      const res = await fetch("/api/dm", {
+      const res = await fetch(apiUrl("/api/dm"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
@@ -111,7 +112,7 @@ function PersonCard({
   isAgent?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-bg-elevated transition-colors group">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-xl glass-soft hover:bg-bg-hover transition-colors group">
       <div className="relative">
         <div className={`w-10 h-10 avatar text-sm ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
           {person.avatarUrl ? (

@@ -242,3 +242,20 @@ model Connection {
   @@unique([requesterId, addresseeId])
   @@map("connections")
 }
+
+// ─── Unified Notifications ───────────────────────────────────────
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  type          String   // "social.message.mention", "agent.task.complete", "calendar.reminder", "email.received"
+  title         String
+  body          String   @default("")
+  sourceService String   @map("source_service") // "social", "nanobot", "calendar", "email"
+  sourceId      String?  @map("source_id")      // optional reference to source entity
+  isRead        Boolean  @default(false) @map("is_read")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}

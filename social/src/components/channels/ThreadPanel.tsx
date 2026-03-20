@@ -7,6 +7,7 @@ import MarkdownContent from "./MarkdownContent";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { formatDistanceToNow } from "date-fns";
 import type { MessageData } from "@/types";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface ThreadPanelProps {
   channelId: string;
@@ -24,7 +25,7 @@ export default function ThreadPanel({ channelId, parentMessage, currentUserId: _
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/channels/${channelId}/messages?parentId=${parentMessage.id}`)
+    fetch(apiUrl(`/api/channels/${channelId}/messages?parentId=${parentMessage.id}`))
       .then((r) => r.json())
       .then((data) => {
         setReplies(data.messages || []);
@@ -54,7 +55,7 @@ export default function ThreadPanel({ channelId, parentMessage, currentUserId: _
   const handleSendReply = async (content: string) => {
     setSending(true);
     try {
-      const res = await fetch(`/api/channels/${channelId}/messages`, {
+      const res = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, parentId: parentMessage.id }),

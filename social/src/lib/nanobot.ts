@@ -79,9 +79,13 @@ export async function invokeAgentStreaming(
 
         const content = delta.content || "";
 
-        // Progress hints from nanobot start with ⏳
-        if (content.includes("⏳")) {
-          // Extract each progress line
+        // Progress hints from nanobot use various emoji prefixes
+        // ⏳ = tool calls, 🤖 = agent working, 🔀 = routing, ⚡ = delegation
+        const isProgress = /^[\s\n]*(⏳|🤖|🔀|⚡|📋)/.test(content) ||
+          content.includes("⏳") || content.includes("🤖") ||
+          content.includes("🔀") || content.includes("⚡");
+
+        if (isProgress) {
           const progressLines = content.split("\n").filter((l: string) => l.trim());
           for (const pl of progressLines) {
             onProgress(pl.trim());

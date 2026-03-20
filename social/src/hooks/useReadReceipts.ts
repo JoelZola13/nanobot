@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface ReadReceiptData {
   userId: string;
@@ -28,7 +29,7 @@ export function useReadReceipts(
       lastSentRef.current = messageId;
 
       try {
-        await fetch(`/api/channels/${channelId}/read`, {
+        await fetch(apiUrl(`/api/channels/${channelId}/read`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId }),
@@ -67,7 +68,7 @@ export function useReadReceipts(
  */
 export async function fetchReadReceipts(channelId: string): Promise<ReadReceiptData[]> {
   try {
-    const res = await fetch(`/api/channels/${channelId}/read`);
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/read`));
     if (res.ok) return res.json();
   } catch {
     // best-effort

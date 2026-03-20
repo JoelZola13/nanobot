@@ -3,11 +3,12 @@ agents:
     role: lead
     description: "Coordinates all cross-channel communication. Routes messages, manages channel priorities, and ensures consistent messaging."
     model: openai-codex/gpt-5.1-codex
-    tools: [web_search, file_read, file_write]
+    tools: [web_search, file_read, file_write, social_list_channels, social_who_online]
     handoffs:
       - email_agent
       - slack_agent
       - whatsapp_agent
+      - social_agent
       - calendar_agent
       - ceo
     system_prompt: communication_manager.md
@@ -47,6 +48,15 @@ agents:
     tools: [web_search, file_read, "mcp_google-calendar_*"]
     handoffs: [communication_manager]
     system_prompt: calendar_agent.md
+    max_iterations: 15
+
+  - name: social_agent
+    role: member
+    description: "Manages SV Social platform communications. Reads messages, sends messages to channels, checks who is online, and searches conversations."
+    model: openai-codex/gpt-5.1-codex
+    tools: [social_read_messages, social_send_message, social_list_channels, social_who_online, social_search, social_user_profile]
+    handoffs: [communication_manager]
+    system_prompt: social_agent.md
     max_iterations: 15
 
   - name: communication_memory

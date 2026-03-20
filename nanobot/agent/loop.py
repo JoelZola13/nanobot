@@ -102,6 +102,7 @@ class AgentLoop:
         self._mcp_servers = mcp_servers or {}
         self._mcp_stack: AsyncExitStack | None = None
         self._mcp_connected = False
+        self._mcp_connect_lock = asyncio.Lock()
         self.postiz_config = postiz_config or PostizConfig()
         self._register_default_tools()
     
@@ -146,21 +147,37 @@ class AgentLoop:
         """Connect to configured MCP servers (one-time, lazy)."""
         if self._mcp_connected or not self._mcp_servers:
             return
-        self._mcp_connected = True
-        from nanobot.agent.tools.mcp import connect_mcp_servers
-        self._mcp_stack = AsyncExitStack()
-        await self._mcp_stack.__aenter__()
-        await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
 
-        # Register computer_use tool if Playwright MCP is available
-        if any("playwright" in name for name in self.tools.tool_names):
+        async with self._mcp_connect_lock:
+            if self._mcp_connected or not self._mcp_servers:
+                return
+
+            from nanobot.agent.tools.mcp import connect_mcp_servers
+
+            self._mcp_stack = AsyncExitStack()
+            await self._mcp_stack.__aenter__()
             try:
-                from nanobot.agent.tools.computer_use import ComputerUseManager, ComputerUseTool
-                manager = ComputerUseManager(self.tools, self.provider, self.model)
-                self.tools.register(ComputerUseTool(manager))
-                logger.info("Computer use tool registered (Playwright MCP available)")
-            except Exception as e:
-                logger.debug(f"Computer use tool not available: {e}")
+                await connect_mcp_servers(self._mcp_servers, self.tools, self._mcp_stack)
+
+                # Register computer_use tool if Playwright MCP is available
+                if any("playwright" in name for name in self.tools.tool_names):
+                    try:
+                        from nanobot.agent.tools.computer_use import ComputerUseManager, ComputerUseTool
+                        manager = ComputerUseManager(self.tools, self.provider, self.model)
+                        self.tools.register(ComputerUseTool(manager))
+                        logger.info("Computer use tool registered (Playwright MCP available)")
+                    except Exception as e:
+                        logger.debug(f"Computer use tool not available: {e}")
+
+                self._mcp_connected = True
+            except BaseException:
+                if self._mcp_stack is not None:
+                    try:
+                        await self._mcp_stack.aclose()
+                    except Exception:
+                        pass
+                    self._mcp_stack = None
+                raise
 
     def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""

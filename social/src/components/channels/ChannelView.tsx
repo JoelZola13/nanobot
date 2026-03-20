@@ -8,6 +8,7 @@ import ThreadPanel from "./ThreadPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { useUnreadStore } from "@/stores/unreadStore";
 import { useReadReceipts } from "@/hooks/useReadReceipts";
+import { apiUrl } from "@/lib/apiUrl";
 import type { MessageData } from "@/types";
 
 interface ChannelViewProps {
@@ -87,6 +88,10 @@ export default function ChannelView({
       if (event.channelId === channelId) {
         setAgentActivities((prev) => {
           if (event.type === "done" || event.type === "error") {
+            // Auto-clear after 3 seconds
+            setTimeout(() => {
+              setAgentActivities((p) => p.filter((a) => a.agent.id !== event.agent.id));
+            }, 3000);
             const filtered = prev.filter((a) => a.agent.id !== event.agent.id);
             return [...filtered, event];
           }
@@ -141,7 +146,7 @@ export default function ChannelView({
     };
 
     // Fetch initial read receipts
-    fetch(`/api/channels/${channelId}/read`)
+    fetch(apiUrl(`/api/channels/${channelId}/read`))
       .then((r) => r.ok ? r.json() : [])
       .then((receipts: { userId: string; messageId: string }[]) => {
         const map = new Map<string, string>();
@@ -189,7 +194,7 @@ export default function ChannelView({
   const handleSend = async (content: string) => {
     setSending(true);
     try {
-      const res = await fetch(`/api/channels/${channelId}/messages`, {
+      const res = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
@@ -213,7 +218,7 @@ export default function ChannelView({
   }, [socket, channelId, currentUserId]);
 
   const handleReaction = async (messageId: string, emoji: string) => {
-    await fetch(`/api/channels/${channelId}/messages/${messageId}/reactions`, {
+    await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ emoji }),
@@ -221,7 +226,7 @@ export default function ChannelView({
   };
 
   const handleEdit = async (messageId: string, content: string) => {
-    const res = await fetch(`/api/channels/${channelId}/messages/${messageId}`, {
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
@@ -232,7 +237,7 @@ export default function ChannelView({
   };
 
   const handleDelete = async (messageId: string) => {
-    const res = await fetch(`/api/channels/${channelId}/messages/${messageId}`, {
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
       method: "DELETE",
     });
     if (res.ok) {
@@ -241,7 +246,7 @@ export default function ChannelView({
   };
 
   const handlePin = async (messageId: string, isPinned: boolean) => {
-    const res = await fetch(`/api/channels/${channelId}/pins`, {
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/pins`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId }),
@@ -259,12 +264,12 @@ export default function ChannelView({
     // Upload audio to S3
     const formData = new FormData();
     formData.append("file", audioBlob, "voice-message.webm");
-    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+    const uploadRes = await fetch(apiUrl("/api/upload"), { method: "POST", body: formData });
     if (!uploadRes.ok) return;
     const { s3Key, url, fileName, fileSize, mimeType } = await uploadRes.json();
 
     // Send message with audio attachment + voice metadata
-    const res = await fetch(`/api/channels/${channelId}/messages`, {
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -280,7 +285,7 @@ export default function ChannelView({
 
       // Auto-transcribe in the background
       console.log("[VOICE] Triggering transcription for message:", msg.id, "audioUrl:", url);
-      fetch("/api/voice/transcribe", {
+      fetch(apiUrl("/api/voice/transcribe"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messageId: msg.id, audioUrl: url }),
@@ -304,11 +309,11 @@ export default function ChannelView({
   const handleFileUpload = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+    const uploadRes = await fetch(apiUrl("/api/upload"), { method: "POST", body: formData });
     if (!uploadRes.ok) return;
     const { s3Key, url, fileName, fileSize, mimeType } = await uploadRes.json();
 
-    const res = await fetch(`/api/channels/${channelId}/messages`, {
+    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

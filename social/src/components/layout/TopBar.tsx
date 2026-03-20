@@ -38,7 +38,7 @@ export default function TopBar({
 
   return (
     <>
-      <header className="h-14 px-4 flex items-center justify-between border-b border-border bg-bg shrink-0">
+      <header className="h-14 px-4 flex items-center justify-between border-b border-border glass shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           {type === "channel" && <Hash size={18} className="text-text-muted shrink-0" />}
           {type === "dm" && <Users size={18} className="text-text-muted shrink-0" />}

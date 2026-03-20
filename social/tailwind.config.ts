@@ -6,24 +6,25 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0A0A0A",
-          surface: "#141414",
-          elevated: "#1C1C1C",
-          hover: "#262626",
+          DEFAULT: "var(--sv-bg)",
+          surface: "var(--sv-bg-surface)",
+          elevated: "var(--sv-bg-elevated)",
+          hover: "var(--sv-bg-hover)",
         },
         border: {
-          DEFAULT: "#262626",
-          subtle: "#1C1C1C",
-          focus: "#FF6B35",
+          DEFAULT: "var(--sv-border)",
+          subtle: "var(--sv-border-subtle)",
+          focus: "var(--sv-accent)",
         },
         accent: {
-          DEFAULT: "#FF6B35",
-          hover: "#FF8A5C",
-          muted: "rgba(255, 107, 53, 0.15)",
+          DEFAULT: "var(--sv-accent)",
+          hover: "var(--sv-accent-hover)",
+          muted: "var(--sv-accent-muted)",
         },
         teal: {
           DEFAULT: "#00D4AA",
@@ -31,9 +32,9 @@ const config: Config = {
           muted: "rgba(0, 212, 170, 0.15)",
         },
         text: {
-          primary: "#F5F5F5",
-          secondary: "#A3A3A3",
-          muted: "#666666",
+          primary: "var(--sv-text-primary)",
+          secondary: "var(--sv-text-secondary)",
+          muted: "var(--sv-text-muted)",
         },
         danger: {
           DEFAULT: "#EF4444",
@@ -47,6 +48,9 @@ const config: Config = {
       },
       fontSize: {
         "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
+      },
+      backdropBlur: {
+        glass: "16px",
       },
     },
   },

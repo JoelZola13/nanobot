@@ -4,7 +4,7 @@ import { auth } from "@/lib/session";
 export default async function Home() {
   const session = await auth();
   if (session?.user) {
-    redirect("/feed");
+    redirect("/dm");
   } else {
     redirect("/login");
   }

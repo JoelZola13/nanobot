@@ -6,7 +6,6 @@ import { useState } from "react";
 import {
   Hash,
   MessageSquare,
-  Newspaper,
   Users,
   Bot,
   Settings,
@@ -17,6 +16,7 @@ import {
 import type { ChannelInfo } from "@/types";
 import { usePresenceStore } from "@/stores/presenceStore";
 import { useUnreadStore } from "@/stores/unreadStore";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface SidebarProps {
   channels: ChannelInfo[];
@@ -35,12 +35,19 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
   const presenceStatuses = usePresenceStore((s) => s.statuses);
   const unreadCounts = useUnreadStore((s) => s.counts);
 
+  // Hide sidebar when embedded in an iframe (profile page) or when standalone sidebar is present
+  const isEmbed = typeof window !== 'undefined' && (
+    window.location.search.includes('embed=true') ||
+    document.getElementById('sv-standalone-sidebar')
+  );
+  if (isEmbed) return null;
+
   const handleUserSearch = async (q: string) => {
     setSearchQuery(q);
     if (q.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(q)}`));
       if (res.ok) {
         const data = await res.json();
         // Filter out self
@@ -52,7 +59,7 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
   };
 
   const startDM = async (otherUserId: string) => {
-    const res = await fetch("/api/dm", {
+    const res = await fetch(apiUrl("/api/dm"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: otherUserId }),
@@ -68,7 +75,7 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
   };
 
   return (
-    <aside className="w-64 h-screen bg-bg-surface border-r border-border flex flex-col shrink-0">
+    <aside className="w-64 h-screen glass-soft border-r border-border flex flex-col shrink-0">
       {/* Brand */}
       <div className="h-14 px-4 flex items-center border-b border-border">
         <h1 className="font-heading font-bold text-lg tracking-tight">
@@ -92,13 +99,6 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
       <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-4">
         {/* Main Links */}
         <div className="space-y-0.5">
-          <Link
-            href="/feed"
-            className={`sidebar-item ${pathname === "/feed" ? "active" : ""}`}
-          >
-            <Newspaper size={16} />
-            <span>Feed</span>
-          </Link>
           <Link
             href="/dm"
             className={`sidebar-item ${pathname.startsWith("/dm") ? "active" : ""}`}

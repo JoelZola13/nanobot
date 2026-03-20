@@ -249,6 +249,7 @@ async def connect_mcp_servers(
 ) -> None:
     """Connect to configured MCP servers and register their tools."""
     for name, cfg in mcp_servers.items():
+        conn = None
         try:
             conn = MCPServerConnection(name, cfg)
             await conn.connect()
@@ -260,10 +261,13 @@ async def connect_mcp_servers(
                 logger.debug(f"MCP: registered tool '{wrapper.name}' from server '{name}'")
 
             logger.info(f"MCP server '{name}': connected, {len(tools.tools)} tools registered")
-        except Exception as e:
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
             logger.error(f"MCP server '{name}': failed to connect: {e}")
             # Ensure partial connection is cleaned up
-            try:
-                await conn.close()
-            except Exception:
-                pass
+            if conn is not None:
+                try:
+                    await conn.close()
+                except Exception:
+                    pass

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { getIO } from "@/lib/socketServer";
 
 // POST /api/channels/[id]/read — mark channel as read up to a given messageId
 export async function POST(
@@ -39,9 +40,7 @@ export async function POST(
   });
 
   // Broadcast via socket if available
-  const io = (globalThis as Record<string, unknown>).__socketio as {
-    to: (room: string) => { emit: (event: string, data: unknown) => void };
-  } | undefined;
+  const io = getIO();
 
   if (io) {
     io.to(`channel:${channelId}`).emit("read:update", {

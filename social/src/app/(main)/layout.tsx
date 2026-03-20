@@ -14,6 +14,7 @@ export default async function MainLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+
   const userId = session.user.id;
 
   // Fetch user's channels and DMs

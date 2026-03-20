@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import MarkdownContent from "./MarkdownContent";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface SearchResult {
   id: string;
@@ -40,7 +41,7 @@ export default function SearchPanel({ onClose }: SearchPanelProps) {
     if (q.length < 2) { setResults([]); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(apiUrl(`/api/search?q=${encodeURIComponent(q)}`));
       const data = await res.json();
       setResults(data.results || []);
     } catch {

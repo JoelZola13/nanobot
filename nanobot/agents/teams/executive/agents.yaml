@@ -3,7 +3,7 @@ agents:
     role: lead
     description: "Central coordinator and Joel's direct interface. Delegates tasks to team managers, resolves cross-team conflicts, and makes strategic decisions."
     model: openai-codex/gpt-5.1-codex
-    tools: [web_search, web_fetch, file_read, file_write, exec, "mcp_airtable_*", "mcp_google-drive_*"]
+    tools: [web_search, web_fetch, file_read, file_write, exec, unified_search, social_who_online, social_read_messages, social_list_channels, social_search, social_send_message, social_user_profile, "mcp_airtable_*", "mcp_google-drive_*"]
     handoffs:
       - communication_manager
       - content_manager

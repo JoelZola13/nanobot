@@ -3,6 +3,7 @@ import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { invokeAgentStreaming } from "@/lib/nanobot";
 import { getFromS3, S3_BUCKET } from "@/lib/s3";
+import { getIO } from "@/lib/socketServer";
 
 // POST /api/voice/transcribe — transcribe a voice message via Groq Whisper
 export async function POST(request: Request) {
@@ -82,9 +83,7 @@ export async function POST(request: Request) {
     });
 
     // Broadcast transcription update via socket
-    const io = (globalThis as Record<string, unknown>).__socketio as {
-      to: (room: string) => { emit: (event: string, data: unknown) => void };
-    } | undefined;
+    const io = getIO();
 
     if (io) {
       io.to(`channel:${message.channelId}`).emit("message:transcription", {
@@ -106,11 +105,6 @@ export async function POST(request: Request) {
   }
 }
 
-function getIO() {
-  return (globalThis as Record<string, unknown>).__socketio as
-    | { to: (room: string) => { emit: (event: string, data: unknown) => void } }
-    | undefined;
-}
 
 async function triggerAgentsForVoice(channelId: string, authorId: string, transcription: string) {
   const channel = await prisma.channel.findUnique({

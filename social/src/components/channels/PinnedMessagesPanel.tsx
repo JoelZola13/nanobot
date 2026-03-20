@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Pin, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import MarkdownContent from "./MarkdownContent";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface PinnedMessage {
   id: string;
@@ -23,7 +24,7 @@ export default function PinnedMessagesPanel({ channelId, onClose }: PinnedMessag
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/channels/${channelId}/pins`)
+    fetch(apiUrl(`/api/channels/${channelId}/pins`))
       .then((r) => r.json())
       .then((data) => {
         setPins(data.pins || []);
@@ -33,7 +34,7 @@ export default function PinnedMessagesPanel({ channelId, onClose }: PinnedMessag
   }, [channelId]);
 
   const handleUnpin = async (messageId: string) => {
-    await fetch(`/api/channels/${channelId}/pins`, {
+    await fetch(apiUrl(`/api/channels/${channelId}/pins`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId }),
