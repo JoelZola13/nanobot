@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nanobot — dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <nav id="sidebar">
+    <div class="logo">
+      <span class="logo-icon">⬡</span>
+      <span class="logo-text">nanobot</span>
+    </div>
+    <div class="nav-items">
+      <a href="#/chat" class="nav-item active" data-page="chat">
+        <span class="nav-icon">▸</span> Chat
+      </a>
+      <a href="#/sessions" class="nav-item" data-page="sessions">
+        <span class="nav-icon">▸</span> Sessions
+      </a>
+      <a href="#/config" class="nav-item" data-page="config">
+        <span class="nav-icon">▸</span> Config
+      </a>
+      <a href="#/nodes" class="nav-item" data-page="nodes">
+        <span class="nav-icon">▸</span> Nodes
+      </a>
+      <a href="#/health" class="nav-item" data-page="health">
+        <span class="nav-icon">▸</span> Health
+      </a>
+    </div>
+    <div class="nav-footer">
+      <div id="conn-status" class="status-indicator disconnected">
+        <span class="status-dot"></span>
+        <span class="status-text">disconnected</span>
+      </div>
+    </div>
+  </nav>
+  <main id="content">
+    <!-- Pages rendered here by router -->
+  </main>
+</div>
+<script src="/static/ws.js"></script>
+<script src="/static/pages/chat.js"></script>
+<script src="/static/pages/sessions.js"></script>
+<script src="/static/pages/config.js"></script>
+<script src="/static/pages/nodes.js"></script>
+<script src="/static/pages/health.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

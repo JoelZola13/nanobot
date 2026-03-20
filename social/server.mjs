@@ -2,6 +2,8 @@ import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { Server as SocketIO } from "socket.io";
+import pg from "pg";
+import Redis from "ioredis";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3182", 10);
@@ -99,9 +101,22 @@ app.prepare().then(() => {
       io.emit("presence:update", { userId, status: "away" });
     });
 
-    // New message — broadcast to channel members
+    // New message — broadcast to channel members + publish to Redis
     socket.on("message:send", (data) => {
       socket.to(`channel:${data.channelId}`).emit("message:new", data);
+      // Publish to Redis event bus for cross-service awareness
+      if (redisPub) {
+        redisPub.publish("social.message.new", JSON.stringify({
+          type: "social.message.new",
+          channelId: data.channelId,
+          channelName: data.channelName || "",
+          authorId: data.author?.id || userId,
+          authorName: data.author?.displayName || "Unknown",
+          content: (data.content || "").slice(0, 200),
+          messageId: data.id || "",
+          timestamp: new Date().toISOString(),
+        })).catch(() => {});
+      }
     });
 
     // Message edit — broadcast to channel
@@ -198,6 +213,89 @@ app.prepare().then(() => {
 
   // Make io accessible for API routes if needed
   globalThis.__socketio = io;
+
+  // ── Redis event bus for cross-service communication ─────────────
+  const redisUrl = process.env.REDIS_URL || "redis://localhost:6380";
+  const redisPub = new Redis(redisUrl);  // For publishing events
+  const redisSub = new Redis(redisUrl);  // For subscribing to events
+
+  redisPub.on("connect", () => console.log("[Redis] Publisher connected"));
+  redisSub.on("connect", () => console.log("[Redis] Subscriber connected"));
+  redisPub.on("error", (err) => console.error("[Redis] Pub error:", err.message));
+  redisSub.on("error", (err) => console.error("[Redis] Sub error:", err.message));
+
+  // Subscribe to agent task completion events
+  redisSub.subscribe("agent.task.complete", (err) => {
+    if (err) console.error("[Redis] Subscribe error:", err.message);
+    else console.log("[Redis] Subscribed to agent.task.complete");
+  });
+
+  redisSub.on("message", (channel, message) => {
+    try {
+      const data = JSON.parse(message);
+      if (channel === "agent.task.complete") {
+        const notification = {
+          type: "agent.task.complete",
+          title: `Agent ${data.agentName || "Agent"} completed a task`,
+          body: data.taskSummary || "",
+          sourceService: "nanobot",
+          createdAt: data.timestamp || new Date().toISOString(),
+        };
+        // Broadcast to all connected clients
+        io.emit("notification:new", notification);
+        // Persist to database for all online human users
+        for (const uid of onlineUsers.keys()) {
+          pgPool.query(
+            `INSERT INTO notifications (id, user_id, type, title, body, source_service, created_at)
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW())`,
+            [uid, notification.type, notification.title, notification.body, notification.sourceService]
+          ).catch((err) => console.error("[Notification] DB write error:", err.message));
+        }
+        console.log(`[Redis] Broadcast agent task complete: ${data.taskSummary?.slice(0, 60)}`);
+      }
+    } catch (err) {
+      console.error("[Redis] Message parse error:", err.message);
+    }
+  });
+
+  // ── PostgreSQL connections ──────────────────────────────────────
+  const pgConnStr = process.env.DATABASE_URL || "postgresql://lobehub:lobehub_password@localhost:5433/social";
+  // Pool for writes (notifications, etc.)
+  const pgPool = new pg.Pool({ connectionString: pgConnStr, max: 3 });
+  pgPool.on("error", (err) => console.error("[PG-Pool] Error:", err.message));
+
+  // ── PG NOTIFY listener for agent-sent messages ─────────────────
+  // When nanobot agents insert messages via social_send_message tool,
+  // they fire pg_notify('social_messages', payload). We listen here
+  // and broadcast to the correct Socket.IO channel room.
+  const pgClient = new pg.Client({ connectionString: pgConnStr });
+  pgClient.connect()
+    .then(() => {
+      pgClient.query("LISTEN social_messages");
+      console.log("[PG-NOTIFY] Listening on social_messages channel");
+      pgClient.on("notification", (msg) => {
+        try {
+          const data = JSON.parse(msg.payload);
+          // Broadcast to the channel room so all connected clients see the message
+          io.to(`channel:${data.channelId}`).emit("message:new", {
+            id: data.id,
+            channelId: data.channelId,
+            author: {
+              id: data.authorId,
+              displayName: data.authorName,
+            },
+            content: data.content,
+            createdAt: new Date().toISOString(),
+          });
+          console.log(`[PG-NOTIFY] Broadcasted agent message to channel:${data.channelId}`);
+        } catch (err) {
+          console.error("[PG-NOTIFY] Error parsing notification:", err.message);
+        }
+      });
+    })
+    .catch((err) => {
+      console.error("[PG-NOTIFY] Failed to connect:", err.message);
+    });
 
   httpServer.listen(port, () => {
     console.log(`> Street Voices Social ready on http://localhost:${port}`);

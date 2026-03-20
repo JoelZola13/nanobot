@@ -2,7 +2,7 @@ agents:
   - name: content_manager
     role: lead
     description: "Runs editorial calendar and content pipeline. Coordinates research, writing, and publishing."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, news_search, file_read, file_write, "mcp_google-drive_*"]
     handoffs:
       - article_researcher
@@ -15,7 +15,7 @@ agents:
   - name: article_researcher
     role: member
     description: "First stage of content pipeline. Researches news stories for Street Voices daily articles."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, web_fetch, news_search, image_search, file_read, file_write]
     handoffs: [content_manager, article_writer]
     system_prompt: article_researcher.md
@@ -24,7 +24,7 @@ agents:
   - name: article_writer
     role: member
     description: "Writes Street Voices articles from research briefs with branded images."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, web_fetch, image_search, article_image, file_read, file_write]
     handoffs: [content_manager]
     system_prompt: article_writer.md
@@ -33,7 +33,7 @@ agents:
   - name: social_media_manager
     role: member
     description: "Manages social media presence. Creates posts, schedules content, and monitors engagement."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [web_search, file_read, file_write, postiz, "mcp_canva_*"]
     handoffs: [content_manager]
     system_prompt: social_media_manager.md
@@ -42,7 +42,7 @@ agents:
   - name: content_memory
     role: member
     description: "Background worker capturing content lifecycle data, editorial decisions, and performance metrics."
-    model: openai-codex/gpt-5.4
+    model: openai-codex/gpt-5.1-codex
     tools: [file_read, file_write]
     handoffs: [content_manager]
     system_prompt: content_memory.md

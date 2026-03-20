@@ -16,8 +16,9 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse
-from starlette.routing import Route
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from starlette.routing import Mount, Route, WebSocketRoute
+from starlette.staticfiles import StaticFiles
 
 SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
@@ -25,6 +26,7 @@ AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "au
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
 AVATARS_DIR = Path(__file__).parent.parent / "static" / "avatars"
 SHARED_ASSETS_DIR = Path(__file__).parent.parent / "LibreChat" / "client" / "public"
+GATEWAY_STATIC_DIR = Path(__file__).parent / "gateway" / "static"
 
 from nanobot.config.loader import load_config
 from nanobot.bus.queue import MessageBus
@@ -37,6 +39,8 @@ _agent: AgentLoop | None = None
 _cron: CronService | None = None
 _orchestrator: Any = None  # Orchestrator | None — lazy import to avoid circular deps
 _harness: Any = None  # DeepAgentHarness | None — deepagents-powered engine
+_gateway: Any = None  # GatewayServer | None — WS mission control
+_redis_bus: Any = None  # RedisBus | None — cross-service event bus
 
 
 def _make_provider(config):
@@ -210,6 +214,31 @@ async def lifespan(app):
     _agent.tools.register(ArticleImageTool(base_url="http://localhost:18790"))
     logger.info("Article image generation tool registered")
 
+    # Register SV Social tools (direct PostgreSQL access)
+    _social_pool = None
+    try:
+        import asyncpg
+        _social_pool = await asyncpg.create_pool(
+            "postgresql://lobehub:lobehub_password@localhost:5433/social",
+            min_size=1,
+            max_size=5,
+        )
+        from nanobot.agent.tools.social_tools import ALL_SOCIAL_TOOLS
+        for tool_cls in ALL_SOCIAL_TOOLS:
+            _agent.tools.register(tool_cls(pool=_social_pool))
+        logger.info(f"SV Social tools registered ({len(ALL_SOCIAL_TOOLS)} tools)")
+
+        # Register unified search tool (spans Social + MeiliSearch)
+        from nanobot.agent.tools.unified_search import UnifiedSearchTool
+        _agent.tools.register(UnifiedSearchTool(
+            pool=_social_pool,
+            meili_url="http://localhost:7700",
+            meili_key="DrhYf7zENyR6AlUCKmnz0eYASOQdl6zxH7s7MKFSfFCt",
+        ))
+        logger.info("Unified search tool registered (social + chat + directory)")
+    except Exception as e:
+        logger.warning(f"SV Social tools not available: {e}")
+
     # Start Slack channel if enabled
     channel_manager = None
     slack_cfg = config.channels.slack
@@ -264,11 +293,20 @@ async def lifespan(app):
                     "timeout": getattr(config.tools.exec, "timeout", 120),
                 },
             }
+            # Collect pre-instantiated tools (social, unified_search) for sub-agent access
+            _extra_tools = {}
+            for t_name in _agent.tools.tool_names:
+                if t_name.startswith("social_") or t_name == "unified_search":
+                    t = _agent.tools.get(t_name)
+                    if t:
+                        _extra_tools[t_name] = t
+
             tool_factory = ToolFactory(
                 agent_registry,
                 workspace=config.workspace_path,
                 tool_config=tool_config,
                 provider=provider,
+                mcp_tools=_extra_tools,
             )
             _orchestrator = Orchestrator(
                 provider=provider,
@@ -319,6 +357,82 @@ async def lifespan(app):
         import traceback
         traceback.print_exc()
 
+    # ── Gateway (WebSocket mission control) ──
+    global _gateway
+    try:
+        from nanobot.gateway.server import GatewayServer
+        from nanobot.gateway.auth import GatewayAuth
+
+        _gateway = GatewayServer(agent=_agent, auth=GatewayAuth(), config=config)
+        logger.info("Gateway mission control ready at /ws (dashboard at /dashboard)")
+    except Exception as exc:
+        _gateway = None
+        logger.warning(f"Gateway not available: {exc}")
+
+    # ── Redis event bus for cross-service communication ──
+    global _redis_bus
+    try:
+        from nanobot.bus.redis_bus import RedisBus
+
+        _redis_bus = RedisBus(url="redis://localhost:6380")
+
+        # Example subscriber: log social messages for awareness
+        async def _on_social_message(event):
+            logger.debug(f"[RedisBus] Social message in #{event.get('channelName', '?')}: {event.get('content', '')[:80]}")
+
+        _redis_bus.subscribe("social.message.new", _on_social_message)
+        await _redis_bus.start()
+        logger.info("Redis event bus started (redis://localhost:6380)")
+    except Exception as exc:
+        _redis_bus = None
+        logger.warning(f"Redis event bus not available: {exc}")
+
+    # ── Platform awareness: refresh context with Social status ──
+    _platform_task = None
+    if _social_pool and _agent:
+        async def _refresh_platform_status():
+            """Periodically query Social DB and update agent context."""
+            while True:
+                try:
+                    async with _social_pool.acquire() as conn:
+                        # Online users
+                        online = await conn.fetch(
+                            """SELECT display_name, is_agent FROM users
+                               WHERE status != 'offline'
+                                  OR last_seen_at > NOW() - INTERVAL '5 minutes'
+                               ORDER BY is_agent ASC LIMIT 15"""
+                        )
+                        people = [r["display_name"] for r in online if not r["is_agent"]]
+                        agents = [r["display_name"] for r in online if r["is_agent"]]
+
+                        # Recent activity
+                        recent = await conn.fetch(
+                            """SELECT c.name, COUNT(*) as cnt
+                               FROM messages m JOIN channels c ON m.channel_id = c.id
+                               WHERE m.created_at > NOW() - INTERVAL '1 hour'
+                                 AND m.deleted_at IS NULL AND c.name IS NOT NULL
+                               GROUP BY c.name ORDER BY cnt DESC LIMIT 5"""
+                        )
+
+                    parts = ["\n## Platform Status (auto-refreshed)"]
+                    if people:
+                        parts.append(f"Online people: {', '.join(people)}")
+                    if agents:
+                        parts.append(f"Online agents: {', '.join(agents)}")
+                    if not people and not agents:
+                        parts.append("No users currently online")
+                    if recent:
+                        activity = "; ".join(f"#{r['name']} ({r['cnt']} msgs)" for r in recent)
+                        parts.append(f"Recent Social activity (1h): {activity}")
+
+                    _agent.context._platform_status = "\n".join(parts)
+                except Exception as e:
+                    logger.debug(f"Platform status refresh failed: {e}")
+                await asyncio.sleep(60)
+
+        _platform_task = asyncio.create_task(_refresh_platform_status())
+        logger.info("Platform awareness task started (60s refresh)")
+
     logger.info("Nanobot API server ready")
     yield
     try:
@@ -331,6 +445,12 @@ async def lifespan(app):
         logger.warning(f"Ignoring MCP shutdown error (harmless): {shutdown_err}")
     except Exception as shutdown_err:
         logger.warning(f"Unexpected shutdown error (continuing): {shutdown_err}")
+    if _platform_task:
+        _platform_task.cancel()
+    if _redis_bus:
+        await _redis_bus.stop()
+    if _social_pool:
+        await _social_pool.close()
     _agent = None
     _cron = None
 
@@ -786,6 +906,19 @@ async def _stream_response(
         usage = {}
         finish_reason = None
 
+    # Publish agent task completion to Redis event bus
+    if _redis_bus and tools_used:
+        try:
+            await _redis_bus.publish("agent.task.complete", {
+                "type": "agent.task.complete",
+                "agentName": requested_model,
+                "taskSummary": (response_text or "")[:150],
+                "toolsUsed": tools_used[:5],
+                "channel": "librechat",
+            })
+        except Exception:
+            pass
+
     # Send the final response
     chunk = {
         "id": chat_id,
@@ -914,6 +1047,22 @@ async def _stream_agent_response(
         content = result.content
         usage = result.usage or {}
         session_id = result.session_id
+
+    # Publish agent task completion to Redis event bus
+    if _redis_bus and not isinstance(result, Exception):
+        try:
+            agents_involved = []
+            if hasattr(result, 'trace') and result.trace:
+                agents_involved = [s.agent for s in getattr(result.trace, 'steps', [])][:5]
+            await _redis_bus.publish("agent.task.complete", {
+                "type": "agent.task.complete",
+                "agentName": agent_name,
+                "taskSummary": (content or "")[:150],
+                "agentsInvolved": agents_involved,
+                "channel": "librechat",
+            })
+        except Exception:
+            pass
 
     # Send the final response content
     chunk = {
@@ -1495,6 +1644,22 @@ async def harness_status(request: Request) -> JSONResponse:
     })
 
 
+async def serve_dashboard(request: Request):
+    """Serve the mission control dashboard SPA."""
+    index_path = GATEWAY_STATIC_DIR / "index.html"
+    if not index_path.exists():
+        return JSONResponse({"error": "Dashboard not found"}, status_code=404)
+    return HTMLResponse(index_path.read_text())
+
+
+async def gateway_ws(websocket):
+    """WebSocket endpoint — delegates to GatewayServer if available."""
+    if _gateway is None:
+        await websocket.close(1013, "Gateway not initialized")
+        return
+    await _gateway._ws_endpoint(websocket)
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
@@ -1521,6 +1686,11 @@ app = Starlette(
         Route("/v1/memory/context/{agent_name}", memory_context_api, methods=["GET"]),
         Route("/v1/agents/{agent_name}/sessions", agent_sessions_api, methods=["GET"]),
         Route("/v1/harness/status", harness_status, methods=["GET"]),
+        # ── Mission Control dashboard ──
+        Route("/dashboard", serve_dashboard, methods=["GET"]),
+        Mount("/static", app=StaticFiles(directory=str(GATEWAY_STATIC_DIR)), name="gateway-static"),
+        # ── WebSocket gateway ──
+        WebSocketRoute("/ws", gateway_ws),
     ],
     middleware=[
         Middleware(

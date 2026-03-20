@@ -89,9 +89,16 @@ services:
     depends_on:
       - librechat-mongodb
       - rag_api
+      - casdoor
     restart: always
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
+    # Strip loopback entries so localhost resolves to host (needed for Casdoor SSO)
+    entrypoint: >
+      /bin/sh -c "cp /etc/hosts /tmp/h &&
+      grep -v -e '^127\\.0\\.0\\.1' -e '^::1' /tmp/h > /etc/hosts &&
+      exec npm run backend"
     environment:
       - HOST=0.0.0.0
       - PORT=3180
@@ -130,6 +137,9 @@ services:
       - type: bind
         source: ./LibreChat/client/public/fonts/CocogooseCompressed-Regular.ttf
         target: /app/client/dist/fonts/CocogooseCompressed-Regular.ttf
+      - type: bind
+        source: ./LibreChat/client/public/sv-platform.js
+        target: /app/client/dist/sv-platform.js
       - type: bind
         source: ./LibreChat/scripts
         target: /app/scripts
@@ -240,12 +250,12 @@ services:
       - "3182:3182"
     environment:
       - PORT=3182
-      - DATABASE_URL=postgresql://lobehub:lobehub_password@postgresql:5432/social
+      - DATABASE_URL=postgresql://lobehub:lobehub_password@localhost:5433/social
       - AUTH_CASDOOR_ISSUER=http://localhost:8380
       - AUTH_CASDOOR_ID=social-app
       - AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
       - AUTH_SECRET=street-voices-social-secret-2026
-      - NEXTAUTH_URL=http://localhost:3182/api/auth
+      - NEXTAUTH_URL=http://localhost:3180/social/api/auth
       - NANOBOT_API_URL=http://host.docker.internal:18790/v1
       - NANOBOT_API_KEY=nanobot
     depends_on:
@@ -255,9 +265,16 @@ services:
         condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
+    # Strip loopback entries so localhost resolves to host (needed for Casdoor SSO)
+    entrypoint: >
+      /bin/sh -c "cp /etc/hosts /tmp/h &&
+      grep -v -e '^127\\.0\\.0\\.1' -e '^::1' /tmp/h > /etc/hosts &&
+      exec node server.mjs"
     restart: unless-stopped
     networks:
       - streetvoices
+      - lobehub_streetvoices
 
 volumes:
   pgdata:
@@ -268,3 +285,5 @@ volumes:
 networks:
   streetvoices:
     driver: bridge
+  lobehub_streetvoices:
+    external: true

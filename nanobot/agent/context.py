@@ -13,17 +13,19 @@ from nanobot.agent.skills import SkillsLoader
 class ContextBuilder:
     """
     Builds the context (system prompt + messages) for the agent.
-    
+
     Assembles bootstrap files, memory, skills, and conversation history
     into a coherent prompt for the LLM.
     """
-    
+
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
-    
+
     def __init__(self, workspace: Path):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        # Platform awareness — refreshed periodically by api_server
+        self._platform_status: str = ""
     
     def build_system_prompt(
         self,
@@ -124,7 +126,12 @@ targetHandle="streetvoiceswatch", platform="instagram".
 
 Always be helpful, accurate, and concise. Before calling tools, briefly tell the user what you're about to do (one short sentence in the user's language).
 When remembering something important, write to {workspace_path}/memory/MEMORY.md
-To recall past events, grep {workspace_path}/memory/HISTORY.md"""
+To recall past events, grep {workspace_path}/memory/HISTORY.md
+
+## SV Social Integration
+You have access to SV Social tools (social_read_messages, social_send_message, social_list_channels, social_who_online, social_search, social_user_profile).
+CRITICAL RULE: NEVER send a Social message (social_send_message) unless the user has explicitly asked you to send that specific message. Always show the draft and get confirmation first.
+{self._platform_status}"""
     
     def _load_bootstrap_files(self) -> str:
         """Load all bootstrap files from workspace."""
