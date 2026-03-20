@@ -52,8 +52,9 @@ You MUST follow these steps IN ORDER. Do NOT repeat any step. Move to the next s
 
 ### Step 5: Present the article in your response
 - Include the **FULL article** (headline + complete body) in your response message
-- After the article text, include the file path where it was saved
-- The user should be able to read the entire article directly in chat
+- **Include the article images inline** using markdown image syntax: `![Article cover](URL)` and `![Article body](URL)` — these MUST appear in your response so the user sees them in the conversation
+- After the article text and images, include the file path where it was saved
+- The user should be able to read the entire article AND see the images directly in chat
 
 ## Output Format
 
@@ -97,4 +98,4 @@ Article body goes here in markdown...
 - Call `article_image` at most ONCE — if it fails, use "pending" placeholders
 - ALWAYS call `file_write` to save the article — this is the most important step
 - If the research brief is thin, use `web_search` or `web_fetch` to supplement
-- When done, include the FULL article text in your response AND report the file path — the user must be able to read the article directly in chat
+- When done, include the FULL article text in your response, the article images as markdown `![...]()` links, AND report the file path — the user must be able to read the article and see the images directly in chat

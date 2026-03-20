@@ -708,7 +708,11 @@ class AgentLoop:
                 elif ext in _VIDEO_EXTS:
                     _add(f"[Video output]({ _API_HOST }/videos/{path.name})")
                 elif ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
-                    _add(f"![Screenshot/output]({ _API_HOST }/screenshots/{path.name})")
+                    # Route article images to the correct endpoint
+                    if "article-image" in path_text or "article_image" in path_text:
+                        _add(f"![Article image]({ _API_HOST }/article-images/{path.name})")
+                    else:
+                        _add(f"![Screenshot/output]({ _API_HOST }/screenshots/{path.name})")
                 continue
 
             # Remotion-style reference in tts output: <Audio src={staticFile('audio/name.wav')}/>
@@ -722,7 +726,7 @@ class AgentLoop:
                 continue
 
             # Tool output that already emits the public URL
-            m = re.search(rf"({re.escape(_API_HOST)}/(?:audio|videos|screenshots)/[^\s)]+)", text)
+            m = re.search(rf"({re.escape(_API_HOST)}/(?:audio|videos|screenshots|article-images)/[^\s)]+)", text)
             if m:
                 url = m.group(1)
                 if "/audio/" in url:
@@ -731,6 +735,8 @@ class AgentLoop:
                     _add(f"[Video output]({url})")
                 elif "/screenshots/" in url:
                     _add(f"![Screenshot/output]({url})")
+                elif "/article-images/" in url:
+                    _add(f"![Article image]({url})")
                 continue
 
         return links

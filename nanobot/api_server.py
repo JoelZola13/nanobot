@@ -1064,19 +1064,34 @@ async def _stream_agent_response(
         except Exception:
             pass
 
-    # Send the final response content
-    chunk = {
+    # Send the final response content (separate from finish_reason per OpenAI spec)
+    if content:
+        content_chunk = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": requested_model,
+            "choices": [{
+                "index": 0,
+                "delta": {"content": content},
+                "finish_reason": None,
+            }],
+        }
+        yield f"data: {json.dumps(content_chunk)}\n\n"
+
+    # Send finish_reason in a separate chunk (LibreChat requires this split)
+    stop_chunk = {
         "id": chat_id,
         "object": "chat.completion.chunk",
         "created": int(time.time()),
         "model": requested_model,
         "choices": [{
             "index": 0,
-            "delta": {"content": content},
+            "delta": {},
             "finish_reason": "stop",
         }],
     }
-    yield f"data: {json.dumps(chunk)}\n\n"
+    yield f"data: {json.dumps(stop_chunk)}\n\n"
 
     # Usage packet if requested
     if include_usage and usage:
