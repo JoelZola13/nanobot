@@ -1697,6 +1697,51 @@ async def groups_api(request: Request) -> JSONResponse:
             "agents": ["scraping-manager", "scraping-agent"],
         },
     ]
+    # Enrich groups with latest message from Social DB
+    try:
+        pool = await _get_social_db()
+        channel_ids = [t["channel_id"] for t in teams]
+        # Fetch latest message + unread count per channel in one query
+        rows = await pool.fetch("""
+            SELECT DISTINCT ON (m.channel_id)
+                m.channel_id,
+                m.content,
+                m.created_at,
+                u.username AS author_username,
+                u.display_name AS author_display_name,
+                u.is_agent AS author_is_agent
+            FROM messages m
+            JOIN users u ON m.author_id = u.id
+            WHERE m.channel_id = ANY($1::text[])
+            ORDER BY m.channel_id, m.created_at DESC
+        """, channel_ids)
+        latest_map = {}
+        for row in rows:
+            latest_map[row["channel_id"]] = {
+                "content": (row["content"][:120] + "…") if len(row["content"]) > 120 else row["content"],
+                "timestamp": row["created_at"].isoformat(),
+                "author": row["author_display_name"] or row["author_username"],
+                "is_agent": row["author_is_agent"],
+            }
+        # Also get message counts per channel
+        count_rows = await pool.fetch("""
+            SELECT channel_id, COUNT(*) as msg_count
+            FROM messages
+            WHERE channel_id = ANY($1::text[])
+            GROUP BY channel_id
+        """, channel_ids)
+        count_map = {r["channel_id"]: r["msg_count"] for r in count_rows}
+
+        for team in teams:
+            cid = team["channel_id"]
+            team["last_message"] = latest_map.get(cid)
+            team["message_count"] = count_map.get(cid, 0)
+    except Exception as e:
+        logger.warning(f"Failed to enrich groups with messages: {e}")
+        for team in teams:
+            team["last_message"] = None
+            team["message_count"] = 0
+
     # Support single group lookup via ?id=N
     group_id = request.query_params.get("id")
     if group_id:
