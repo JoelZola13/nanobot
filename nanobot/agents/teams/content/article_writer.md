@@ -52,9 +52,11 @@ You MUST follow these steps IN ORDER. Do NOT repeat any step. Move to the next s
 
 ### Step 5: Present the article in your response
 - Include the **FULL article** (headline + complete body) in your response message
-- **Include the article images inline** using markdown image syntax: `![Article cover](URL)` and `![Article body](URL)` — these MUST appear in your response so the user sees them in the conversation
+- **Show the hero/source photo inline** using `![description](hero_image_url)` — this is the raw photo the reader will see
+- **Show the branded template images inline** using `![Article cover](URL)` and `![Article body](URL)` from generate_article_image
+- ALL images MUST be markdown image links so they render as visible images in the conversation — NOT as text URLs
 - After the article text and images, include the file path where it was saved
-- The user should be able to read the entire article AND see the images directly in chat
+- The user should be able to read the entire article AND see ALL images (source photos + branded templates) directly in chat
 
 ## Output Format
 
