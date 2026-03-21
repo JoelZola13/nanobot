@@ -1851,10 +1851,15 @@ async def group_send_message(request: Request) -> JSONResponse:
                 if not agent_user:
                     return
 
-                # Process through nanobot
-                from nanobot.agent.loop import AgentLoop
-                loop = AgentLoop()
-                result = await loop.process_direct(content, channel=f"group-{group_id}")
+                # Process through the shared nanobot agent
+                if _agent is None:
+                    logger.error("Agent not initialized, cannot process group mention")
+                    return
+                result = await _agent.process_direct(
+                    f"[Group chat #{group_id}] {content}",
+                    channel=f"group-{group_id}",
+                    session_key=f"group:{group_id}",
+                )
 
                 # Save agent reply
                 reply_id = str(uuid.uuid4())
