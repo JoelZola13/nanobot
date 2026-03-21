@@ -1581,6 +1581,328 @@ async def embeddings(request: Request) -> JSONResponse:
 
 
 
+async def groups_api(request: Request) -> JSONResponse:
+    """GET /groups — Return agent teams as community groups."""
+    teams = [
+        {
+            "id": 1,
+            "name": "Executive",
+            "description": "Strategic leadership and cross-team coordination. The CEO oversees all operations and delegates work across the organization.",
+            "avatar_url": None,
+            "member_count": 3,
+            "tags": ["Leadership", "Strategy", "Operations"],
+            "category": "leadership",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "executive",
+            "channel_id": "channel-executive",
+            "agents": ["ceo", "auto-router"],
+        },
+        {
+            "id": 2,
+            "name": "Communication",
+            "description": "Email, Slack, WhatsApp, calendar, and social outreach. Manages all inbound and outbound messaging across platforms.",
+            "avatar_url": None,
+            "member_count": 7,
+            "tags": ["Email", "Slack", "WhatsApp", "Calendar"],
+            "category": "operations",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "communication",
+            "channel_id": "channel-communication",
+            "agents": ["communication-manager", "email-agent", "slack-agent", "social-agent", "whatsapp-agent", "calendar-agent"],
+        },
+        {
+            "id": 3,
+            "name": "Content",
+            "description": "Article research, writing, social media management, and editorial workflow for Street Voices publications.",
+            "avatar_url": None,
+            "member_count": 4,
+            "tags": ["Articles", "Writing", "Social Media"],
+            "category": "creative",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "content",
+            "channel_id": "channel-content",
+            "agents": ["content-manager", "article-researcher", "article-writer", "social-media"],
+        },
+        {
+            "id": 4,
+            "name": "Development",
+            "description": "Full-stack engineering, database administration, DevOps, and infrastructure management.",
+            "avatar_url": None,
+            "member_count": 5,
+            "tags": ["Engineering", "Backend", "Frontend", "DevOps"],
+            "category": "technical",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "development",
+            "channel_id": "channel-development",
+            "agents": ["dev-manager", "backend-dev", "frontend-dev", "database-admin", "devops"],
+        },
+        {
+            "id": 5,
+            "name": "Finance",
+            "description": "Financial management, accounting, crypto operations, and budget tracking for Street Voices.",
+            "avatar_url": None,
+            "member_count": 3,
+            "tags": ["Finance", "Accounting", "Crypto"],
+            "category": "operations",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "finance",
+            "channel_id": "channel-finance",
+            "agents": ["finance-manager", "accounting-agent", "crypto-agent"],
+        },
+        {
+            "id": 6,
+            "name": "Grant Writing",
+            "description": "Grant research, proposal writing, budget planning, and project management for funding applications.",
+            "avatar_url": None,
+            "member_count": 5,
+            "tags": ["Grants", "Proposals", "Budgets"],
+            "category": "operations",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "grant",
+            "channel_id": "channel-grant",
+            "agents": ["grant-manager", "grant-writer", "budget-manager", "project-manager"],
+        },
+        {
+            "id": 7,
+            "name": "Research",
+            "description": "Media platform analysis, program research, and strategic insights for Street Voices initiatives.",
+            "avatar_url": None,
+            "member_count": 4,
+            "tags": ["Research", "Analysis", "Insights"],
+            "category": "research",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "research",
+            "channel_id": "channel-research",
+            "agents": ["research-manager", "media-platform-researcher", "media-program-researcher", "street-bot-researcher"],
+        },
+        {
+            "id": 8,
+            "name": "Scraping",
+            "description": "Web scraping, data collection, and automated information gathering from online sources.",
+            "avatar_url": None,
+            "member_count": 3,
+            "tags": ["Data", "Scraping", "Automation"],
+            "category": "technical",
+            "is_public": True,
+            "is_member": True,
+            "channel_slug": "scraping",
+            "channel_id": "channel-scraping",
+            "agents": ["scraping-manager", "scraping-agent"],
+        },
+    ]
+    # Support single group lookup via ?id=N
+    group_id = request.query_params.get("id")
+    if group_id:
+        try:
+            gid = int(group_id)
+            group = next((g for g in teams if g["id"] == gid), None)
+            if group:
+                return JSONResponse(group)
+            return JSONResponse({"error": "Group not found"}, status_code=404)
+        except ValueError:
+            pass
+    return JSONResponse(teams)
+
+
+# ── Group → Channel ID mapping ──────────────────────────────────
+_GROUP_CHANNEL_MAP = {
+    1: "channel-executive",
+    2: "channel-communication",
+    3: "channel-content",
+    4: "channel-development",
+    5: "channel-finance",
+    6: "channel-grant",
+    7: "channel-research",
+    8: "channel-scraping",
+}
+
+SOCIAL_DB_URL = "postgresql://lobehub:lobehub_password@localhost:5433/social"
+
+async def _get_social_db():
+    """Get or create asyncpg connection pool for social DB."""
+    import asyncpg
+    if not hasattr(_get_social_db, "_pool") or _get_social_db._pool is None:
+        _get_social_db._pool = await asyncpg.create_pool(SOCIAL_DB_URL, min_size=1, max_size=5)
+    return _get_social_db._pool
+
+_get_social_db._pool = None
+
+
+async def group_messages(request: Request) -> JSONResponse:
+    """GET /groups/{group_id}/messages — Fetch messages for a group's channel."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    pool = await _get_social_db()
+    rows = await pool.fetch("""
+        SELECT m.id, m.content, m.created_at, m.is_edited, m.is_pinned,
+               u.id as author_id, u.username, u.display_name, u.avatar_url, u.is_agent
+        FROM messages m
+        JOIN users u ON m.author_id = u.id
+        WHERE m.channel_id = $1 AND m.deleted_at IS NULL AND m.parent_id IS NULL
+        ORDER BY m.created_at ASC
+        LIMIT 100
+    """, channel_id)
+
+    messages = []
+    for row in rows:
+        messages.append({
+            "id": row["id"],
+            "content": row["content"],
+            "createdAt": row["created_at"].isoformat(),
+            "isEdited": row["is_edited"],
+            "isPinned": row["is_pinned"],
+            "author": {
+                "id": row["author_id"],
+                "username": row["username"],
+                "displayName": row["display_name"],
+                "avatarUrl": row["avatar_url"],
+                "isAgent": row["is_agent"],
+            },
+        })
+    return JSONResponse({"messages": messages})
+
+
+async def group_send_message(request: Request) -> JSONResponse:
+    """POST /groups/{group_id}/messages — Send a message to a group channel."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    body = await request.json()
+    content = body.get("content", "").strip()
+    if not content:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    # Use Joel's user ID
+    user_id = "cmmq4buiv0000qrrtsv31r71l"
+
+    pool = await _get_social_db()
+
+    # Ensure Joel is a member of this channel
+    member = await pool.fetchrow(
+        "SELECT id FROM channel_members WHERE channel_id = $1 AND user_id = $2",
+        channel_id, user_id,
+    )
+    if not member:
+        import uuid
+        member_id = f"member-{channel_id}-joel"
+        await pool.execute(
+            "INSERT INTO channel_members (id, channel_id, user_id, role, joined_at) VALUES ($1, $2, $3, 'member', NOW()) ON CONFLICT (channel_id, user_id) DO NOTHING",
+            member_id, channel_id, user_id,
+        )
+
+    # Insert message
+    import uuid
+    msg_id = str(uuid.uuid4())
+    await pool.execute("""
+        INSERT INTO messages (id, channel_id, author_id, content, created_at, updated_at, is_edited, is_pinned)
+        VALUES ($1, $2, $3, $4, NOW(), NOW(), false, false)
+    """, msg_id, channel_id, user_id, content)
+
+    # Fetch the inserted message back
+    row = await pool.fetchrow("""
+        SELECT m.id, m.content, m.created_at,
+               u.id as author_id, u.username, u.display_name, u.avatar_url, u.is_agent
+        FROM messages m JOIN users u ON m.author_id = u.id
+        WHERE m.id = $1
+    """, msg_id)
+
+    msg = {
+        "id": row["id"],
+        "content": row["content"],
+        "createdAt": row["created_at"].isoformat(),
+        "isEdited": False,
+        "isPinned": False,
+        "author": {
+            "id": row["author_id"],
+            "username": row["username"],
+            "displayName": row["display_name"],
+            "avatarUrl": row["avatar_url"],
+            "isAgent": row["is_agent"],
+        },
+    }
+
+    # Check for @agent mentions and trigger agent response
+    mentioned_agents = []
+    for agent_name in body.get("agents", []):
+        if f"@{agent_name}" in content:
+            mentioned_agents.append(agent_name)
+
+    # If any agent was mentioned, trigger a response asynchronously
+    if mentioned_agents:
+        async def _trigger_agent(agent_username: str):
+            """Send the message to nanobot for agent to respond, then save the reply."""
+            try:
+                agent_user = await pool.fetchrow(
+                    "SELECT id, username, display_name FROM users WHERE username = $1 AND is_agent = true",
+                    agent_username,
+                )
+                if not agent_user:
+                    return
+
+                # Process through nanobot
+                from nanobot.agent.loop import AgentLoop
+                loop = AgentLoop()
+                result = await loop.process_direct(content, channel=f"group-{group_id}")
+
+                # Save agent reply
+                reply_id = str(uuid.uuid4())
+                await pool.execute("""
+                    INSERT INTO messages (id, channel_id, author_id, content, created_at, updated_at, is_edited, is_pinned)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW(), false, false)
+                """, reply_id, channel_id, agent_user["id"], result or "I couldn't process that request.")
+            except Exception as e:
+                logger.error(f"Agent response error: {e}")
+
+        for agent in mentioned_agents:
+            asyncio.create_task(_trigger_agent(agent))
+
+    return JSONResponse(msg, status_code=201)
+
+
+async def group_members(request: Request) -> JSONResponse:
+    """GET /groups/{group_id}/members — List members of a group channel."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    pool = await _get_social_db()
+    rows = await pool.fetch("""
+        SELECT u.id, u.username, u.display_name, u.avatar_url, u.is_agent, u.status,
+               cm.role, cm.joined_at
+        FROM channel_members cm
+        JOIN users u ON cm.user_id = u.id
+        WHERE cm.channel_id = $1
+        ORDER BY u.is_agent ASC, u.display_name ASC
+    """, channel_id)
+
+    members = []
+    for row in rows:
+        members.append({
+            "id": row["id"],
+            "username": row["username"],
+            "displayName": row["display_name"],
+            "avatarUrl": row["avatar_url"],
+            "isAgent": row["is_agent"],
+            "status": row["status"] or "offline",
+            "role": row["role"],
+            "joinedAt": row["joined_at"].isoformat() if row["joined_at"] else None,
+        })
+    return JSONResponse({"members": members})
+
+
 async def memory_api(request: Request) -> JSONResponse:
     """GET/POST /v1/memory — Universal shared memory API.
 
@@ -1693,6 +2015,10 @@ app = Starlette(
         Route("/api/cron/jobs/{job_id}", cron_delete_job, methods=["DELETE"]),
         Route("/v1/agents/status", agents_status, methods=["GET"]),
         Route("/v1/agents/list", agents_list, methods=["GET"]),
+        Route("/groups", groups_api, methods=["GET"]),
+        Route("/groups/{group_id:int}/messages", group_messages, methods=["GET"]),
+        Route("/groups/{group_id:int}/messages", group_send_message, methods=["POST"]),
+        Route("/groups/{group_id:int}/members", group_members, methods=["GET"]),
         Route("/shared/{filename:path}", serve_shared_asset, methods=["GET"]),
         Route("/api/article-image/generate", generate_article_image, methods=["POST"]),
         Route("/article-images/{filename:path}", serve_article_image, methods=["GET"]),

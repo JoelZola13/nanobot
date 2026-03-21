@@ -204,8 +204,22 @@ class AgentInstance:
 
                     # Stream tool call progress
                     if on_progress:
+                        # Include key argument for research tools so user sees URLs
+                        arg_hint = ""
+                        if tc.arguments:
+                            for key in ("url", "query", "search_query", "terms"):
+                                val = tc.arguments.get(key)
+                                if val and isinstance(val, str):
+                                    # Make URLs clickable links
+                                    if val.startswith(("http://", "https://")):
+                                        display = val if len(val) <= 80 else val[:77] + "…"
+                                        arg_hint = f" [{display}]({val})"
+                                    else:
+                                        display = val if len(val) <= 80 else val[:77] + "…"
+                                        arg_hint = f" `{display}`"
+                                    break
                         await on_progress(
-                            f"🔧 **{self.spec.name}** → `{tc.name}`"
+                            f"🔧 **{self.spec.name}** → `{tc.name}`{arg_hint}"
                         )
 
                     # Propagate on_progress to delegate tools so sub-agents
