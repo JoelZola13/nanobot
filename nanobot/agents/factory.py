@@ -77,7 +77,7 @@ class ToolFactory:
         self._tool_config = tool_config or {}
         self._provider = provider
         # MCP tools keyed by their full name (e.g. "mcp_airtable_list_records")
-        self._mcp_tools: dict[str, Tool] = mcp_tools or {}
+        self._mcp_tools: dict[str, Tool] = mcp_tools if mcp_tools is not None else {}
 
     def build_tools(self, spec: AgentSpec) -> ToolRegistry:
         """

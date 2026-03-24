@@ -3,7 +3,7 @@ agents:
     role: lead
     description: "Oversees the full grant lifecycle — opportunity identification, team coordination, submission management, and funder relations."
     model: openai-codex/gpt-5.1-codex
-    tools: [web_search, file_read, file_write, grants_database, "mcp_google-calendar_*"]
+    tools: [web_search, web_fetch, file_read, file_write, grants_database, "mcp_google-calendar_*", "mcp_playwright_*"]
     handoffs:
       - grant_writer
       - budget_manager
@@ -11,7 +11,7 @@ agents:
       - grant_memory
       - ceo
     system_prompt: grant_manager.md
-    max_iterations: 25
+    max_iterations: 50
 
   - name: grant_writer
     role: member
