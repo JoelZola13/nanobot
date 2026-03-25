@@ -33,12 +33,33 @@ You'll see a window with a blinking cursor. This is where you'll type commands.
 Copy and paste this into Terminal, then press Enter:
 
 ```
-git clone https://github.com/JoelZola13/nanobot.git
+git clone --recursive https://github.com/JoelZola13/nanobot.git
 ```
+
+The `--recursive` part is important — it downloads the chat interface along with the main project.
 
 If you get "git: command not found":
 - **Mac:** A popup will ask to install developer tools. Click **Install**, wait, then try again.
 - **Windows:** Download Git from https://git-scm.com/downloads and install it, then try again.
+
+If you forgot `--recursive` or the `LibreChat/` folder is empty:
+```
+cd ~/nanobot
+git submodule update --init --recursive
+```
+
+---
+
+## Quick Setup (Alternative)
+
+If you already have the secrets files from Joel, you can skip Steps 4-5 and run:
+
+```
+cd ~/nanobot
+./setup.sh
+```
+
+It will check everything and start the platform for you. If something is missing, it will tell you what to do.
 
 ---
 

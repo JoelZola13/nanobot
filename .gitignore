@@ -22,7 +22,6 @@ poetry.lock
 botpy.log
 tests/
 node_modules/
-LibreChat/
 bridge/dist/
 
 # Claude worktrees and config

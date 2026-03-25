@@ -1,0 +1,40 @@
+{
+  "$meta": {
+    "version": 1,
+    "updatedAt": "2026-03-25T09:00:00.000Z",
+    "source": "onboard"
+  },
+  "database": {
+    "mode": "postgres",
+    "connectionString": "postgresql://myuser:mypassword@vectordb:5432/paperclip"
+  },
+  "logging": {
+    "mode": "file",
+    "logDir": "/home/paperclip/.paperclip/instances/default/logs"
+  },
+  "server": {
+    "deploymentMode": "authenticated",
+    "exposure": "private",
+    "host": "0.0.0.0",
+    "port": 3100,
+    "allowedHostnames": [],
+    "serveUi": true
+  },
+  "auth": {
+    "baseUrlMode": "auto",
+    "disableSignUp": false
+  },
+  "storage": {
+    "provider": "local_disk",
+    "localDisk": {
+      "baseDir": "/home/paperclip/.paperclip/instances/default/data/storage"
+    }
+  },
+  "secrets": {
+    "provider": "local_encrypted",
+    "strictMode": false,
+    "localEncrypted": {
+      "keyFilePath": "/home/paperclip/.paperclip/instances/default/secrets/master.key"
+    }
+  }
+}
