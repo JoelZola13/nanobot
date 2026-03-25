@@ -1,6 +1,10 @@
 services:
   api:
     container_name: nanobot-librechat
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: streetvoices/librechat:local
     ports: !override []
     depends_on: !override
       - mongodb

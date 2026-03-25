@@ -59,10 +59,11 @@ echo "→ Setting up LibreChat configuration..."
 cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
 cp deploy/librechat.yaml LibreChat/librechat.yaml
 
-# Start the platform
-echo "→ Starting all services (first run downloads ~1-2 GB, may take 5-15 min)..."
+# Build and start the platform
+echo "→ Building and starting all services..."
+echo "  (First run builds custom frontend + downloads images — may take 10-20 min)"
 cd LibreChat
-docker compose up -d
+docker compose up -d --build
 
 echo ""
 echo "=== Setup Complete ==="
