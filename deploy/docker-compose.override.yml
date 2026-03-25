@@ -9,9 +9,6 @@ services:
         source: ./librechat.yaml
         target: /app/librechat.yaml
       - type: bind
-        source: ./client/dist
-        target: /app/client/dist
-      - type: bind
         source: ./scripts
         target: /app/scripts
 

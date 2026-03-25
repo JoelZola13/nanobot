@@ -11,7 +11,7 @@ mcpServers:
     args:
       - /app/scripts/postiz-mcp.js
     env:
-      POSTIZ_API_KEY: "b0cdba1a151dba58aaa9055368a9e8a96b98e857a6e78513d848a6de6d77a9ea"
+      POSTIZ_API_KEY: "${POSTIZ_API_KEY}"
       POSTIZ_API_URL: "http://host.docker.internal:4007/api"
     timeout: 30000
     initTimeout: 10000

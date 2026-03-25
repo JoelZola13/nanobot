@@ -51,6 +51,9 @@ if [ $MISSING -eq 1 ]; then
   exit 1
 fi
 
+# Ensure required directories exist
+mkdir -p "${NANOBOT_HOME:-$HOME/.nanobot}/whatsapp-auth"
+
 # Copy deploy configs into LibreChat
 echo "→ Setting up LibreChat configuration..."
 cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
