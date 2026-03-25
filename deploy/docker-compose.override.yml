@@ -71,6 +71,8 @@ services:
       - type: bind
         source: ../LibreChat/client/public
         target: /app/LibreChat/client/public
+    environment:
+      - OAUTH_CLI_KIT_TOKEN_PATH=/root/.nanobot/codex-token.json
     env_file:
       - ../.env.nanobot
     restart: always
