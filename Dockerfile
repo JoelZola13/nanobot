@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# Install Node.js 20 for the WhatsApp bridge
+# Install Node.js 20 for the WhatsApp bridge + MCP servers
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates gnupg git && \
     mkdir -p /etc/apt/keyrings && \
@@ -11,6 +11,9 @@ RUN apt-get update && \
     apt-get purge -y gnupg && \
     apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
+
+# Install tsx globally for paperclip-relay
+RUN npm install -g tsx
 
 WORKDIR /app
 
@@ -23,6 +26,7 @@ RUN mkdir -p nanobot bridge && touch nanobot/__init__.py && \
 # Copy the full source and install
 COPY nanobot/ nanobot/
 COPY bridge/ bridge/
+COPY static/ static/
 RUN uv pip install --system --no-cache .
 
 # Build the WhatsApp bridge
@@ -30,11 +34,11 @@ WORKDIR /app/bridge
 RUN npm install && npm run build
 WORKDIR /app
 
-# Create config directory
-RUN mkdir -p /root/.nanobot
+# Create config/workspace directories
+RUN mkdir -p /root/.nanobot/workspace
 
-# Gateway default port
-EXPOSE 18790
+# Ports: 18790 (API), 3001 (WhatsApp), 3050 (Relay)
+EXPOSE 18790 3001 3050
 
 ENTRYPOINT ["nanobot"]
 CMD ["status"]

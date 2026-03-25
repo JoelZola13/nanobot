@@ -1,0 +1,320 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.nanobot/workspace",
+      "model": "openai-codex/gpt-5.4",
+      "maxTokens": 8192,
+      "temperature": 0.7,
+      "maxToolIterations": 20,
+      "memoryWindow": 50
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "bridgeUrl": "ws://localhost:3001",
+      "bridgeToken": "",
+      "autoReplyEnabled": false,
+      "forwardToChannel": "slack",
+      "forwardToId": "YOUR_SLACK_DM_ID",
+      "allowFrom": []
+    },
+    "telegram": {
+      "enabled": false,
+      "token": "",
+      "allowFrom": [],
+      "proxy": null
+    },
+    "discord": {
+      "enabled": false,
+      "token": "",
+      "allowFrom": [],
+      "gatewayUrl": "wss://gateway.discord.gg/?v=10&encoding=json",
+      "intents": 37377
+    },
+    "feishu": {
+      "enabled": false,
+      "appId": "",
+      "appSecret": "",
+      "encryptKey": "",
+      "verificationToken": "",
+      "allowFrom": []
+    },
+    "mochat": {
+      "enabled": false,
+      "baseUrl": "https://mochat.io",
+      "socketUrl": "",
+      "socketPath": "/socket.io",
+      "socketDisableMsgpack": false,
+      "socketReconnectDelayMs": 1000,
+      "socketMaxReconnectDelayMs": 10000,
+      "socketConnectTimeoutMs": 10000,
+      "refreshIntervalMs": 30000,
+      "watchTimeoutMs": 25000,
+      "watchLimit": 100,
+      "retryDelayMs": 500,
+      "maxRetryAttempts": 0,
+      "clawToken": "",
+      "agentUserId": "",
+      "sessions": [],
+      "panels": [],
+      "allowFrom": [],
+      "mention": {
+        "requireInGroups": false
+      },
+      "groups": {},
+      "replyDelayMode": "non-mention",
+      "replyDelayMs": 120000
+    },
+    "dingtalk": {
+      "enabled": false,
+      "clientId": "",
+      "clientSecret": "",
+      "allowFrom": []
+    },
+    "email": {
+      "enabled": true,
+      "consentGranted": true,
+      "imapHost": "imap.gmail.com",
+      "imapPort": 993,
+      "imapUsername": "your-email@example.com",
+      "imapPassword": "YOUR_IMAPPASSWORD_HERE",
+      "imapMailbox": "INBOX",
+      "imapUseSsl": true,
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587,
+      "smtpUsername": "your-email@example.com",
+      "smtpPassword": "YOUR_SMTPPASSWORD_HERE",
+      "smtpUseTls": true,
+      "smtpUseSsl": false,
+      "fromAddress": "your-email@example.com",
+      "autoReplyEnabled": false,
+      "pollIntervalSeconds": 30,
+      "markSeen": true,
+      "maxBodyChars": 12000,
+      "subjectPrefix": "Re: ",
+      "allowFrom": []
+    },
+    "slack": {
+      "enabled": true,
+      "mode": "socket",
+      "webhookPath": "/slack/events",
+      "botToken": "YOUR_BOTTOKEN_HERE",
+      "appToken": "YOUR_APPTOKEN_HERE",
+      "userTokenReadOnly": true,
+      "replyInThread": true,
+      "reactEmoji": "eyes",
+      "groupPolicy": "mention",
+      "groupAllowFrom": [],
+      "dm": {
+        "enabled": true,
+        "policy": "open",
+        "allowFrom": []
+      }
+    },
+    "qq": {
+      "enabled": false,
+      "appId": "",
+      "secret": "",
+      "allowFrom": []
+    }
+  },
+  "providers": {
+    "custom": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "anthropic": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "openai": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "openrouter": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "deepseek": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "groq": {
+      "apiKey": "YOUR_APIKEY_HERE",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "zhipu": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "dashscope": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "vllm": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "gemini": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "moonshot": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "minimax": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "aihubmix": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "siliconflow": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "openaiCodex": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    },
+    "githubCopilot": {
+      "apiKey": "",
+      "apiBase": null,
+      "extraHeaders": null
+    }
+  },
+  "gateway": {
+    "host": "0.0.0.0",
+    "port": 18790
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "apiKey": "YOUR_APIKEY_HERE",
+        "maxResults": 5
+      }
+    },
+    "stockPhotos": {
+      "provider": "pexels",
+      "apiKey": "YOUR_APIKEY_HERE"
+    },
+    "exec": {
+      "timeout": 60
+    },
+    "restrictToWorkspace": false,
+    "mcpServers": {
+      "airtable": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "airtable-mcp-server"
+        ],
+        "env": {
+          "AIRTABLE_API_KEY": "YOUR_AIRTABLE_API_KEY_HERE"
+        }
+      },
+      "paperclip": {
+        "command": "npx",
+        "args": [
+          "tsx",
+          "bridge/src/paperclip-mcp.ts"
+        ],
+        "cwd": "/app",
+        "env": {
+          "PAPERCLIP_API": "http://127.0.0.1:3100/api",
+          "PAPERCLIP_COMPANY_ID": "78940514-fbb0-4c2d-8cee-09bcfd5399a4",
+          "PAPERCLIP_PROJECT_ID": "645c5cd9-caa1-46c7-be50-da6e6001df14",
+          "NANOBOT_API": "http://127.0.0.1:18790",
+          "CRON_JOBS_PATH": "/root/.nanobot/workspace/cron/jobs.json"
+        }
+      },
+      "google-calendar": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@cocal/google-calendar-mcp"
+        ],
+        "env": {
+          "GOOGLE_OAUTH_CREDENTIALS": "/root/.nanobot/gcp-oauth.keys.json"
+        }
+      },
+      "google-drive": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@piotr-agier/google-drive-mcp"
+        ],
+        "env": {
+          "GOOGLE_DRIVE_OAUTH_CREDENTIALS": "/path/to/update",
+          "GOOGLE_DRIVE_MCP_TOKEN_PATH": "YOUR_GOOGLE_DRIVE_MCP_TOKEN_PATH_HERE"
+        }
+      },
+      "playwright": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@playwright/mcp@latest",
+          "--caps",
+          "vision",
+          "--isolated",
+          "--executable-path",
+          "/path/to/update"
+        ]
+      },
+      "github": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-github"
+        ],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_HERE"
+        }
+      },
+      "postiz": {
+        "url": "http://localhost:4007/api/mcp/b0cdba1a151dba58aaa9055368a9e8a96b98e857a6e78513d848a6de6d77a9ea"
+      },
+      "canva": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "mcp-remote@latest",
+          "https://mcp.canva.com/mcp",
+          "--static-oauth-client-metadata",
+          "{\"scope\":\"openid email profile design:content:read design:content:write design:meta:read asset:read asset:write brandtemplate:content:read brandtemplate:meta:read folder:read folder:write comment:read comment:write\"}"
+        ]
+      }
+    },
+    "postiz": {
+      "enabled": true,
+      "baseUrl": "http://localhost:4007",
+      "apiKey": "YOUR_APIKEY_HERE",
+      "apiKeyHeader": "YOUR_APIKEYHEADER_HERE",
+      "apiKeyPrefix": "",
+      "extraHeaders": {},
+      "publishPath": "/api/public/v1/posts",
+      "requestTimeout": 30,
+      "defaultIntegrationId": "cmlus86vx0005mg83ye5lei7a",
+      "defaultPlatform": "instagram",
+      "defaultMaxCaptionChars": 2200
+    }
+  }
+}
