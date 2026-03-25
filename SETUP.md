@@ -123,7 +123,7 @@ Save `nanobot-secrets.zip` to your **Desktop**.
 **Mac — double-click method:**
 1. Double-click the zip file on your Desktop
 2. Enter the password Joel gave you
-3. You should now see 3 files on your Desktop: `.env.nanobot`, `librechat.env`, `config.json`
+3. You should now see 4 files on your Desktop: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
 
 **Mac — Terminal method (if double-click doesn't ask for password):**
 ```
@@ -135,7 +135,7 @@ Enter the password when prompted.
 **Windows:**
 1. Right-click the zip file → **Extract All**
 2. Enter the password Joel gave you
-3. You should see 3 files: `.env.nanobot`, `librechat.env`, `config.json`
+3. You should see 4 files: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
 
 **Can't see the files?** Files starting with a dot (`.env.nanobot`) are hidden by default.
 - **Mac:** In Finder, press `Cmd + Shift + .` to show hidden files
@@ -156,9 +156,12 @@ cp ~/Desktop/librechat.env LibreChat/.env
 
 mkdir -p ~/.nanobot/whatsapp-auth
 cp ~/Desktop/config.json ~/.nanobot/config.json
+cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json
 ```
 
 **No errors?** Great — move to the next step.
+
+> **What is `codex-token.json`?** This is the AI authentication token that lets the agents respond. Without it, you can log in to the app but the bots won't answer. If agents stop responding in the future, Joel will send an updated token file — just replace `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
 
 **If you see "No such file or directory":** Make sure the zip file was saved to your Desktop, and that you unzipped it there. The 3 files must be directly on the Desktop, not inside a subfolder.
 
@@ -477,7 +480,7 @@ docker compose exec nanobot-api bash
 
 ### LLM Provider
 
-The platform uses **OpenAI Codex OAuth** — a browser-based login that provides API access without a traditional API key. The token is stored in `~/.nanobot/config.json`.
+The platform uses **OpenAI Codex OAuth** — a browser-based login that provides API access without a traditional API key. The token is stored in `~/.nanobot/codex-token.json`.
 
 When it expires (agents stop responding), Joel re-authenticates:
 ```bash
