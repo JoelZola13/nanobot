@@ -1,166 +1,245 @@
-# Nanobot Platform Setup
+# Street Voices Platform — Setup Guide
 
-Everything runs in Docker. One command to start the full stack.
+This guide assumes you've never used a terminal before. Follow every step exactly.
 
-## Prerequisites
+---
 
-- **Docker Desktop** or **OrbStack** (macOS)
-- **Git**
-- A copy of the nanobot config (`~/.nanobot/config.json`) — get this from the team lead
+## Step 1: Install Docker Desktop
 
-## Quick Start
+Docker runs all our services in containers (think of it like a virtual computer inside your computer).
 
-```bash
-# 1. Clone the repo
+1. Go to https://www.docker.com/products/docker-desktop/
+2. Click **Download for Mac** (or Windows)
+3. Open the downloaded file and drag Docker to your Applications folder
+4. Open **Docker Desktop** from your Applications
+5. It will ask for permissions — click **Allow** / **OK** for everything
+6. Wait until you see a green "Running" status in the Docker Desktop window
+
+**Leave Docker Desktop running.** It needs to be open whenever you use the platform.
+
+---
+
+## Step 2: Open Terminal
+
+- **Mac:** Press `Cmd + Space`, type `Terminal`, press Enter
+- **Windows:** Press `Win + R`, type `cmd`, press Enter
+
+You'll see a window with a blinking cursor. This is where you'll type commands.
+
+---
+
+## Step 3: Download the Project
+
+Copy and paste this into Terminal, then press Enter:
+
+```
 git clone https://github.com/JoelZola13/nanobot.git
-cd nanobot
+```
 
-# 2. Copy deployment configs into place
+If you get "git: command not found":
+- **Mac:** A popup will ask to install developer tools. Click **Install**, wait, then try again.
+- **Windows:** Download Git from https://git-scm.com/downloads and install it, then try again.
+
+---
+
+## Step 4: Set Up the Config Files
+
+Joel will send you an encrypted zip file (`nanobot-secrets.zip`) and a password separately.
+
+### 4a. Unzip the secrets
+
+**Mac:** Double-click the zip file on your Desktop. It will ask for the password Joel sent you.
+
+**Or in Terminal:**
+```
+cd ~/Desktop
+unzip nanobot-secrets.zip
+```
+Enter the password when it asks.
+
+You should now have 3 files: `.env.nanobot`, `librechat.env`, `config.json`
+
+### 4b. Put the files where they belong
+
+Copy and paste ALL of these lines into Terminal and press Enter:
+
+```
+cd ~/nanobot
+
 cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
 cp deploy/librechat.yaml LibreChat/librechat.yaml
 
-# 3. Set up secrets (get real values from team lead)
-#    Option A: Team lead sends you the actual files
-cp /path/from/team-lead/.env.nanobot .env.nanobot
-cp /path/from/team-lead/librechat.env LibreChat/.env
+cp ~/Desktop/.env.nanobot .env.nanobot
+cp ~/Desktop/librechat.env LibreChat/.env
+
 mkdir -p ~/.nanobot
-cp /path/from/team-lead/config.json ~/.nanobot/config.json
+cp ~/Desktop/config.json ~/.nanobot/config.json
+```
 
-#    Option B: Copy examples and fill in values yourself
-cp deploy/.env.nanobot.example .env.nanobot
-cp deploy/librechat.env.example LibreChat/.env
-cp deploy/config.json.example ~/.nanobot/config.json
-#    Then edit each file and replace the placeholder values
+---
 
-# 4. Start everything
-cd LibreChat
+## Step 5: Start the Platform
+
+```
+cd ~/nanobot/LibreChat
 docker compose up -d
-
-# 5. Open the app
-open http://localhost:3180
 ```
 
-## Services
+The first time you run this, it will download a lot of stuff (1-2 GB). This can take 5-15 minutes depending on your internet. You'll see progress bars.
 
-| Service | Container | Port | Description |
-|---------|-----------|------|-------------|
-| Nginx | nanobot-nginx | **3180** | Unified reverse proxy (main entry point) |
-| LibreChat | nanobot-librechat | 3080 (internal) | Chat UI + auth |
-| Nanobot API | nanobot-api | 18790 | AI agent engine + MCP tools |
-| Paperclip | nanobot-paperclip | 3100 | Project management |
-| Paperclip Relay | nanobot-relay | 3050 | Agent dispatch |
-| WhatsApp Bridge | nanobot-whatsapp | 3001 (internal) | WhatsApp integration |
-| MongoDB | nanobot-mongodb | 27018 | Chat/user data |
-| Meilisearch | nanobot-meilisearch | 7700 (internal) | Search index |
-| PostgreSQL | nanobot-vectordb | 5432 (internal) | Vector DB + Paperclip DB |
-| RAG API | nanobot-rag-api | 8000 (internal) | Retrieval-augmented generation (**disabled by default**) |
-
-## Files You Need
-
-The repo includes example templates in `deploy/`. Three files contain secrets that aren't committed to git:
-
-| File | Example Template | What It Contains |
-|------|-----------------|------------------|
-| `.env.nanobot` | `deploy/.env.nanobot.example` | Groq API key, Postiz config |
-| `LibreChat/.env` | `deploy/librechat.env.example` | JWT secrets, OAuth, MongoDB URI |
-| `~/.nanobot/config.json` | `deploy/config.json.example` | LLM provider, email, Slack, MCP servers, Brave Search |
-
-**Easiest path:** Ask Joel for the real files. He'll send them securely.
-
-**DIY path:** Copy the examples, fill in your own API keys.
-
-## Creating Your Account
-
-1. Go to http://localhost:3180
-2. Click **Sign up** and create an account with your email
-3. You're in — all 40+ agents and 110 tools are shared through the backend
-
-Everyone shares the same nanobot backend. No individual API keys needed.
-
-## LLM Provider (OpenAI Codex OAuth)
-
-The backend uses **OpenAI Codex OAuth** — a browser-based login, no API keys.
-The token is stored in `~/.nanobot/config.json` on the host machine.
-
-When the token expires, the team lead re-authenticates:
-```bash
-cd /path/to/nanobot
-.venv/bin/python -m nanobot provider login openai-codex
+When it's done, you'll see something like:
 ```
-No one else needs to do this.
+✔ Container nanobot-mongodb     Started
+✔ Container nanobot-api         Started
+✔ Container nanobot-librechat   Started
+✔ Container nanobot-nginx       Started
+...
+```
 
-### `LibreChat/.env` (LibreChat config)
+---
 
-Already in the repo. Contains:
-- MongoDB connection
-- JWT secrets
-- OAuth settings (Google, Facebook)
+## Step 6: Open the App
 
-## Common Commands
+Open your browser and go to:
 
-```bash
-# Start everything
-cd LibreChat && docker compose up -d
+**http://localhost:3180**
 
-# Stop everything
+1. Click **Sign up**
+2. Create an account with your name and email
+3. You're in!
+
+---
+
+## Using the Platform
+
+Once you're logged in, you have access to:
+
+- **40+ AI agents** — Grant Manager, CEO, Communication Manager, and more
+- **110 tools** — web search, email, calendar, browser automation, social media
+- **Grant Writer** — full grant application workspace
+- **Tasks, News, Gallery, Groups** — community management tools
+
+Just start chatting! Select an agent from the model dropdown, or use the default Street Bot.
+
+---
+
+## Starting and Stopping
+
+### To start (every time you restart your computer):
+
+1. Open **Docker Desktop** (wait for green "Running")
+2. Open **Terminal**
+3. Type:
+   ```
+   cd ~/nanobot/LibreChat
+   docker compose up -d
+   ```
+4. Go to http://localhost:3180
+
+### To stop:
+
+```
+cd ~/nanobot/LibreChat
 docker compose down
+```
 
-# View logs
-docker compose logs -f nanobot-api     # API logs
-docker compose logs -f nanobot-nginx   # Nginx logs
-docker compose logs -f                 # All logs
+### To check if it's running:
 
-# Rebuild after code changes
-docker compose build nanobot-api       # Rebuild API image
-docker compose up -d --force-recreate nanobot-api  # Restart with new image
-
-# Rebuild frontend after client changes
-cd client && NODE_OPTIONS='--max-old-space-size=4096' npx vite build --outDir dist
-# No container restart needed — dist is bind-mounted
-
-# Check status
+```
+cd ~/nanobot/LibreChat
 docker compose ps
 ```
 
-## Architecture
+---
+
+## Troubleshooting
+
+### "Cannot connect to the Docker daemon"
+Docker Desktop isn't running. Open it from your Applications and wait for the green status.
+
+### "Port 3180 already in use"
+Something else is using that port. Close any other web servers, or restart your computer.
+
+### The page loads but agents don't respond
+The AI backend might need a moment to start. Wait 30 seconds and try again. If it still doesn't work, tell Joel — the auth token may have expired (only he can refresh it).
+
+### "command not found: docker"
+Docker Desktop isn't installed properly. Reinstall it from Step 1.
+
+### Everything was working but now it's not
+Try restarting:
+```
+cd ~/nanobot/LibreChat
+docker compose down
+docker compose up -d
+```
+
+### Still stuck?
+Message Joel. Include what you see on screen (a screenshot helps).
+
+---
+
+## For Developers
+
+<details>
+<summary>Click to expand technical details</summary>
+
+### Services
+
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| Nginx | nanobot-nginx | **3180** | Reverse proxy (main entry) |
+| LibreChat | nanobot-librechat | internal | Chat UI + auth |
+| Nanobot API | nanobot-api | 18790 | Agent engine + MCP tools |
+| Paperclip | nanobot-paperclip | 3100 | Image generation |
+| Paperclip Relay | nanobot-relay | 3050 | Dispatch |
+| WhatsApp Bridge | nanobot-whatsapp | internal | WhatsApp messaging |
+| MongoDB | nanobot-mongodb | 27018 | Database |
+| Meilisearch | nanobot-meilisearch | internal | Search |
+| PostgreSQL | nanobot-vectordb | internal | Vector DB |
+
+### Architecture
 
 ```
 Browser → nginx (3180)
             ├── / → LibreChat (chat UI)
             ├── /sbapi/v1 → nanobot-api (AI agents)
-            ├── /STR/ → Paperclip (project mgmt)
-            ├── /api/ → split between LibreChat + Paperclip
-            ├── /relay/ → Paperclip Relay
-            └── /social → SV Social (external)
+            ├── /STR/ → Paperclip
+            └── /api/ → LibreChat + Paperclip
 ```
 
-The nanobot API is the brain — it runs the agent loop, connects to 100+ MCP tools, and streams responses back through LibreChat.
+### Config Files
 
-## Troubleshooting
+| File | Purpose |
+|------|---------|
+| `~/.nanobot/config.json` | API keys, MCP servers, channels, LLM provider |
+| `LibreChat/.env` | LibreChat settings (port, auth, secrets) |
+| `LibreChat/librechat.yaml` | Agent models, endpoints |
+| `LibreChat/docker-compose.override.yml` | All service definitions |
+| `.env.nanobot` | Nanobot container env vars |
 
-**502 Bad Gateway on `/sbapi/v1/*`**
-Nginx cached a stale container IP. Run: `docker exec nanobot-nginx nginx -s reload`
+### Useful Commands
 
-**nanobot-api restarting**
-Check logs: `docker compose logs nanobot-api`. Common causes:
-- Missing `~/.nanobot/config.json`
-- Missing Python deps (rebuild: `docker compose build nanobot-api`)
+```bash
+docker compose logs -f nanobot-api     # API logs
+docker compose logs -f                 # All logs
+docker compose build nanobot-api       # Rebuild after code changes
+docker compose restart nanobot-api     # Restart just the API
+```
 
-**nanobot-rag-api restarting (if enabled)**
-Needs `OPENAI_API_KEY` in `LibreChat/.env` for embeddings. Disabled by default — see below to enable.
+### LLM Provider
 
-## Enabling RAG API (Optional)
+Uses OpenAI Codex OAuth (browser login, no API key). Token stored in `~/.nanobot/config.json`. When it expires, Joel re-auths:
+```bash
+.venv/bin/python -m nanobot provider login openai-codex
+```
 
-The RAG API (document search/embeddings) is disabled by default because it requires a paid OpenAI API key. To enable:
+### Enabling RAG API (Optional)
+
+Disabled by default (needs `OPENAI_API_KEY` for embeddings). To enable:
 
 1. Add `OPENAI_API_KEY=sk-...` to `LibreChat/.env`
-2. Edit `LibreChat/docker-compose.override.yml` — remove the `profiles: [rag]` block from the `rag_api` service
-3. Add `rag_api` back to the `api` service's `depends_on` list
-4. Run:
-   ```bash
-   docker compose up -d rag_api
-   ```
+2. Remove `profiles: [rag]` from `rag_api` in `docker-compose.override.yml`
+3. Run: `docker compose up -d rag_api`
 
-**Port conflicts**
-Check: `lsof -iTCP -sTCP:LISTEN -nP | grep <port>`
-Key ports: 3180, 18790, 3100, 3050, 27018
+</details>
