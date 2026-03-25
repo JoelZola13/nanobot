@@ -166,6 +166,8 @@ class Orchestrator:
                     trace=trace,
                 )
 
+            # Ensure MCP tools are ready before building the tool set
+            await self.tool_factory.ensure_mcp_ready()
             # Build the agent's tool set
             tools = self.tool_factory.build_tools(spec)
 

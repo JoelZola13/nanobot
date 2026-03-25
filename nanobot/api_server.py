@@ -192,17 +192,20 @@ async def lifespan(app):
     # Register Remotion video tools
     remotion_dir = config.workspace_path / "remotion"
     if remotion_dir.exists():
-        from nanobot.agent.tools.remotion import RemotionComposeTool, RemotionRenderTool
-        _agent.tools.register(RemotionComposeTool(remotion_dir=remotion_dir))
-        _agent.tools.register(RemotionRenderTool(
-            remotion_dir=remotion_dir,
-            base_url="http://localhost:18790",
-        ))
-        from nanobot.agent.tools.tts import QwenTTSTool
-        audio_dir = remotion_dir / "public" / "audio"
-        audio_dir.mkdir(parents=True, exist_ok=True)
-        _agent.tools.register(QwenTTSTool(audio_dir=audio_dir))
-        logger.info("Remotion tools registered (compose + render + tts)")
+        try:
+            from nanobot.agent.tools.remotion import RemotionComposeTool, RemotionRenderTool
+            _agent.tools.register(RemotionComposeTool(remotion_dir=remotion_dir))
+            _agent.tools.register(RemotionRenderTool(
+                remotion_dir=remotion_dir,
+                base_url="http://localhost:18790",
+            ))
+            from nanobot.agent.tools.tts import QwenTTSTool
+            audio_dir = remotion_dir / "public" / "audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            _agent.tools.register(QwenTTSTool(audio_dir=audio_dir))
+            logger.info("Remotion tools registered (compose + render + tts)")
+        except ImportError as e:
+            logger.warning(f"Remotion/TTS tools not available (missing deps): {e}")
 
     # Register Qwen-Image generation tool (always available, connects to local server)
     from nanobot.agent.tools.image_gen import QwenImageGenTool
@@ -319,6 +322,7 @@ async def lifespan(app):
             # tool registry reference so ToolFactory can pull them lazily.
             # We pass an empty dict now; the factory will be patched once MCP connects.
             _extra_tools: dict[str, Any] = {}
+            _mcp_ready = asyncio.Event()
 
             tool_factory = ToolFactory(
                 agent_registry,
@@ -326,6 +330,7 @@ async def lifespan(app):
                 tool_config=tool_config,
                 provider=provider,
                 mcp_tools=_extra_tools,
+                mcp_ready=_mcp_ready,
             )
 
             # Schedule a task to inject MCP tools once they're connected
@@ -352,6 +357,7 @@ async def lifespan(app):
                 )
                 if pw_count == 0:
                     logger.warning("Playwright MCP tools not found — browser automation won't work for agents")
+                _mcp_ready.set()
 
             asyncio.create_task(_inject_mcp_tools())
             _orchestrator = Orchestrator(

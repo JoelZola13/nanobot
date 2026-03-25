@@ -48,15 +48,36 @@
       "createdTime": "2026-03-11T00:00:00Z",
       "displayName": "Street Voices Social",
       "logo": "",
-      "homepageUrl": "http://localhost:3182",
+      "homepageUrl": "http://localhost:3180/social",
       "organization": "streetvoices",
       "enablePassword": true,
       "enableSignUp": true,
-      "enableAutoSignin": false,
+      "enableAutoSignin": true,
       "clientId": "social-app",
       "clientSecret": "social-casdoor-secret-2026",
       "redirectUris": [
-        "http://localhost:3182/api/auth/callback/casdoor"
+        "http://localhost:3180/social/api/auth/callback/casdoor"
+      ],
+      "tokenFormat": "JWT",
+      "expireInHours": 168,
+      "grantTypes": ["authorization_code"],
+      "cert": "cert-built-in"
+    },
+    {
+      "owner": "admin",
+      "name": "librechat-app",
+      "createdTime": "2026-03-15T00:00:00Z",
+      "displayName": "Street Voices Chat",
+      "logo": "",
+      "homepageUrl": "http://localhost:3180",
+      "organization": "streetvoices",
+      "enablePassword": true,
+      "enableSignUp": true,
+      "enableAutoSignin": true,
+      "clientId": "librechat-app",
+      "clientSecret": "librechat-casdoor-secret-2026",
+      "redirectUris": [
+        "http://localhost:3180/oauth/openid/callback"
       ],
       "tokenFormat": "JWT",
       "expireInHours": 168,
