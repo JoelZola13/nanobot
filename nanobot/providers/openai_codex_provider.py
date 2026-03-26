@@ -35,7 +35,41 @@ class OpenAICodexProvider(LLMProvider):
         model = model or self.default_model
         system_prompt, input_items = _convert_messages(messages)
 
-        token = await asyncio.to_thread(get_codex_token)
+        # ── Get Codex OAuth token ──
+        try:
+            token = await asyncio.to_thread(get_codex_token)
+        except Exception as e:
+            err = str(e)
+            logger.error(f"Codex OAuth token unavailable: {err}")
+            return LLMResponse(
+                content=(
+                    "⚠️ **AI agents are currently offline** — the authentication token "
+                    "is missing or expired.\n\n"
+                    "**To fix this**, Joel needs to run:\n"
+                    "```\n"
+                    "cd ~/nanobot && ./login.sh\n"
+                    "```\n"
+                    "Then restart the API:\n"
+                    "```\n"
+                    "cd ~/nanobot/LibreChat && docker compose restart nanobot-api\n"
+                    "```\n\n"
+                    f"_(Technical detail: {err})_"
+                ),
+                finish_reason="error",
+            )
+
+        if not token or not getattr(token, "access", None):
+            logger.error("Codex OAuth token is empty or has no access field")
+            return LLMResponse(
+                content=(
+                    "⚠️ **AI agents are currently offline** — the authentication token "
+                    "is invalid or expired.\n\n"
+                    "Ask Joel to re-authenticate by running `./login.sh` in the nanobot folder, "
+                    "then restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`"
+                ),
+                finish_reason="error",
+            )
+
         headers = _build_headers(token.account_id, token.access)
 
         body: dict[str, Any] = {
@@ -74,8 +108,9 @@ class OpenAICodexProvider(LLMProvider):
                 finish_reason=finish_reason,
             )
         except Exception as e:
+            logger.error(f"Codex API request failed: {e}")
             return LLMResponse(
-                content=f"Error calling Codex: {str(e)}",
+                content=f"⚠️ **Agent error:** {str(e)}\n\nIf this persists, the Codex token may have expired. Ask Joel to re-run `./login.sh`.",
                 finish_reason="error",
             )
 
@@ -311,6 +346,10 @@ def _map_finish_reason(status: str | None) -> str:
 
 
 def _friendly_error(status_code: int, raw: str) -> str:
+    if status_code == 401:
+        return "Codex authentication token is expired or invalid. Joel needs to re-run ./login.sh"
+    if status_code == 403:
+        return "Codex access denied — the token may have been revoked. Joel needs to re-run ./login.sh"
     if status_code == 429:
         return "ChatGPT usage quota exceeded or rate limit triggered. Please try again later."
     return f"HTTP {status_code}: {raw}"

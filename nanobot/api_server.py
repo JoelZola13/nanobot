@@ -1199,12 +1199,32 @@ async def health(request: Request) -> JSONResponse:
             "initialized": _harness.is_initialized,
             "universal_memory": True,
         }
+
+    # Check Codex OAuth token status
+    codex_status = "unknown"
+    codex_detail = None
+    try:
+        from oauth_cli_kit import get_token as _get_token
+        token = _get_token()
+        if token and getattr(token, "access", None):
+            codex_status = "ok"
+        else:
+            codex_status = "missing"
+            codex_detail = "Token file exists but has no access token — re-run ./login.sh"
+    except Exception as e:
+        codex_status = "error"
+        codex_detail = str(e)
+
+    overall = "ok" if (agent_count > 0 and codex_status == "ok") else "degraded"
+
     return JSONResponse({
-        "status": "ok",
+        "status": overall,
         "agents": agent_count,
         "teams": len(teams),
         "orchestrator": _orchestrator is not None,
         "harness": harness_info if harness_info else None,
+        "codex_token": codex_status,
+        **({"codex_detail": codex_detail} if codex_detail else {}),
     })
 
 
