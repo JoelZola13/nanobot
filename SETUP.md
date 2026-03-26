@@ -14,11 +14,22 @@ This guide walks you through everything from scratch. No coding experience neede
 
 ---
 
-## Step 1: Install Docker Desktop
+## Step 1: Install Docker Desktop or OrbStack
 
-Docker runs the entire platform inside containers on your computer. Think of it as a mini server that lives on your laptop.
+You need a container runtime to run the platform. Pick one:
 
-### Mac
+### Option A: OrbStack (recommended for Mac — faster, lighter)
+
+1. Go to https://orbstack.dev/download
+2. Download and install OrbStack
+3. Open **OrbStack** from Applications
+4. It's ready when you see the OrbStack icon in your menu bar
+
+OrbStack uses less RAM and CPU than Docker Desktop. It's a drop-in replacement — all the same commands work.
+
+### Option B: Docker Desktop (Mac or Windows)
+
+#### Mac
 
 1. Go to https://www.docker.com/products/docker-desktop/
 2. Click **Download for Mac**
@@ -31,7 +42,7 @@ Docker runs the entire platform inside containers on your computer. Think of it 
 6. It will ask for your password and permissions — click **Allow** / **OK** for everything
 7. Wait until you see a **green whale icon** in your menu bar (top of screen) — this means Docker is running
 
-### Windows
+#### Windows
 
 1. Go to https://www.docker.com/products/docker-desktop/
 2. Click **Download for Windows**
@@ -40,7 +51,7 @@ Docker runs the entire platform inside containers on your computer. Think of it 
 5. Open **Docker Desktop** from the Start menu
 6. Wait until the Docker icon in your system tray (bottom-right) shows "running"
 
-**Important:** Docker Desktop must be running whenever you use the platform. Leave it open.
+**Important:** Docker Desktop or OrbStack must be running whenever you use the platform. Leave it open.
 
 ---
 
@@ -262,7 +273,7 @@ The `login.sh` opens a browser — sign in with your own ChatGPT account. You on
 ## Troubleshooting
 
 ### "Cannot connect to the Docker daemon"
-Docker Desktop isn't running. Open it from Applications and wait for the green whale icon.
+Docker Desktop or OrbStack isn't running. Open it from Applications and wait for the green status icon.
 
 ### "git: command not found"
 Git isn't installed. Go back to Step 2.
