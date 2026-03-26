@@ -35,23 +35,34 @@ class OpenAICodexProvider(LLMProvider):
         model = model or self.default_model
         system_prompt, input_items = _convert_messages(messages)
 
-        # ── Get Codex OAuth token ──
+        # ── Get Codex OAuth token (auto-refreshes if expiring) ──
         try:
             token = await asyncio.to_thread(get_codex_token)
         except Exception as e:
             err = str(e)
             logger.error(f"Codex OAuth token unavailable: {err}")
+            is_missing = "not found" in err.lower()
+            if is_missing:
+                return LLMResponse(
+                    content=(
+                        "⚠️ **AI agents are not set up yet** — no authentication token found.\n\n"
+                        "**To fix this**, run the login command (you need a ChatGPT account):\n"
+                        "```\n"
+                        "cd ~/nanobot && ./login.sh\n"
+                        "```\n"
+                        "This opens a browser — sign in with any ChatGPT account.\n"
+                        "The token auto-refreshes, so you only need to do this once."
+                    ),
+                    finish_reason="error",
+                )
             return LLMResponse(
                 content=(
-                    "⚠️ **AI agents are currently offline** — the authentication token "
-                    "is missing or expired.\n\n"
-                    "**To fix this**, Joel needs to run:\n"
+                    "⚠️ **AI agents are temporarily offline** — the authentication token "
+                    "could not be refreshed.\n\n"
+                    "This usually fixes itself. Try again in a minute.\n\n"
+                    "If it persists, re-run the login:\n"
                     "```\n"
                     "cd ~/nanobot && ./login.sh\n"
-                    "```\n"
-                    "Then restart the API:\n"
-                    "```\n"
-                    "cd ~/nanobot/LibreChat && docker compose restart nanobot-api\n"
                     "```\n\n"
                     f"_(Technical detail: {err})_"
                 ),
@@ -62,10 +73,11 @@ class OpenAICodexProvider(LLMProvider):
             logger.error("Codex OAuth token is empty or has no access field")
             return LLMResponse(
                 content=(
-                    "⚠️ **AI agents are currently offline** — the authentication token "
-                    "is invalid or expired.\n\n"
-                    "Ask Joel to re-authenticate by running `./login.sh` in the nanobot folder, "
-                    "then restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`"
+                    "⚠️ **AI agents are offline** — the authentication token is invalid.\n\n"
+                    "Re-run the login (any ChatGPT account works):\n"
+                    "```\n"
+                    "cd ~/nanobot && ./login.sh\n"
+                    "```"
                 ),
                 finish_reason="error",
             )

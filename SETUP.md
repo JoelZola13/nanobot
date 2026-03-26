@@ -154,21 +154,25 @@ cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json
 
 ### Option B: No secrets zip yet (get started without agents responding)
 
-You can set up the platform now and add the real secrets later. The UI will work, but AI agents won't respond until Joel provides the `codex-token.json`.
+You can set up the platform now and log in to the AI yourself. Run:
 
 ```
 cd ~/nanobot
 ./setup.sh
 ```
 
-The setup script automatically creates config files from examples. When Joel sends the secrets, follow Option A above to replace them, then restart:
+The setup script automatically creates all config files from defaults.
+
+After setup completes, **connect the AI agents** (you need a free ChatGPT account):
 
 ```
-cd ~/nanobot/LibreChat
-docker compose restart nanobot-api
+cd ~/nanobot
+./login.sh
 ```
 
-> **What is `codex-token.json`?** This is the AI authentication token that lets agents call GPT-5.4. Without it, you can log in and browse the app, but agents won't respond. If agents stop responding, Joel will send an updated token — replace `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
+This opens a browser — sign in with any ChatGPT account. The token **auto-refreshes**, so you only need to do this once.
+
+> **How does AI auth work?** The agents call GPT-5.4 via OpenAI Codex OAuth. When you run `./login.sh`, it saves a token to `~/.nanobot/codex-token.json`. This token auto-refreshes for weeks — you don't need to log in again unless it's been a very long time. Any teammate with a ChatGPT account can run `./login.sh` independently.
 
 ---
 
@@ -385,17 +389,16 @@ curl http://localhost:18790/health
 
 If `codex_token` says `"error"` or `"missing"`:
 
-1. **Ask Joel** for an updated `codex-token.json` file
-2. Copy it: `cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json`
-3. Restart the API: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
+1. Run the login (any ChatGPT account works):
+   ```
+   cd ~/nanobot
+   ./login.sh
+   ```
+2. Sign in with your ChatGPT account in the browser
+3. The script auto-restarts the API
 4. Check again: `curl http://localhost:18790/health` — look for `"codex_token": "ok"`
 
-**For Joel only** — to refresh the token yourself:
-```
-cd ~/nanobot
-./login.sh
-cd LibreChat && docker compose restart nanobot-api
-```
+The token auto-refreshes for weeks, so you only need to do this once.
 
 ### Agent Marketplace shows "No agents found"
 The nanobot-api needs to be running and healthy. Check:
@@ -504,7 +507,7 @@ The platform uses two layers of auth:
 
 1. **User login (Casdoor OpenID):** Teammates log in via "Sign in with Street Voices" which redirects to Casdoor (port 8380). Pre-configured admin: `joel@streetvoices.ca` / `street2020`. Add new users via the Casdoor admin panel.
 
-2. **AI provider (Codex OAuth):** All agents call GPT-5.4 via OpenAI Codex. This uses a shared OAuth token (`codex-token.json`) from Joel's ChatGPT account. When it expires, Joel runs `./login.sh` to refresh and shares the updated file.
+2. **AI provider (Codex OAuth):** All agents call GPT-5.4 via OpenAI Codex. Any teammate with a ChatGPT account runs `./login.sh` once — the token auto-refreshes for weeks. No need to share token files.
 
 ### Making Frontend Changes
 
@@ -574,15 +577,15 @@ docker compose exec nanobot-api bash
 
 ### LLM Provider
 
-The platform uses **OpenAI Codex OAuth** — a browser-based login that provides API access without a traditional API key. The token is stored in `~/.nanobot/codex-token.json`.
+The platform uses **OpenAI Codex OAuth** — a browser-based login that provides API access without a traditional API key. The token is stored in `~/.nanobot/codex-token.json` and **auto-refreshes** for weeks.
 
-When it expires (agents stop responding), Joel re-authenticates:
+Any teammate can authenticate independently:
 ```bash
 cd ~/nanobot
 ./login.sh
 ```
 
-Then shares the updated `codex-token.json` with the team. Teammates copy it to `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`.
+This opens a browser, the teammate signs in with any ChatGPT account, and the token is saved and auto-refreshed. No need to share token files between teammates.
 
 ### Enabling RAG API (Optional)
 
