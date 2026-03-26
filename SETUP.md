@@ -10,7 +10,7 @@ This guide walks you through everything from scratch. No coding experience neede
 - At least **16 GB of RAM** (8 GB works but will be slow)
 - At least **10 GB of free disk space**
 - A decent internet connection (you'll download ~2-3 GB on first setup)
-- The **secrets zip file** and **password** from Joel (he'll send these separately)
+- A free **ChatGPT account** (for AI agent access)
 
 ---
 
@@ -84,148 +84,49 @@ You'll see a window with a blinking cursor. This is where you paste commands.
 
 ---
 
-## Step 4: Download the Project
+## Step 4: Download and Set Up the Platform
 
-Copy and paste this into Terminal, then press Enter:
+Copy and paste these three commands into Terminal. This downloads everything and builds the platform:
 
 ```
 git clone --recursive https://github.com/JoelZola13/nanobot.git
 cd nanobot
-```
-
-This will take 1-3 minutes. You'll see progress messages.
-
-**If you see an error about `--recursive`** or the download seems too quick (under 10 seconds), run:
-
-```
-git submodule update --init --recursive
-```
-
-This downloads the chat interface separately. Wait for it to finish.
-
----
-
-## Step 5: Set Up the Config Files
-
-### Option A: You have Joel's secrets zip (recommended)
-
-Joel will send you two things separately (for security):
-1. An encrypted zip file called `nanobot-secrets.zip` (via email or Slack)
-2. A password to unlock it (via a different channel — text, call, etc.)
-
-**Save `nanobot-secrets.zip` to your Desktop**, then unzip it:
-
-**Mac — double-click method:**
-1. Double-click the zip file on your Desktop
-2. Enter the password Joel gave you
-3. You should now see 4 files: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
-
-**Mac — Terminal method (if double-click doesn't ask for password):**
-```
-cd ~/Desktop
-unzip nanobot-secrets.zip
-```
-Enter the password when prompted.
-
-**Windows:**
-1. Right-click the zip file → **Extract All**
-2. Enter the password Joel gave you
-3. You should see 4 files: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
-
-**Can't see the files?** Files starting with a dot (`.env.nanobot`) are hidden by default.
-- **Mac:** In Finder, press `Cmd + Shift + .` to show hidden files
-- **Windows:** In File Explorer, click **View** → check **Hidden items**
-
-Now place the files where they belong. Paste ALL of these lines at once:
-
-```
-cd ~/nanobot
-
-cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
-cp deploy/librechat.yaml LibreChat/librechat.yaml
-
-cp ~/Desktop/.env.nanobot .env.nanobot
-cp ~/Desktop/librechat.env LibreChat/.env
-
-mkdir -p ~/.nanobot/whatsapp-auth
-cp ~/Desktop/config.json ~/.nanobot/config.json
-cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json
-```
-
-### Option B: No secrets zip yet (get started without agents responding)
-
-You can set up the platform now and log in to the AI yourself. Run:
-
-```
-cd ~/nanobot
 ./setup.sh
-```
-
-The setup script automatically creates all config files from defaults.
-
-After setup completes, **connect the AI agents** (you need a free ChatGPT account):
-
-```
-cd ~/nanobot
-./login.sh
-```
-
-This opens a browser — sign in with any ChatGPT account. The token **auto-refreshes**, so you only need to do this once.
-
-> **How does AI auth work?** The agents call GPT-5.4 via OpenAI Codex OAuth. When you run `./login.sh`, it saves a token to `~/.nanobot/codex-token.json`. This token auto-refreshes for weeks — you don't need to log in again unless it's been a very long time. Any teammate with a ChatGPT account can run `./login.sh` independently.
-
----
-
-## Step 6: Build and Start the Platform
-
-### Option A: One-command setup (recommended)
-
-```
-cd ~/nanobot
-./setup.sh
-```
-
-This checks everything and starts the platform automatically.
-
-### Option B: Manual start
-
-```
-cd ~/nanobot
-cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
-cp deploy/librechat.yaml LibreChat/librechat.yaml
-cd LibreChat
-docker compose up -d --build
 ```
 
 **The first time takes 15-25 minutes.** Docker is building the application from source — compiling the website, installing dependencies, downloading base images. You'll see lots of output scrolling by. This is normal.
 
-On future starts (after reboot, etc.), it will be much faster (under 30 seconds).
-
-When it's done, you'll see something like:
+When it's done, you'll see:
 
 ```
- Container nanobot-mongodb     Started
- Container nanobot-vectordb    Started
- Container nanobot-casdoor     Started
- Container nanobot-redis       Started
- Container nanobot-api         Started
- Container nanobot-librechat   Started
- Container nanobot-social      Started
- Container nanobot-paperclip   Started
- Container nanobot-nginx       Started
-...
+=== Setup Complete ===
+
+  Platform:    http://localhost:3180
+  OAuth Admin: http://localhost:8380
 ```
 
-### Verify everything is running
+**If you see an error about `--recursive`** or the `LibreChat/` folder is empty, run:
 
 ```
-cd ~/nanobot/LibreChat
-docker compose ps
+git submodule update --init --recursive
+./setup.sh
 ```
 
-You should see **11-12 containers** with status `Up` or `running`. If any show `restarting` or `exited`, see Troubleshooting below.
+---
 
-### Check that agents are working
+## Step 5: Connect the AI Agents
+
+The platform is running, but the AI agents need to connect to GPT-5.4. Run:
+
+```
+./login.sh
+```
+
+This opens a browser window. **Sign in with any ChatGPT account** (a free account works).
+
+After signing in, the script saves a token and restarts the API automatically. You only need to do this **once** — the token auto-refreshes for weeks.
+
+### Verify agents are working
 
 ```
 curl http://localhost:18790/health
@@ -236,11 +137,9 @@ Look for:
 - `"codex_token": "ok"` — AI will respond
 - `"status": "ok"` — everything working
 
-If `codex_token` shows `"error"` or `"missing"`, agents won't respond. See the **Agents don't respond** section in Troubleshooting.
-
 ---
 
-## Step 7: Open the App
+## Step 6: Open the App
 
 Open your web browser (Chrome, Safari, Firefox — any works) and go to:
 
@@ -250,9 +149,9 @@ Open your web browser (Chrome, Safari, Firefox — any works) and go to:
 
 You have two options:
 
-1. **OAuth login (recommended):** Click **"Sign in with Street Voices"** — this uses the centralized auth system. Joel creates your account at http://localhost:8380 (Casdoor admin panel).
+1. **OAuth login (recommended):** Click **"Sign in with Street Voices"** — this uses the centralized auth system.
 
-2. **Local account:** Click **Sign up**, enter your name, email, and create a password. This account is local to your computer only.
+2. **Local account:** Click **Sign up**, enter your name, email, and create a password.
 
 ---
 
@@ -285,10 +184,10 @@ Use the left sidebar and top navigation to access:
 
 - **Chat** — the main AI conversation interface
 - **Agent Marketplace** — browse and chat with all 38+ agents
-- **Messages** — team messaging and presence (SV Social)
+- **Messages** — team messaging and presence
 - **Social Media** — social media management dashboard
 - **Grant Writer** — dedicated grant writing workspace
-- **Tasks** — project management board (Paperclip)
+- **Tasks** — project management board
 - **Groups** — team collaboration spaces
 - **Gallery** — media and image management
 - **News** — content feed and article editor
@@ -337,13 +236,10 @@ When Joel pushes updates to the codebase:
 ```
 cd ~/nanobot
 git pull --recurse-submodules
-cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
-cp deploy/librechat.yaml LibreChat/librechat.yaml
-cd LibreChat
-docker compose up -d --build
+./setup.sh
 ```
 
-This pulls the latest code, copies the updated configs, and rebuilds any changed services.
+The setup script copies the updated configs and rebuilds any changed services.
 
 ---
 
@@ -372,9 +268,6 @@ You forgot `--recursive`. Run:
 cd ~/nanobot
 git submodule update --init --recursive
 ```
-
-### "No such file or directory" when copying config files
-The secrets files aren't on your Desktop, or they're inside a subfolder. Find the 4 files (`.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`) and make sure they're directly on the Desktop.
 
 ### Docker build fails with "out of memory" or is extremely slow
 Docker needs more RAM. Open **Docker Desktop** → **Settings** (gear icon) → **Resources** → set **Memory** to at least **4 GB** (6 GB recommended). Click **Apply & Restart**.
@@ -454,11 +347,11 @@ nanobot/
 ├── LibreChat/            # Git submodule — customized chat frontend (React)
 │   └── client/src/components/streetbot/  # All Street Voices pages (40+)
 ├── LobeHub/              # Casdoor SSO config + init data
-├── deploy/               # Docker config templates
+├── deploy/               # Docker config templates (auto-copied by setup.sh)
 ├── static/               # Agent avatars
 ├── Dockerfile            # Builds nanobot-api + whatsapp-bridge + relay
 ├── Dockerfile.paperclip  # Builds Paperclip (project management)
-├── login.sh              # Codex OAuth login (Joel only)
+├── login.sh              # Codex OAuth login (any teammate can run this)
 └── setup.sh              # One-command setup script
 ```
 
@@ -494,12 +387,12 @@ Browser → nginx (3180)
 
 | File | Purpose |
 |------|---------|
-| `~/.nanobot/config.json` | API keys, MCP servers, LLM provider config |
-| `~/.nanobot/codex-token.json` | Codex OAuth token (makes agents respond) |
-| `LibreChat/.env` | LibreChat settings (auth secrets, DB connection, OAuth) |
-| `LibreChat/librechat.yaml` | Agent models, endpoints, MCP servers |
-| `LibreChat/docker-compose.override.yml` | All custom service definitions |
-| `.env.nanobot` | Nanobot container environment variables |
+| `~/.nanobot/config.json` | API keys, MCP servers, LLM provider config (auto-created from defaults) |
+| `~/.nanobot/codex-token.json` | Codex OAuth token (created by `./login.sh`) |
+| `LibreChat/.env` | LibreChat settings — auth, DB, OAuth (auto-created by `setup.sh`) |
+| `LibreChat/librechat.yaml` | Agent models, endpoints, MCP servers (auto-copied by `setup.sh`) |
+| `LibreChat/docker-compose.override.yml` | All custom service definitions (auto-copied by `setup.sh`) |
+| `.env.nanobot` | Nanobot container environment variables (auto-created by `setup.sh`) |
 
 ### Authentication
 
