@@ -241,6 +241,22 @@ git pull --recurse-submodules
 
 The setup script copies the updated configs and rebuilds any changed services.
 
+### Updating from a Previous Install
+
+If you set up the platform before March 2026 (the old method with secrets zip), you need to reset the database volumes once to get the new services (Social, Casdoor, Redis):
+
+```
+cd ~/nanobot
+git pull --recurse-submodules
+cd LibreChat && docker compose down -v && cd ..
+./setup.sh
+./login.sh
+```
+
+The `-v` deletes old database volumes so PostgreSQL reinitializes with the new `casdoor` and `social` databases. Your chat history in MongoDB is **not affected** — that's a separate volume. You only need to do this once.
+
+The `login.sh` opens a browser — sign in with your own ChatGPT account. You only need to do this once, it auto-refreshes.
+
 ---
 
 ## Troubleshooting
