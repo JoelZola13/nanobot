@@ -31,6 +31,7 @@ services:
       - api
       - nanobot-api
       - paperclip
+      - sv-social
     restart: always
 
   mongodb:
@@ -136,3 +137,148 @@ services:
       - nanobot-api
       - paperclip
     restart: always
+
+  # ── SV Social (Street Voices Social Pages) ─────────────────────
+  sv-social:
+    container_name: nanobot-social
+    build:
+      context: ../social
+      dockerfile: Dockerfile
+    ports:
+      - "3182:3182"
+      - "3183:3183"
+    environment:
+      - PORT=3182
+      - WS_PORT=3183
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://social:social_password@social-postgres:5432/social
+      - NEXTAUTH_URL=http://localhost:3180/social/api/auth
+      - AUTH_SECRET=street-voices-social-secret-2026
+      - AUTH_CASDOOR_ISSUER=http://localhost:8380
+      - AUTH_CASDOOR_ID=social-app
+      - AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
+      - NANOBOT_API_URL=http://nanobot-api:18790/v1
+      - NANOBOT_API_KEY=nanobot
+    depends_on:
+      social-postgres:
+        condition: service_healthy
+    restart: always
+
+  social-postgres:
+    container_name: nanobot-social-postgres
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=social
+      - POSTGRES_PASSWORD=social_password
+      - POSTGRES_DB=social
+    volumes:
+      - social-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U social -d social
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: always
+
+  # ── Postiz (Social Media Scheduling) ───────────────────────────
+  postiz:
+    container_name: nanobot-postiz
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    environment:
+      - MAIN_URL=http://localhost:4007
+      - FRONTEND_URL=http://localhost:4007
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:4007/api
+      - JWT_SECRET=${POSTIZ_JWT_SECRET:-4CeokNgeR0BZcSNNffNU1hzm2xY3JIfiOySJaRRuVsEnRvnCJbfyI83s5Gwv05pZ}
+      - DATABASE_URL=postgresql://postiz-user:postiz_password@postiz-postgres:5432/postiz-db
+      - REDIS_URL=redis://postiz-redis:6379
+      - BACKEND_INTERNAL_URL=http://localhost:3000
+      - IS_GENERAL=true
+      - DISABLE_REGISTRATION=false
+      - RUN_CRON=true
+      - STORAGE_PROVIDER=local
+      - UPLOAD_DIRECTORY=/uploads
+      - NEXT_PUBLIC_UPLOAD_DIRECTORY=/uploads
+      - NX_ADD_PLUGINS=false
+      - API_LIMIT=30
+      - FEE_AMOUNT=0.05
+      - OPENAI_API_KEY=
+      - FACEBOOK_APP_ID=${POSTIZ_FACEBOOK_APP_ID:-}
+      - FACEBOOK_APP_SECRET=${POSTIZ_FACEBOOK_APP_SECRET:-}
+      - X_API_KEY=${POSTIZ_X_API_KEY:-}
+      - X_API_SECRET=${POSTIZ_X_API_SECRET:-}
+      - LINKEDIN_CLIENT_ID=
+      - LINKEDIN_CLIENT_SECRET=
+      - REDDIT_CLIENT_ID=
+      - REDDIT_CLIENT_SECRET=
+      - GITHUB_CLIENT_ID=
+      - GITHUB_CLIENT_SECRET=
+      - YOUTUBE_CLIENT_ID=
+      - YOUTUBE_CLIENT_SECRET=
+      - TIKTOK_CLIENT_ID=
+      - TIKTOK_CLIENT_SECRET=
+      - PINTEREST_CLIENT_ID=
+      - PINTEREST_CLIENT_SECRET=
+      - DRIBBBLE_CLIENT_ID=
+      - DRIBBBLE_CLIENT_SECRET=
+      - DISCORD_CLIENT_ID=
+      - DISCORD_CLIENT_SECRET=
+      - DISCORD_BOT_TOKEN_ID=
+      - THREADS_APP_ID=
+      - THREADS_APP_SECRET=
+      - SLACK_ID=
+      - SLACK_SECRET=
+      - SLACK_SIGNING_SECRET=
+      - BEEHIIVE_API_KEY=
+      - BEEHIIVE_PUBLICATION_ID=
+      - NEXT_PUBLIC_DISCORD_SUPPORT=
+      - NEXT_PUBLIC_POLOTNO=
+      - STRIPE_PUBLISHABLE_KEY=
+      - STRIPE_SECRET_KEY=
+      - STRIPE_SIGNING_KEY=
+      - STRIPE_SIGNING_KEY_CONNECT=
+    volumes:
+      - postiz-config:/config/
+      - postiz-uploads:/uploads/
+    ports:
+      - "4007:5000"
+    depends_on:
+      postiz-postgres:
+        condition: service_healthy
+      postiz-redis:
+        condition: service_healthy
+    restart: always
+
+  postiz-postgres:
+    container_name: nanobot-postiz-postgres
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=postiz-user
+      - POSTGRES_PASSWORD=postiz_password
+      - POSTGRES_DB=postiz-db
+    volumes:
+      - postiz-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U postiz-user -d postiz-db
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: always
+
+  postiz-redis:
+    container_name: nanobot-postiz-redis
+    image: redis:7.2
+    healthcheck:
+      test: redis-cli ping
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - postiz-redis-data:/data
+    restart: always
+
+volumes:
+  social-postgres-data:
+  postiz-postgres-data:
+  postiz-redis-data:
+  postiz-config:
+  postiz-uploads:
