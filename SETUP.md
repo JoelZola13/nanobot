@@ -6,7 +6,7 @@ This guide walks you through everything from scratch. No coding experience neede
 
 ## What You'll Need Before Starting
 
-- A **Mac** (Intel or Apple Silicon) or **Windows 10/11** computer
+- A **Mac** (Intel or Apple Silicon) or **Windows 10/11** or **Linux** computer
 - At least **16 GB of RAM** (8 GB works but will be slow)
 - At least **10 GB of free disk space**
 - A decent internet connection (you'll download ~2-3 GB on first setup)
@@ -90,15 +90,10 @@ Copy and paste this into Terminal, then press Enter:
 
 ```
 git clone --recursive https://github.com/JoelZola13/nanobot.git
+cd nanobot
 ```
 
 This will take 1-3 minutes. You'll see progress messages.
-
-When it's done, move into the project folder:
-
-```
-cd nanobot
-```
 
 **If you see an error about `--recursive`** or the download seems too quick (under 10 seconds), run:
 
@@ -110,20 +105,20 @@ This downloads the chat interface separately. Wait for it to finish.
 
 ---
 
-## Step 5: Set Up the Secret Config Files
+## Step 5: Set Up the Config Files
+
+### Option A: You have Joel's secrets zip (recommended)
 
 Joel will send you two things separately (for security):
 1. An encrypted zip file called `nanobot-secrets.zip` (via email or Slack)
 2. A password to unlock it (via a different channel — text, call, etc.)
 
-### 5a. Download and unzip the secrets
-
-Save `nanobot-secrets.zip` to your **Desktop**.
+**Save `nanobot-secrets.zip` to your Desktop**, then unzip it:
 
 **Mac — double-click method:**
 1. Double-click the zip file on your Desktop
 2. Enter the password Joel gave you
-3. You should now see 4 files on your Desktop: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
+3. You should now see 4 files: `.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`
 
 **Mac — Terminal method (if double-click doesn't ask for password):**
 ```
@@ -141,9 +136,7 @@ Enter the password when prompted.
 - **Mac:** In Finder, press `Cmd + Shift + .` to show hidden files
 - **Windows:** In File Explorer, click **View** → check **Hidden items**
 
-### 5b. Put the config files where they belong
-
-Go back to Terminal and paste ALL of these lines at once, then press Enter:
+Now place the files where they belong. Paste ALL of these lines at once:
 
 ```
 cd ~/nanobot
@@ -159,17 +152,27 @@ cp ~/Desktop/config.json ~/.nanobot/config.json
 cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json
 ```
 
-**No errors?** Great — move to the next step.
+### Option B: No secrets zip yet (get started without agents responding)
 
-> **What is `codex-token.json`?** This is the AI authentication token that lets the agents respond. Without it, you can log in to the app but the bots won't answer. If agents stop responding in the future, Joel will send an updated token file — just replace `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
+You can set up the platform now and add the real secrets later. The UI will work, but AI agents won't respond until Joel provides the `codex-token.json`.
 
-**If you see "No such file or directory":** Make sure the zip file was saved to your Desktop, and that you unzipped it there. The 3 files must be directly on the Desktop, not inside a subfolder.
+```
+cd ~/nanobot
+./setup.sh
+```
+
+The setup script automatically creates config files from examples. When Joel sends the secrets, follow Option A above to replace them, then restart:
+
+```
+cd ~/nanobot/LibreChat
+docker compose restart nanobot-api
+```
+
+> **What is `codex-token.json`?** This is the AI authentication token that lets agents call GPT-5.4. Without it, you can log in and browse the app, but agents won't respond. If agents stop responding, Joel will send an updated token — replace `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
 
 ---
 
 ## Step 6: Build and Start the Platform
-
-You have two options:
 
 ### Option A: One-command setup (recommended)
 
@@ -183,7 +186,10 @@ This checks everything and starts the platform automatically.
 ### Option B: Manual start
 
 ```
-cd ~/nanobot/LibreChat
+cd ~/nanobot
+cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
+cp deploy/librechat.yaml LibreChat/librechat.yaml
+cd LibreChat
 docker compose up -d --build
 ```
 
@@ -194,12 +200,15 @@ On future starts (after reboot, etc.), it will be much faster (under 30 seconds)
 When it's done, you'll see something like:
 
 ```
-✔ Container nanobot-mongodb     Started
-✔ Container nanobot-vectordb    Started
-✔ Container nanobot-api         Started
-✔ Container nanobot-librechat   Started
-✔ Container nanobot-paperclip   Started
-✔ Container nanobot-nginx       Started
+ Container nanobot-mongodb     Started
+ Container nanobot-vectordb    Started
+ Container nanobot-casdoor     Started
+ Container nanobot-redis       Started
+ Container nanobot-api         Started
+ Container nanobot-librechat   Started
+ Container nanobot-social      Started
+ Container nanobot-paperclip   Started
+ Container nanobot-nginx       Started
 ...
 ```
 
@@ -210,7 +219,20 @@ cd ~/nanobot/LibreChat
 docker compose ps
 ```
 
-You should see **8-9 containers** with status `Up` or `running`. If any show `restarting` or `exited`, see Troubleshooting below.
+You should see **11-12 containers** with status `Up` or `running`. If any show `restarting` or `exited`, see Troubleshooting below.
+
+### Check that agents are working
+
+```
+curl http://localhost:18790/health
+```
+
+Look for:
+- `"agents": 38` — agent definitions loaded
+- `"codex_token": "ok"` — AI will respond
+- `"status": "ok"` — everything working
+
+If `codex_token` shows `"error"` or `"missing"`, agents won't respond. See the **Agents don't respond** section in Troubleshooting.
 
 ---
 
@@ -220,12 +242,13 @@ Open your web browser (Chrome, Safari, Firefox — any works) and go to:
 
 **http://localhost:3180**
 
-1. Click **Sign up** (top right)
-2. Enter your name, email, and create a password
-3. Click **Create Account**
-4. You're in!
+### Logging in
 
-**Note:** This account is local to your computer only. Everyone creates their own account.
+You have two options:
+
+1. **OAuth login (recommended):** Click **"Sign in with Street Voices"** — this uses the centralized auth system. Joel creates your account at http://localhost:8380 (Casdoor admin panel).
+
+2. **Local account:** Click **Sign up**, enter your name, email, and create a password. This account is local to your computer only.
 
 ---
 
@@ -244,19 +267,33 @@ To talk to a specific agent:
    - **Content Manager** — articles, blog posts, media
    - **Research Manager** — web research, reports
    - **Finance Manager** — budgets, financial planning
-   - And more...
+   - **Development Manager** — technical projects, code
+   - **Scraping Manager** — web data collection
+   - And 30+ more specialized agents...
+
+### Browse All Agents
+
+Go to **http://localhost:3180/agents** to see the full Agent Marketplace — all 38+ agents organized by team with descriptions.
 
 ### Navigate the Platform
 
 Use the left sidebar and top navigation to access:
 
 - **Chat** — the main AI conversation interface
+- **Agent Marketplace** — browse and chat with all 38+ agents
+- **Messages** — team messaging and presence (SV Social)
+- **Social Media** — social media management dashboard
 - **Grant Writer** — dedicated grant writing workspace
-- **Tasks** — project management board
+- **Tasks** — project management board (Paperclip)
 - **Groups** — team collaboration spaces
 - **Gallery** — media and image management
-- **News** — content feed
+- **News** — content feed and article editor
+- **Calendar** — scheduling and events
+- **Documents** — file management and sharing
 - **Database** — data browser
+- **Academy** — learning and training
+- **Directory** — services and listings
+- **Jobs** — job board and applications
 
 ---
 
@@ -315,7 +352,15 @@ Docker Desktop isn't running. Open it from Applications and wait for the green w
 Git isn't installed. Go back to Step 2.
 
 ### "Port 3180 already in use"
-Something else is using that port. Either close it, or restart your computer. Then try again.
+Something else is using that port. Run `docker compose down` first, or restart your computer. Then try again.
+
+### "Port 3100 already in use" (Paperclip)
+Another process is on port 3100. Fix it with a clean restart:
+```
+cd ~/nanobot/LibreChat
+docker compose down
+docker compose up -d
+```
 
 ### The clone was fast but LibreChat/ folder is empty
 You forgot `--recursive`. Run:
@@ -325,21 +370,46 @@ git submodule update --init --recursive
 ```
 
 ### "No such file or directory" when copying config files
-The secrets files aren't on your Desktop, or they're inside a subfolder. Find the 3 files (`.env.nanobot`, `librechat.env`, `config.json`) and make sure they're directly on your Desktop.
+The secrets files aren't on your Desktop, or they're inside a subfolder. Find the 4 files (`.env.nanobot`, `librechat.env`, `config.json`, `codex-token.json`) and make sure they're directly on the Desktop.
 
 ### Docker build fails with "out of memory" or is extremely slow
 Docker needs more RAM. Open **Docker Desktop** → **Settings** (gear icon) → **Resources** → set **Memory** to at least **4 GB** (6 GB recommended). Click **Apply & Restart**.
 
-### The page loads but agents don't respond
-The AI backend needs a moment after startup. Wait 30 seconds and try again.
+### Agents don't respond (most common issue)
 
-If it still doesn't work, the auth token may have expired. Message Joel — only he can refresh it.
+This means the Codex OAuth token is missing or expired. Check:
+
+```
+curl http://localhost:18790/health
+```
+
+If `codex_token` says `"error"` or `"missing"`:
+
+1. **Ask Joel** for an updated `codex-token.json` file
+2. Copy it: `cp ~/Desktop/codex-token.json ~/.nanobot/codex-token.json`
+3. Restart the API: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`
+4. Check again: `curl http://localhost:18790/health` — look for `"codex_token": "ok"`
+
+**For Joel only** — to refresh the token yourself:
+```
+cd ~/nanobot
+./login.sh
+cd LibreChat && docker compose restart nanobot-api
+```
+
+### Agent Marketplace shows "No agents found"
+The nanobot-api needs to be running and healthy. Check:
+```
+cd ~/nanobot/LibreChat
+docker compose logs nanobot-api | head -50
+```
+Look for "Multi-agent system ready: 38 agents across 8 teams". If you see "Multi-agent system not available", pull the latest code and rebuild.
 
 ### A container keeps restarting
 Check what's wrong:
 ```
 cd ~/nanobot/LibreChat
-docker compose logs nanobot-api
+docker compose logs nanobot-api --tail 20
 ```
 Replace `nanobot-api` with the name of the container that's restarting. Send the last 20 lines to Joel.
 
@@ -350,6 +420,9 @@ cd ~/nanobot/LibreChat
 docker compose down
 docker compose up -d --build
 ```
+
+### UID/GID warnings in Docker output
+You'll see warnings like `The "UID" variable is not set. Defaulting to a blank string.` — **these are harmless**. Ignore them.
 
 ### Still stuck?
 Message Joel with:
@@ -370,16 +443,19 @@ Message Joel with:
 nanobot/
 ├── nanobot/              # Python backend — AI agents, tools, API server
 │   ├── agents/           # Agent definitions and orchestration
-│   │   └── teams/        # 40+ agent configs (markdown files)
-│   ├── api_server.py     # FastAPI server (port 18790)
+│   │   └── teams/        # 38 agent configs across 8 teams
+│   ├── api_server.py     # Starlette/Uvicorn server (port 18790)
 │   └── agent/tools/      # Tool implementations (email, web, browser, etc.)
+├── social/               # SV Social — Next.js messaging & presence app
 ├── bridge/               # Node.js — WhatsApp bridge + Paperclip relay
 ├── LibreChat/            # Git submodule — customized chat frontend (React)
-│   └── client/src/components/streetbot/  # All Street Voices pages
+│   └── client/src/components/streetbot/  # All Street Voices pages (40+)
+├── LobeHub/              # Casdoor SSO config + init data
 ├── deploy/               # Docker config templates
 ├── static/               # Agent avatars
 ├── Dockerfile            # Builds nanobot-api + whatsapp-bridge + relay
 ├── Dockerfile.paperclip  # Builds Paperclip (project management)
+├── login.sh              # Codex OAuth login (Joel only)
 └── setup.sh              # One-command setup script
 ```
 
@@ -389,13 +465,16 @@ nanobot/
 |---------|-----------|------|-------------|
 | Nginx | nanobot-nginx | **3180** | Reverse proxy (main entry point) |
 | LibreChat | nanobot-librechat | internal | Chat UI + user auth (React) |
-| Nanobot API | nanobot-api | 18790 | Agent engine + all MCP tools (Python/FastAPI) |
+| Nanobot API | nanobot-api | 18790 | Agent engine + all MCP tools (Python) |
+| SV Social | nanobot-social | 3182, 3183 | Real-time messaging + presence (Next.js) |
+| Casdoor | nanobot-casdoor | 8380 | OAuth/SSO provider |
+| Redis | nanobot-redis | 6380 | Event bus for cross-service messaging |
 | Paperclip | nanobot-paperclip | 3100 | Project/task management |
 | Paperclip Relay | nanobot-relay | 3050 | Heartbeat + dispatch |
 | WhatsApp Bridge | nanobot-whatsapp | internal | WhatsApp messaging (Baileys) |
 | MongoDB | nanobot-mongodb | 27018 | Chat history + user database |
 | Meilisearch | nanobot-meilisearch | internal | Full-text search |
-| PostgreSQL | nanobot-vectordb | internal | Vector DB + Paperclip data |
+| PostgreSQL | nanobot-vectordb | internal | Vector DB + Paperclip + Casdoor + Social data |
 
 ### Architecture
 
@@ -403,6 +482,7 @@ nanobot/
 Browser → nginx (3180)
             ├── /           → LibreChat (chat UI)
             ├── /sbapi/v1   → nanobot-api (AI agents)
+            ├── /social     → SV Social (messaging)
             ├── /STR/       → Paperclip (tasks/projects)
             └── /api/       → LibreChat API + Paperclip
 ```
@@ -411,11 +491,20 @@ Browser → nginx (3180)
 
 | File | Purpose |
 |------|---------|
-| `~/.nanobot/config.json` | API keys, MCP servers, LLM provider token |
-| `LibreChat/.env` | LibreChat settings (auth secrets, DB connection) |
+| `~/.nanobot/config.json` | API keys, MCP servers, LLM provider config |
+| `~/.nanobot/codex-token.json` | Codex OAuth token (makes agents respond) |
+| `LibreChat/.env` | LibreChat settings (auth secrets, DB connection, OAuth) |
 | `LibreChat/librechat.yaml` | Agent models, endpoints, MCP servers |
 | `LibreChat/docker-compose.override.yml` | All custom service definitions |
 | `.env.nanobot` | Nanobot container environment variables |
+
+### Authentication
+
+The platform uses two layers of auth:
+
+1. **User login (Casdoor OpenID):** Teammates log in via "Sign in with Street Voices" which redirects to Casdoor (port 8380). Pre-configured admin: `joel@streetvoices.ca` / `street2020`. Add new users via the Casdoor admin panel.
+
+2. **AI provider (Codex OAuth):** All agents call GPT-5.4 via OpenAI Codex. This uses a shared OAuth token (`codex-token.json`) from Joel's ChatGPT account. When it expires, Joel runs `./login.sh` to refresh and shares the updated file.
 
 ### Making Frontend Changes
 
@@ -450,11 +539,12 @@ docker compose up -d nanobot-api
 
 ### Adding a New Agent
 
-Agent definitions are markdown files in `nanobot/agents/teams/<department>/`:
+Agent definitions are YAML + markdown files in `nanobot/agents/teams/<department>/`:
 
-1. Create a new `.md` file following the pattern of existing agents
-2. The agent will be automatically available in the next API restart
-3. Add it to `deploy/librechat.yaml` under `models.default` to show in the UI dropdown
+1. Add the agent to `agents.yaml` in the team folder
+2. Create a `.md` file with the system prompt
+3. The agent will be automatically available after API restart
+4. Add it to `deploy/librechat.yaml` under `models.default` to show in the UI dropdown
 
 ### Useful Commands
 
@@ -462,7 +552,11 @@ Agent definitions are markdown files in `nanobot/agents/teams/<department>/`:
 # View logs (most useful for debugging)
 docker compose logs -f nanobot-api        # API/agent logs
 docker compose logs -f nanobot-librechat  # Frontend logs
+docker compose logs -f nanobot-social     # Social/messaging logs
 docker compose logs -f                    # All services
+
+# Check agent health + token status
+curl http://localhost:18790/health
 
 # Restart a single service
 docker compose restart nanobot-api
@@ -484,10 +578,11 @@ The platform uses **OpenAI Codex OAuth** — a browser-based login that provides
 
 When it expires (agents stop responding), Joel re-authenticates:
 ```bash
-.venv/bin/python -m nanobot provider login openai-codex
+cd ~/nanobot
+./login.sh
 ```
 
-Then sends an updated `config.json` to the team.
+Then shares the updated `codex-token.json` with the team. Teammates copy it to `~/.nanobot/codex-token.json` and restart: `cd ~/nanobot/LibreChat && docker compose restart nanobot-api`.
 
 ### Enabling RAG API (Optional)
 
