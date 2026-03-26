@@ -44,6 +44,12 @@ services:
 
   vectordb:
     container_name: nanobot-vectordb
+    environment:
+      - POSTGRES_DBS=paperclip
+    volumes:
+      - type: bind
+        source: ../deploy/init-extra-dbs.sh
+        target: /docker-entrypoint-initdb.d/init-extra-dbs.sh
 
   # ── RAG API (disabled — needs OPENAI_API_KEY for embeddings) ─────
   # To re-enable: remove the profiles block below, add OPENAI_API_KEY
