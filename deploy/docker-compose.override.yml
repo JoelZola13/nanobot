@@ -131,12 +131,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - type: bind
-        source: ${NANOBOT_HOME:-~/.nanobot}
-        target: /root/.nanobot
-      - type: bind
-        source: ../LibreChat/client/public
-        target: /app/LibreChat/client/public
+      # Mount ~/.nanobot if it exists (for codex-token.json and config.json)
+      # If it doesn't exist, the baked-in defaults from the Docker image are used
+      - ${NANOBOT_HOME:-~/.nanobot}:/root/.nanobot
+      - ../LibreChat/client/public:/app/LibreChat/client/public
     environment:
       - OAUTH_CLI_KIT_TOKEN_PATH=/root/.nanobot/codex-token.json
     env_file:
@@ -154,12 +152,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - type: bind
-        source: ${NANOBOT_HOME:-~/.nanobot}/whatsapp-auth
-        target: /root/.nanobot/whatsapp-auth
-      - type: bind
-        source: ${NANOBOT_HOME:-~/.nanobot}/config.json
-        target: /root/.nanobot/config.json
+      - ${NANOBOT_HOME:-~/.nanobot}:/root/.nanobot
     env_file:
       - ../.env.nanobot
     depends_on:

@@ -34,8 +34,9 @@ WORKDIR /app/bridge
 RUN npm install && npm run build
 WORKDIR /app
 
-# Create config/workspace directories
-RUN mkdir -p /root/.nanobot/workspace
+# Bake default config into the image (overridden by volume mount if secrets exist)
+COPY deploy/config.json.example /root/.nanobot/config.json
+RUN mkdir -p /root/.nanobot/workspace /root/.nanobot/whatsapp-auth
 
 # Ports: 18790 (API), 3001 (WhatsApp), 3050 (Relay)
 EXPOSE 18790 3001 3050
