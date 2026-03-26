@@ -8,6 +8,14 @@ services:
     ports: !override []
     depends_on: !override
       - mongodb
+      - casdoor
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Strip loopback so localhost resolves to host (needed for Casdoor SSO)
+    entrypoint: >
+      /bin/sh -c "cp /etc/hosts /tmp/h &&
+      grep -v -e '^127\\.0\\.0\\.1' -e '^::1' /tmp/h > /etc/hosts &&
+      exec npm run backend"
     volumes:
       - type: bind
         source: ./librechat.yaml
@@ -43,14 +51,72 @@ services:
 
   vectordb:
     container_name: nanobot-vectordb
+    volumes:
+      - type: bind
+        source: ../deploy/init-casdoor-db.sh
+        target: /docker-entrypoint-initdb.d/10-init-extra-dbs.sh
 
   # ── RAG API (disabled — needs OPENAI_API_KEY for embeddings) ─────
-  # To re-enable: remove the profiles block below, add OPENAI_API_KEY
-  # to LibreChat/.env, then run: docker compose up -d rag_api
   rag_api:
     container_name: nanobot-rag-api
     profiles:
       - rag
+
+  # ── Casdoor (OAuth/SSO — one-click login for teammates) ────────
+  casdoor:
+    image: casbin/casdoor
+    container_name: nanobot-casdoor
+    ports:
+      - "8380:8000"
+    volumes:
+      - type: bind
+        source: ../LobeHub/casdoor/init_data.json
+        target: /init_data.json
+      - type: bind
+        source: ../deploy/casdoor-app.conf
+        target: /conf/app.conf
+    depends_on:
+      - vectordb
+    restart: always
+
+  # ── Redis (event bus for cross-service messaging) ───────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nanobot-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  # ── SV Social (messaging, presence, real-time chat) ─────────────
+  social:
+    container_name: nanobot-social
+    build:
+      context: ../social
+      dockerfile: Dockerfile
+    ports:
+      - "3182:3182"
+      - "3183:3183"
+    environment:
+      - PORT=3182
+      - WS_PORT=3183
+      - DATABASE_URL=postgresql://myuser:mypassword@vectordb:5432/social
+      - AUTH_CASDOOR_ISSUER=http://localhost:8380
+      - AUTH_CASDOOR_ID=social-app
+      - AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
+      - AUTH_SECRET=street-voices-social-secret-2026
+      - NEXTAUTH_URL=http://localhost:3180/social/api/auth
+      - NANOBOT_API_URL=http://nanobot-api:18790/v1
+      - NANOBOT_API_KEY=nanobot
+      - REDIS_URL=redis://redis:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - vectordb
+      - casdoor
+      - redis
+    restart: always
 
   # ── Nanobot API Server (Python/FastAPI) ──────────────────────────
   nanobot-api:
@@ -136,3 +202,6 @@ services:
       - nanobot-api
       - paperclip
     restart: always
+
+volumes:
+  redis_data:

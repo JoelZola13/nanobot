@@ -19,40 +19,24 @@ if [ ! -f "LibreChat/docker-compose.yml" ]; then
   git submodule update --init --recursive
 fi
 
-# Check for required config files
-MISSING=0
-
+# Auto-create config files from examples if missing
 if [ ! -f ".env.nanobot" ]; then
-  echo "MISSING: .env.nanobot"
-  MISSING=1
+  echo "→ Creating .env.nanobot from example..."
+  cp deploy/.env.nanobot.example .env.nanobot
 fi
 
 if [ ! -f "LibreChat/.env" ]; then
-  echo "MISSING: LibreChat/.env"
-  MISSING=1
+  echo "→ Creating LibreChat/.env from example..."
+  cp deploy/librechat.env.example LibreChat/.env
 fi
 
-if [ ! -d "${NANOBOT_HOME:-$HOME/.nanobot}" ] || [ ! -f "${NANOBOT_HOME:-$HOME/.nanobot}/config.json" ]; then
-  echo "MISSING: ~/.nanobot/config.json"
-  MISSING=1
-fi
+NANOBOT_DIR="${NANOBOT_HOME:-$HOME/.nanobot}"
+mkdir -p "$NANOBOT_DIR/whatsapp-auth"
 
-if [ $MISSING -eq 1 ]; then
-  echo ""
-  echo "Some config files are missing. Ask Joel for the nanobot-secrets.zip file,"
-  echo "then run these commands:"
-  echo ""
-  echo "  cp <path-to>/.env.nanobot .env.nanobot"
-  echo "  cp <path-to>/librechat.env LibreChat/.env"
-  echo "  mkdir -p ~/.nanobot"
-  echo "  cp <path-to>/config.json ~/.nanobot/config.json"
-  echo ""
-  echo "Then run this script again."
-  exit 1
+if [ ! -f "$NANOBOT_DIR/config.json" ]; then
+  echo "→ Creating ~/.nanobot/config.json from example..."
+  cp deploy/config.json.example "$NANOBOT_DIR/config.json"
 fi
-
-# Ensure required directories exist
-mkdir -p "${NANOBOT_HOME:-$HOME/.nanobot}/whatsapp-auth"
 
 # Copy deploy configs into LibreChat
 echo "→ Setting up LibreChat configuration..."
@@ -61,11 +45,18 @@ cp deploy/librechat.yaml LibreChat/librechat.yaml
 
 # Build and start the platform
 echo "→ Building and starting all services..."
-echo "  (First run builds custom frontend + downloads images — may take 10-20 min)"
+echo "  (First run builds custom frontend + downloads images — may take 15-25 min)"
 cd LibreChat
 docker compose up -d --build
 
 echo ""
 echo "=== Setup Complete ==="
-echo "Open http://localhost:3180 in your browser"
-echo "Click 'Sign up' to create your account"
+echo ""
+echo "  Platform:  http://localhost:3180"
+echo "  OAuth/SSO: http://localhost:8380  (admin: joel@streetvoices.ca / street2020)"
+echo ""
+echo "  Click 'Sign in with Street Voices' to log in via OAuth."
+echo "  Or click 'Sign up' to create a local account."
+echo ""
+echo "  To add teammates: open http://localhost:8380, log in as admin,"
+echo "  go to Users → Add User, then share their login with them."
