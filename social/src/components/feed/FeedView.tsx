@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Heart, MessageCircle, Share2, Send, ImagePlus } from "lucide-react";
 import type { FeedPostData } from "@/types";
+import { apiUrl } from "@/lib/apiUrl";
 
 interface FeedViewProps {
   initialPosts: FeedPostData[];
@@ -19,7 +20,7 @@ export default function FeedView({ initialPosts, userId: _userId }: FeedViewProp
     if (!newPost.trim() || posting) return;
     setPosting(true);
     try {
-      const res = await fetch("/api/feed", {
+      const res = await fetch(apiUrl("/api/feed"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newPost }),
@@ -35,7 +36,7 @@ export default function FeedView({ initialPosts, userId: _userId }: FeedViewProp
   };
 
   const handleLike = async (postId: string) => {
-    const res = await fetch(`/api/feed/${postId}/like`, { method: "POST" });
+    const res = await fetch(apiUrl(`/api/feed/${postId}/like`), { method: "POST" });
     if (res.ok) {
       setPosts(
         posts.map((p) =>

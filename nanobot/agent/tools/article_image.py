@@ -81,7 +81,11 @@ class ArticleImageTool(Tool):
 
         return (
             f"Article images generated successfully!\n\n"
-            f"**Cover image:** {cover_url}\n"
-            f"**Body image:** {body_url}\n\n"
-            f"Image ID: {result['image_id']}"
+            f"**Cover image:**\n![Article cover]({cover_url})\n\n"
+            f"**Body image:**\n![Article body]({body_url})\n\n"
+            f"Image ID: {result['image_id']}\n\n"
+            f"IMPORTANT: Include these exact markdown image links in your response "
+            f"so the user can see the images inline in the conversation:\n"
+            f"![Article cover]({cover_url})\n"
+            f"![Article body]({body_url})"
         )

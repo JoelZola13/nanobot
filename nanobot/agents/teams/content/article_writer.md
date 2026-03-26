@@ -60,6 +60,7 @@ Your final response MUST follow this EXACT structure:
 ---
 
 ![Hero photo description](hero_image_url_here)
+*Source: [Site Name](source_page_url) — or "AI-generated image" if applicable*
 
 # Article Headline Here
 
@@ -75,9 +76,10 @@ Want me to publish this to Instagram?
 MANDATORY requirements for Step 5:
 1. **Sources visited** — list EVERY URL from web_search and web_fetch at the TOP
 2. **Hero image** — `![description](url)` on its own line so it renders as a visible image
-3. **Full article text** — the complete article, not a summary
-4. **File path** — where the article was saved
-5. **Instagram question** — ask if Joel wants to publish
+3. **Image attribution** — below every image, credit the source (site/photographer) or label as AI-generated
+4. **Full article text** — the complete article, not a summary
+5. **File path** — where the article was saved
+6. **Instagram question** — ask if Joel wants to publish
 
 ## Output Format
 

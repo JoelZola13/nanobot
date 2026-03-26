@@ -248,8 +248,10 @@ services:
     container_name: sv-social
     ports:
       - "3182:3182"
+      - "3183:3183"
     environment:
       - PORT=3182
+      - WS_PORT=3183
       - DATABASE_URL=postgresql://lobehub:lobehub_password@localhost:5433/social
       - AUTH_CASDOOR_ISSUER=http://localhost:8380
       - AUTH_CASDOOR_ID=social-app

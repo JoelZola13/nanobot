@@ -113,46 +113,6 @@ window.HealthPage = {
 
     health.gateway.detail = window.nanoWS._url || 'connected';
 
-    // Check deep agent harness via REST
-    try {
-      const base = `${location.protocol}//${location.host}`;
-      const harnessResp = await fetch(`${base}/v1/harness/status`);
-      const harnessData = await harnessResp.json();
-      if (harnessData.status === 'ready') {
-        health.harness = {
-          status: 'ok', label: 'Deep Agents',
-          detail: `${harnessData.agents} agents, memory active`,
-        };
-      } else {
-        health.harness = {
-          status: 'warn', label: 'Deep Agents',
-          detail: harnessData.status || 'not ready',
-        };
-      }
-    } catch {
-      health.harness = {
-        status: 'unknown', label: 'Deep Agents',
-        detail: 'unavailable',
-      };
-    }
-
-    // Check orchestrator via REST
-    try {
-      const base = `${location.protocol}//${location.host}`;
-      const agentsResp = await fetch(`${base}/v1/agents/status`);
-      const agentsData = await agentsResp.json();
-      health.orchestrator = {
-        status: agentsData.count > 0 ? 'ok' : 'warn',
-        label: 'Orchestrator',
-        detail: `${agentsData.count} agents`,
-      };
-    } catch {
-      health.orchestrator = {
-        status: 'unknown', label: 'Orchestrator',
-        detail: 'unavailable',
-      };
-    }
-
     this._health = health;
     this._renderGrid(grid);
     this._renderLogs();

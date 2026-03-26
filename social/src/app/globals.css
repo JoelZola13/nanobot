@@ -5,6 +5,46 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── Light mode (default) — Street Voices branding ── */
+  :root {
+    --sv-bg: #f7f8fc;
+    --sv-bg-surface: rgba(255, 255, 255, 0.7);
+    --sv-bg-elevated: rgba(255, 255, 255, 0.85);
+    --sv-bg-hover: rgba(243, 244, 248, 0.8);
+    --sv-text-primary: #1a1c24;
+    --sv-text-secondary: #4b4d59;
+    --sv-text-muted: #8e8ea0;
+    --sv-accent: #ffb300;
+    --sv-accent-hover: #ffc233;
+    --sv-accent-muted: rgba(255, 179, 0, 0.12);
+    --sv-border: rgba(17, 24, 39, 0.10);
+    --sv-border-subtle: rgba(17, 24, 39, 0.06);
+    --sv-glass-surface: rgba(255, 255, 255, 0.55);
+    --sv-glass-border: rgba(255, 255, 255, 0.7);
+    --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+    --sv-sidebar-bg: rgba(255, 255, 255, 0.6);
+  }
+
+  /* ── Dark mode — Street Voices branding ── */
+  .dark {
+    --sv-bg: #1f2027;
+    --sv-bg-surface: rgba(42, 44, 54, 0.55);
+    --sv-bg-elevated: rgba(52, 54, 64, 0.6);
+    --sv-bg-hover: rgba(41, 43, 52, 0.7);
+    --sv-text-primary: #dddde2;
+    --sv-text-secondary: #afafaf;
+    --sv-text-muted: #666;
+    --sv-accent: #ffd600;
+    --sv-accent-hover: #f2cb00;
+    --sv-accent-muted: rgba(255, 214, 0, 0.12);
+    --sv-border: rgba(188, 189, 208, 0.15);
+    --sv-border-subtle: rgba(188, 189, 208, 0.08);
+    --sv-glass-surface: rgba(255, 255, 255, 0.04);
+    --sv-glass-border: rgba(255, 255, 255, 0.08);
+    --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.2);
+    --sv-sidebar-bg: rgba(20, 21, 29, 0.85);
+  }
+
   * {
     @apply border-border;
   }
@@ -25,14 +65,39 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+    background: var(--sv-border);
+    @apply rounded-full;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-muted;
+    background: var(--sv-text-muted);
   }
 }
 
 @layer components {
+  /* ── Glassmorphism base classes ── */
+  .glass {
+    background: var(--sv-glass-surface);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--sv-glass-border);
+    box-shadow: var(--sv-glass-shadow);
+  }
+
+  .glass-soft {
+    background: var(--sv-bg-surface);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--sv-glass-border);
+  }
+
+  .glass-strong {
+    background: var(--sv-bg-elevated);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--sv-glass-border);
+    box-shadow: var(--sv-glass-shadow);
+  }
+
   .btn-primary {
     @apply bg-accent text-white font-medium px-4 py-2 rounded-lg
            hover:bg-accent-hover transition-colors duration-150
@@ -45,29 +110,40 @@
   }
 
   .input-field {
-    @apply bg-bg-surface border border-border rounded-lg px-3 py-2
+    background: var(--sv-bg-surface);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    @apply border border-border rounded-lg px-3 py-2
            text-text-primary placeholder-text-muted
            focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
            transition-colors duration-150;
   }
 
   .channel-message {
-    @apply px-4 py-1.5 hover:bg-bg-surface/50 transition-colors duration-75;
+    @apply px-4 py-1.5 transition-colors duration-75;
+  }
+  .channel-message:hover {
+    background: var(--sv-bg-hover);
   }
 
   .sidebar-item {
     @apply flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm
-           text-text-secondary hover:bg-bg-hover hover:text-text-primary
+           text-text-secondary hover:text-text-primary
            transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-item:hover {
+    background: var(--sv-bg-hover);
   }
 
   .sidebar-item.active {
-    @apply bg-accent-muted text-accent;
+    @apply text-accent;
+    background: var(--sv-accent-muted);
   }
 
   .avatar {
-    @apply rounded-full bg-bg-elevated flex items-center justify-center
+    @apply rounded-full flex items-center justify-center
            text-text-secondary font-heading font-semibold shrink-0;
+    background: var(--sv-bg-elevated);
   }
 
   .badge {

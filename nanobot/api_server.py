@@ -16,7 +16,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
@@ -192,17 +192,20 @@ async def lifespan(app):
     # Register Remotion video tools
     remotion_dir = config.workspace_path / "remotion"
     if remotion_dir.exists():
-        from nanobot.agent.tools.remotion import RemotionComposeTool, RemotionRenderTool
-        _agent.tools.register(RemotionComposeTool(remotion_dir=remotion_dir))
-        _agent.tools.register(RemotionRenderTool(
-            remotion_dir=remotion_dir,
-            base_url="http://localhost:18790",
-        ))
-        from nanobot.agent.tools.tts import QwenTTSTool
-        audio_dir = remotion_dir / "public" / "audio"
-        audio_dir.mkdir(parents=True, exist_ok=True)
-        _agent.tools.register(QwenTTSTool(audio_dir=audio_dir))
-        logger.info("Remotion tools registered (compose + render + tts)")
+        try:
+            from nanobot.agent.tools.remotion import RemotionComposeTool, RemotionRenderTool
+            _agent.tools.register(RemotionComposeTool(remotion_dir=remotion_dir))
+            _agent.tools.register(RemotionRenderTool(
+                remotion_dir=remotion_dir,
+                base_url="http://localhost:18790",
+            ))
+            from nanobot.agent.tools.tts import QwenTTSTool
+            audio_dir = remotion_dir / "public" / "audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            _agent.tools.register(QwenTTSTool(audio_dir=audio_dir))
+            logger.info("Remotion tools registered (compose + render + tts)")
+        except ImportError as e:
+            logger.warning(f"Remotion/TTS tools not available (missing deps): {e}")
 
     # Register Qwen-Image generation tool (always available, connects to local server)
     from nanobot.agent.tools.image_gen import QwenImageGenTool
@@ -213,6 +216,28 @@ async def lifespan(app):
     from nanobot.agent.tools.article_image import ArticleImageTool
     _agent.tools.register(ArticleImageTool(base_url="http://localhost:18790"))
     logger.info("Article image generation tool registered")
+
+    # Register Academy tools (OpenMAIC + SBP backend)
+    try:
+        from nanobot.agent.tools.academy import (
+            AcademyCreateCourseTool,
+            AcademyListCoursesTool,
+            AcademyGenerateQuizTool,
+            AcademyGradeQuizTool,
+            AcademyTutorTool,
+        )
+        from nanobot.services.openmaic_client import OpenMAICClient
+
+        _openmaic_client = OpenMAICClient(base_url="http://localhost:3001")
+        _academy_api_url = "http://localhost:18790"  # Self-proxy (nanobot → Supabase)
+        _agent.tools.register(AcademyCreateCourseTool(openmaic=_openmaic_client, sbp_api=_academy_api_url))
+        _agent.tools.register(AcademyListCoursesTool(sbp_api=_academy_api_url))
+        _agent.tools.register(AcademyGenerateQuizTool(openmaic=_openmaic_client, sbp_api=_academy_api_url))
+        _agent.tools.register(AcademyGradeQuizTool(openmaic=_openmaic_client, sbp_api=_academy_api_url))
+        _agent.tools.register(AcademyTutorTool(openmaic=_openmaic_client))
+        logger.info("Academy tools registered (5 tools, OpenMAIC + Supabase)")
+    except Exception as e:
+        logger.warning(f"Academy tools not available: {e}")
 
     # Register SV Social tools (direct PostgreSQL access)
     _social_pool = None
@@ -293,13 +318,11 @@ async def lifespan(app):
                     "timeout": getattr(config.tools.exec, "timeout", 120),
                 },
             }
-            # Collect pre-instantiated tools (social, unified_search) for sub-agent access
-            _extra_tools = {}
-            for t_name in _agent.tools.tool_names:
-                if t_name.startswith("social_") or t_name == "unified_search":
-                    t = _agent.tools.get(t_name)
-                    if t:
-                        _extra_tools[t_name] = t
+            # MCP tools connect async in the agent loop — pass the agent's
+            # tool registry reference so ToolFactory can pull them lazily.
+            # We pass an empty dict now; the factory will be patched once MCP connects.
+            _extra_tools: dict[str, Any] = {}
+            _mcp_ready = asyncio.Event()
 
             tool_factory = ToolFactory(
                 agent_registry,
@@ -307,7 +330,36 @@ async def lifespan(app):
                 tool_config=tool_config,
                 provider=provider,
                 mcp_tools=_extra_tools,
+                mcp_ready=_mcp_ready,
             )
+
+            # Schedule a task to inject MCP tools once they're connected
+            async def _inject_mcp_tools():
+                """Wait for ALL MCP tools to be available, then inject them."""
+                # Wait until Playwright is connected (it's one of the slower ones)
+                for _ in range(60):  # wait up to 60 seconds
+                    await asyncio.sleep(2)
+                    pw_names = [n for n in _agent.tools.tool_names if "playwright" in n]
+                    if pw_names:
+                        break
+                # Now collect everything
+                for t_name in _agent.tools.tool_names:
+                    if (t_name.startswith("mcp_")
+                        or t_name.startswith("social_")
+                        or t_name == "unified_search"):
+                        t = _agent.tools.get(t_name)
+                        if t:
+                            _extra_tools[t_name] = t
+                pw_count = sum(1 for n in _extra_tools if "playwright" in n)
+                logger.info(
+                    f"Injected {len(_extra_tools)} MCP/social tools into ToolFactory "
+                    f"({pw_count} Playwright tools)"
+                )
+                if pw_count == 0:
+                    logger.warning("Playwright MCP tools not found — browser automation won't work for agents")
+                _mcp_ready.set()
+
+            asyncio.create_task(_inject_mcp_tools())
             _orchestrator = Orchestrator(
                 provider=provider,
                 agent_registry=agent_registry,
@@ -1660,6 +1712,793 @@ async def gateway_ws(websocket):
     await _gateway._ws_endpoint(websocket)
 
 
+# ── Groups / Agent Teams API ──────────────────────────────────────────────────
+
+_GROUP_CHANNEL_MAP = {
+    1: "channel-executive",
+    2: "channel-communication",
+    3: "channel-content",
+    4: "channel-development",
+    5: "channel-finance",
+    6: "channel-grant",
+    7: "channel-research",
+    8: "channel-scraping",
+}
+
+_GROUP_NAMES = {
+    1: "Executive", 2: "Communication", 3: "Content", 4: "Development",
+    5: "Finance", 6: "Grant Writing", 7: "Research", 8: "Scraping",
+}
+
+_TEAMS = [
+    {"id": 1, "name": "Executive", "description": "Strategic leadership and cross-team coordination. The CEO oversees all operations and delegates work across the organization.", "avatar_url": None, "member_count": 3, "tags": ["Leadership", "Strategy", "Operations"], "category": "leadership", "is_public": True, "is_member": True, "channel_slug": "executive", "channel_id": "channel-executive", "agents": ["ceo", "auto-router"]},
+    {"id": 2, "name": "Communication", "description": "Email, Slack, WhatsApp, calendar, and social outreach. Manages all inbound and outbound messaging across platforms.", "avatar_url": None, "member_count": 7, "tags": ["Email", "Slack", "WhatsApp", "Calendar"], "category": "operations", "is_public": True, "is_member": True, "channel_slug": "communication", "channel_id": "channel-communication", "agents": ["communication-manager", "email-agent", "slack-agent", "social-agent", "whatsapp-agent", "calendar-agent"]},
+    {"id": 3, "name": "Content", "description": "Article research, writing, social media management, and editorial workflow for Street Voices publications.", "avatar_url": None, "member_count": 4, "tags": ["Articles", "Writing", "Social Media"], "category": "creative", "is_public": True, "is_member": True, "channel_slug": "content", "channel_id": "channel-content", "agents": ["content-manager", "article-researcher", "article-writer", "social-media"]},
+    {"id": 4, "name": "Development", "description": "Full-stack engineering, database administration, DevOps, and infrastructure management.", "avatar_url": None, "member_count": 5, "tags": ["Engineering", "Backend", "Frontend", "DevOps"], "category": "technical", "is_public": True, "is_member": True, "channel_slug": "development", "channel_id": "channel-development", "agents": ["dev-manager", "backend-dev", "frontend-dev", "database-admin", "devops"]},
+    {"id": 5, "name": "Finance", "description": "Financial management, accounting, crypto operations, and budget tracking for Street Voices.", "avatar_url": None, "member_count": 3, "tags": ["Finance", "Accounting", "Crypto"], "category": "operations", "is_public": True, "is_member": True, "channel_slug": "finance", "channel_id": "channel-finance", "agents": ["finance-manager", "accounting-agent", "crypto-agent"]},
+    {"id": 6, "name": "Grant Writing", "description": "Grant research, proposal writing, budget planning, and project management for funding applications.", "avatar_url": None, "member_count": 5, "tags": ["Grants", "Proposals", "Budgets"], "category": "operations", "is_public": True, "is_member": True, "channel_slug": "grant", "channel_id": "channel-grant", "agents": ["grant-manager", "grant-writer", "budget-manager", "project-manager"]},
+    {"id": 7, "name": "Research", "description": "Media platform analysis, program research, and strategic insights for Street Voices initiatives.", "avatar_url": None, "member_count": 4, "tags": ["Research", "Analysis", "Insights"], "category": "research", "is_public": True, "is_member": True, "channel_slug": "research", "channel_id": "channel-research", "agents": ["research-manager", "media-platform-researcher", "media-program-researcher", "street-bot-researcher"]},
+    {"id": 8, "name": "Scraping", "description": "Web scraping, data collection, and automated information gathering from online sources.", "avatar_url": None, "member_count": 3, "tags": ["Data", "Scraping", "Automation"], "category": "technical", "is_public": True, "is_member": True, "channel_slug": "scraping", "channel_id": "channel-scraping", "agents": ["scraping-manager", "scraping-agent"]},
+]
+
+_social_pool = None
+
+async def _get_social_db():
+    global _social_pool
+    if _social_pool is None:
+        import asyncpg
+        _social_pool = await asyncpg.create_pool(
+            "postgresql://lobehub:lobehub_password@localhost:5433/social",
+            min_size=1, max_size=5,
+        )
+    return _social_pool
+
+
+_SUPABASE_URL = "https://bkxkrjktbqxefgsoavxf.supabase.co"
+_SUPABASE_SERVICE_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJreGtyamt0YnF4ZWZnc29hdnhmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjkxNjU1NiwiZXhwIjoyMDc4NDkyNTU2fQ."
+    "RXvByoU2sUheesX6VqTbHTlI1HqT7m2W3ZW-EDblGPY"
+)
+
+
+def _supabase_headers() -> dict:
+    return {
+        "apikey": _SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {_SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+
+# ── Academy AI Tutor — lightweight LLM chat for the tutor widget ──
+
+# In-memory session store (simple — no persistence needed for tutor chat)
+_tutor_sessions: dict[str, dict] = {}
+
+
+async def _handle_tutor(request: Request, parts: list[str]) -> Response:
+    """Handle /api/academy/tutor/* endpoints."""
+    # parts: ["tutor", "chat"], ["tutor", "sessions"], etc.
+    action = parts[1] if len(parts) > 1 else ""
+    method = request.method
+
+    if action == "chat" and method == "POST":
+        return await _tutor_chat(request)
+    elif action == "sessions" and method == "POST" and len(parts) == 2:
+        return await _tutor_start_session(request)
+    elif action == "sessions" and method == "GET" and len(parts) == 2:
+        return await _tutor_list_sessions(request)
+    elif action == "sessions" and len(parts) >= 3:
+        session_id = parts[2]
+        if len(parts) >= 4 and parts[3] == "end" and method == "POST":
+            return _tutor_end_session(session_id, request)
+        elif len(parts) >= 4 and parts[3] == "messages":
+            return _tutor_get_messages(session_id)
+        elif method == "GET":
+            return _tutor_get_session(session_id)
+    elif action == "explain" and method == "POST":
+        return await _tutor_explain(request)
+    elif action == "recommendations" and method == "GET":
+        return _tutor_recommendations(request)
+    elif action == "quick" and len(parts) >= 3:
+        if parts[2] == "help" and method == "POST":
+            return await _tutor_quick_help(request)
+        elif parts[2] == "quiz-prep" and method == "POST":
+            return _tutor_quiz_prep(request)
+
+    return JSONResponse({"error": f"Unknown tutor endpoint: {'/'.join(parts)}"}, status_code=404)
+
+
+async def _tutor_agent_call(user_message: str, session_key: str = "tutor:default") -> str:
+    """Route tutor messages through the full AgentLoop (has academy tools)."""
+    if not _agent:
+        return "The academy agent is not available right now. Please try again later."
+    try:
+        response = await _agent.process_direct(
+            content=user_message,
+            session_key=session_key,
+            channel="academy-tutor",
+            chat_id="tutor",
+        )
+        return response or "I'm not sure how to help with that. Could you rephrase?"
+    except Exception as e:
+        logger.error(f"Tutor agent call failed: {e}")
+        return "I'm having trouble connecting right now. Please try again in a moment."
+
+
+async def _tutor_chat(request: Request) -> Response:
+    """POST /api/academy/tutor/chat — routes through the full academy agent."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    user_message = body.get("message", "").strip()
+    if not user_message:
+        return JSONResponse({"error": "Message is required"}, status_code=400)
+
+    session_id = body.get("session_id")
+    course_id = body.get("course_id")
+    lesson_id = body.get("lesson_id")
+    user_id = str(request.query_params.get("user_id", "anonymous"))
+
+    # Build the full message with context for the agent
+    context_prefix = ""
+    if course_id:
+        context_prefix += f"[Academy Tutor | Course: {course_id}] "
+    if lesson_id:
+        context_prefix += f"[Lesson: {lesson_id}] "
+
+    agent_message = f"{context_prefix}{user_message}\n\n(Respond as the Academy Tutor. After your answer, include exactly 3 follow-up suggestions as a JSON array on the last line prefixed with SUGGESTIONS:)"
+
+    # Use session-scoped key so the agent remembers conversation context
+    if not session_id:
+        session_id = str(uuid.uuid4())
+    session_key = f"tutor:{user_id}:{session_id}"
+
+    # Route through the full agent (has academy tools: create course, quiz, etc.)
+    raw_response = await _tutor_agent_call(agent_message, session_key=session_key)
+
+    # Parse suggestions from response
+    suggestions = []
+    message_text = raw_response
+    if "SUGGESTIONS:" in raw_response:
+        parts = raw_response.rsplit("SUGGESTIONS:", 1)
+        message_text = parts[0].strip()
+        try:
+            suggestions = json.loads(parts[1].strip())
+        except Exception:
+            pass
+
+    # Track session in memory
+    if session_id not in _tutor_sessions:
+        _tutor_sessions[session_id] = {
+            "id": session_id,
+            "user_id": user_id,
+            "course_id": course_id,
+            "lesson_id": lesson_id,
+            "session_type": body.get("session_type", "general"),
+            "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "message_count": 0,
+            "messages": [],
+        }
+    session = _tutor_sessions[session_id]
+    session["messages"].append({"role": "user", "content": user_message, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    session["messages"].append({"role": "assistant", "content": message_text, "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+    session["message_count"] = len(session["messages"])
+
+    return JSONResponse({
+        "message": message_text,
+        "session_id": session_id,
+        "suggestions": suggestions,
+    })
+
+
+async def _tutor_start_session(request: Request) -> Response:
+    """POST /api/academy/tutor/sessions — create a new session."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    user_id = request.query_params.get("user_id", "anonymous")
+    session_id = str(uuid.uuid4())
+    session = {
+        "id": session_id,
+        "user_id": user_id,
+        "course_id": body.get("course_id"),
+        "lesson_id": body.get("lesson_id"),
+        "session_type": body.get("session_type", "general"),
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "message_count": 0,
+        "messages": [],
+    }
+    _tutor_sessions[session_id] = session
+    return JSONResponse({k: v for k, v in session.items() if k != "messages"})
+
+
+async def _tutor_list_sessions(request: Request) -> Response:
+    """GET /api/academy/tutor/sessions — list user sessions."""
+    user_id = request.query_params.get("user_id", "")
+    sessions = [
+        {k: v for k, v in s.items() if k != "messages"}
+        for s in _tutor_sessions.values()
+        if s.get("user_id") == user_id
+    ]
+    return JSONResponse({"sessions": sessions})
+
+
+def _tutor_get_session(session_id: str) -> Response:
+    """GET /api/academy/tutor/sessions/{id}."""
+    session = _tutor_sessions.get(session_id)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    return JSONResponse({k: v for k, v in session.items() if k != "messages"})
+
+
+def _tutor_end_session(session_id: str, request: Request) -> Response:
+    """POST /api/academy/tutor/sessions/{id}/end."""
+    session = _tutor_sessions.get(session_id)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    session["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return JSONResponse({k: v for k, v in session.items() if k != "messages"})
+
+
+def _tutor_get_messages(session_id: str) -> Response:
+    """GET /api/academy/tutor/sessions/{id}/messages."""
+    session = _tutor_sessions.get(session_id)
+    if not session:
+        return JSONResponse({"messages": []})
+    messages = [
+        {"id": f"msg-{i}", "session_id": session_id, **m}
+        for i, m in enumerate(session.get("messages", []))
+    ]
+    return JSONResponse({"messages": messages})
+
+
+async def _tutor_explain(request: Request) -> Response:
+    """POST /api/academy/tutor/explain — explain a concept."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    concept = body.get("concept", "").strip()
+    if not concept:
+        return JSONResponse({"error": "Concept is required"}, status_code=400)
+
+    difficulty = body.get("difficulty_level", "detailed")
+    prompt = f"[Academy Tutor] Explain this concept at a {difficulty} level with real-world examples: {concept}"
+
+    explanation = await _tutor_agent_call(prompt)
+    if "SUGGESTIONS:" in explanation:
+        explanation = explanation.rsplit("SUGGESTIONS:", 1)[0].strip()
+
+    return JSONResponse({"explanation": explanation})
+
+
+def _tutor_recommendations(request: Request) -> Response:
+    """GET /api/academy/tutor/recommendations — static starter recommendations."""
+    return JSONResponse({"recommendations": [
+        {"recommendation_type": "course", "title": "Speaking Up with Confidence", "description": "Build advocacy skills for any situation", "priority": 1},
+        {"recommendation_type": "course", "title": "Know Your Rights", "description": "Understand your fundamental rights", "priority": 2},
+        {"recommendation_type": "lesson", "title": "Power Mapping 101", "description": "Learn to identify key decision makers", "priority": 3},
+    ]})
+
+
+async def _tutor_quick_help(request: Request) -> Response:
+    """POST /api/academy/tutor/quick/help — quick contextual help."""
+    question = request.query_params.get("question", "")
+    if not question:
+        try:
+            body = await request.json()
+            question = body.get("question", "")
+        except Exception:
+            pass
+    if not question:
+        return JSONResponse({"error": "Question is required"}, status_code=400)
+
+    answer = await _tutor_agent_call(f"[Academy Tutor - Quick Help] Answer briefly in 2-3 sentences: {question}")
+    return JSONResponse({"answer": answer, "suggestions": []})
+
+
+def _tutor_quiz_prep(request: Request) -> Response:
+    """POST /api/academy/tutor/quick/quiz-prep — quiz preparation tips."""
+    return JSONResponse({
+        "tips": [
+            "Review the key concepts from each lesson before attempting the quiz",
+            "Focus on understanding the 'why' behind each concept, not just memorizing facts",
+            "Try explaining concepts in your own words to test your understanding",
+        ],
+        "struggling_topics": [],
+        "progress": {},
+    })
+
+
+async def academy_proxy(request: Request) -> Response:
+    """Academy API — direct Supabase REST proxy + AI tutor endpoints."""
+    import httpx
+
+    path = request.url.path  # e.g. /api/academy/courses or /api/academy/tutor/chat
+    parts = path.replace("/api/academy/", "").strip("/").split("/")
+
+    resource = parts[0] if parts else ""
+
+    # ── AI Tutor endpoints (LLM-powered, not Supabase) ──
+    if resource == "tutor":
+        return await _handle_tutor(request, parts)
+
+    table_map = {
+        "courses": "academy_courses",
+        "modules": "academy_modules",
+        "lessons": "academy_lessons",
+        "quizzes": "academy_quizzes",
+        "questions": "academy_quiz_questions",
+        "enrollments": "academy_enrollments",
+        "submissions": "academy_submissions",
+        "discussions": "academy_discussions",
+    }
+    table = table_map.get(resource)
+    if not table:
+        return JSONResponse({"error": f"Unknown academy resource: {resource}"}, status_code=404)
+
+    base = f"{_SUPABASE_URL}/rest/v1/{table}"
+    headers = _supabase_headers()
+    method = request.method
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if method == "GET":
+                # Build Supabase query from request params
+                params = dict(request.query_params)
+                qs = "select=*"
+
+                # Handle specific resource ID
+                if len(parts) >= 2 and parts[1]:
+                    qs += f"&id=eq.{parts[1]}"
+
+                # Handle nested resources (e.g. courses/{id}/modules)
+                if len(parts) >= 3:
+                    nested_resource = parts[2]
+                    nested_table = table_map.get(nested_resource)
+                    if nested_table:
+                        table = nested_table
+                        base = f"{_SUPABASE_URL}/rest/v1/{nested_table}"
+                        qs = f"select=*&course_id=eq.{parts[1]}"
+                        if len(parts) >= 4 and parts[3]:
+                            qs += f"&id=eq.{parts[3]}"
+                        # Handle deeply nested (courses/{id}/modules/{mid}/lessons)
+                        if len(parts) >= 5:
+                            deep_resource = parts[4]
+                            deep_table = table_map.get(deep_resource)
+                            if deep_table:
+                                base = f"{_SUPABASE_URL}/rest/v1/{deep_table}"
+                                qs = f"select=*&module_id=eq.{parts[3]}"
+
+                # Apply filters from query params
+                state = params.pop("state", None)
+                if state:
+                    qs += f"&state=eq.{state}"
+                elif resource == "courses" and len(parts) < 2:
+                    qs += "&state=eq.published"  # Default to published
+
+                category = params.pop("category", None)
+                if category:
+                    qs += f"&category=eq.{category}"
+                level = params.pop("level", None)
+                if level:
+                    qs += f"&level=eq.{level}"
+
+                user_id = params.pop("user_id", None)
+                if user_id:
+                    qs += f"&user_id=eq.{user_id}"
+
+                limit = params.pop("limit", "20")
+                skip = params.pop("skip", "0")
+                qs += f"&order=created_at.desc&offset={skip}&limit={limit}"
+
+                resp = await client.get(f"{base}?{qs}", headers=headers)
+                data = resp.json()
+
+                # If querying by specific ID, return single object
+                if len(parts) >= 2 and parts[1] and isinstance(data, list):
+                    if not data:
+                        return JSONResponse({"detail": "Not found"}, status_code=404)
+                    return JSONResponse(data[0])
+
+                return JSONResponse(data)
+
+            elif method == "POST":
+                body = await request.body()
+                body_json = json.loads(body) if body else {}
+
+                # Inject parent IDs for nested resources
+                if len(parts) >= 3:
+                    nested_resource = parts[2]
+                    nested_table = table_map.get(nested_resource)
+                    if nested_table:
+                        base = f"{_SUPABASE_URL}/rest/v1/{nested_table}"
+                        body_json["course_id"] = parts[1]
+                        if len(parts) >= 5:
+                            deep_resource = parts[4]
+                            deep_table = table_map.get(deep_resource)
+                            if deep_table:
+                                base = f"{_SUPABASE_URL}/rest/v1/{deep_table}"
+                                body_json["module_id"] = parts[3]
+
+                resp = await client.post(base, headers=headers, json=body_json)
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    return JSONResponse(data[0], status_code=201)
+                return JSONResponse(data, status_code=resp.status_code)
+
+            elif method in ("PATCH", "PUT"):
+                if len(parts) < 2:
+                    return JSONResponse({"error": "Resource ID required"}, status_code=400)
+                resource_id = parts[1]
+                body = await request.body()
+                url = f"{base}?id=eq.{resource_id}"
+                resp = await client.patch(url, headers=headers, content=body)
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    return JSONResponse(data[0])
+                return JSONResponse(data, status_code=resp.status_code)
+
+            elif method == "DELETE":
+                if len(parts) < 2:
+                    return JSONResponse({"error": "Resource ID required"}, status_code=400)
+                resource_id = parts[1]
+                url = f"{base}?id=eq.{resource_id}"
+                resp = await client.delete(url, headers=headers)
+                return Response(status_code=204)
+
+    except httpx.ConnectError:
+        return JSONResponse({"error": "Supabase not reachable"}, status_code=502)
+    except Exception as e:
+        logger.error(f"Academy proxy error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def groups_api(request: Request) -> JSONResponse:
+    """GET /groups — Return agent teams as community groups."""
+    group_id = request.query_params.get("id")
+    if group_id:
+        team = next((t for t in _TEAMS if t["id"] == int(group_id)), None)
+        return JSONResponse([team] if team else [])
+    return JSONResponse(_TEAMS)
+
+
+async def group_messages(request: Request) -> JSONResponse:
+    """GET /groups/{group_id}/messages — Fetch messages from a group channel."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    pool = await _get_social_db()
+    rows = await pool.fetch("""
+        SELECT m.id, m.content, m.created_at, m.is_edited, m.is_pinned,
+               u.id as author_id, u.username, u.display_name, u.avatar_url, u.is_agent
+        FROM messages m JOIN users u ON m.author_id = u.id
+        WHERE m.channel_id = $1
+        ORDER BY m.created_at ASC
+        LIMIT 100
+    """, channel_id)
+
+    messages = [{
+        "id": r["id"],
+        "content": r["content"],
+        "createdAt": r["created_at"].isoformat(),
+        "isEdited": r["is_edited"],
+        "isPinned": r["is_pinned"],
+        "author": {
+            "id": r["author_id"],
+            "username": r["username"],
+            "displayName": r["display_name"],
+            "avatarUrl": r["avatar_url"],
+            "isAgent": r["is_agent"],
+        },
+    } for r in rows]
+    return JSONResponse({"messages": messages})
+
+
+async def group_send_message(request: Request) -> JSONResponse:
+    """POST /groups/{group_id}/messages — Send a message and trigger agent response."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    body = await request.json()
+    content = body.get("content", "").strip()
+    if not content:
+        return JSONResponse({"error": "Empty message"}, status_code=400)
+
+    user_id = "cmmq4buiv0000qrrtsv31r71l"
+    pool = await _get_social_db()
+
+    # Ensure Joel is a member
+    member = await pool.fetchrow(
+        "SELECT id FROM channel_members WHERE channel_id = $1 AND user_id = $2",
+        channel_id, user_id,
+    )
+    if not member:
+        member_id = f"member-{channel_id}-joel"
+        await pool.execute(
+            "INSERT INTO channel_members (id, channel_id, user_id, role, joined_at) VALUES ($1, $2, $3, 'member', NOW()) ON CONFLICT (channel_id, user_id) DO NOTHING",
+            member_id, channel_id, user_id,
+        )
+
+    # Insert message
+    msg_id = str(uuid.uuid4())
+    await pool.execute("""
+        INSERT INTO messages (id, channel_id, author_id, content, created_at, updated_at, is_edited, is_pinned)
+        VALUES ($1, $2, $3, $4, NOW(), NOW(), false, false)
+    """, msg_id, channel_id, user_id, content)
+
+    # Fetch inserted message
+    row = await pool.fetchrow("""
+        SELECT m.id, m.content, m.created_at,
+               u.id as author_id, u.username, u.display_name, u.avatar_url, u.is_agent
+        FROM messages m JOIN users u ON m.author_id = u.id
+        WHERE m.id = $1
+    """, msg_id)
+
+    msg = {
+        "id": row["id"], "content": row["content"],
+        "createdAt": row["created_at"].isoformat(),
+        "isEdited": False, "isPinned": False,
+        "author": {"id": row["author_id"], "username": row["username"],
+                    "displayName": row["display_name"], "avatarUrl": row["avatar_url"],
+                    "isAgent": row["is_agent"]},
+    }
+
+    # Determine which agent(s) should respond
+    agents_list = body.get("agents", [])
+    mentioned_agents = [a for a in agents_list if f"@{a}" in content]
+
+    # If no specific @mention, the lead agent (first in list) always responds
+    if not mentioned_agents and agents_list:
+        mentioned_agents = [agents_list[0]]
+
+    group_name = _GROUP_NAMES.get(group_id, f"Group {group_id}")
+
+    async def _trigger_agent(agent_username: str):
+        try:
+            agent_user = await pool.fetchrow(
+                "SELECT id, username, display_name FROM users WHERE username = $1 AND is_agent = true",
+                agent_username,
+            )
+            if not agent_user:
+                return
+            if _agent is None:
+                logger.error("Agent not initialized, cannot process group message")
+                return
+
+            prompt = (
+                f"You are responding as {agent_user['display_name']} in the {group_name} team group chat. "
+                f"Keep your response concise, relevant to your role, and conversational. "
+                f"The user said: {content}"
+            )
+            result = await _agent.process_direct(
+                prompt,
+                channel=f"group-{group_id}",
+                session_key=f"group:{group_id}",
+            )
+
+            reply_id = str(uuid.uuid4())
+            await pool.execute("""
+                INSERT INTO messages (id, channel_id, author_id, content, created_at, updated_at, is_edited, is_pinned)
+                VALUES ($1, $2, $3, $4, NOW(), NOW(), false, false)
+            """, reply_id, channel_id, agent_user["id"], result or "I couldn't process that request.")
+        except Exception as e:
+            logger.error(f"Agent response error: {e}")
+
+    for agent in mentioned_agents:
+        asyncio.create_task(_trigger_agent(agent))
+
+    return JSONResponse(msg, status_code=201)
+
+
+async def group_members(request: Request) -> JSONResponse:
+    """GET /groups/{group_id}/members — List members of a group channel."""
+    group_id = int(request.path_params["group_id"])
+    channel_id = _GROUP_CHANNEL_MAP.get(group_id)
+    if not channel_id:
+        return JSONResponse({"error": "Group not found"}, status_code=404)
+
+    pool = await _get_social_db()
+    rows = await pool.fetch("""
+        SELECT u.id, u.username, u.display_name, u.avatar_url, u.is_agent
+        FROM channel_members cm JOIN users u ON cm.user_id = u.id
+        WHERE cm.channel_id = $1
+        ORDER BY u.is_agent ASC, u.display_name ASC
+    """, channel_id)
+
+    members = [{
+        "id": r["id"], "username": r["username"],
+        "displayName": r["display_name"], "avatarUrl": r["avatar_url"],
+        "isAgent": r["is_agent"], "status": "online",
+        "role": "member", "joinedAt": None,
+    } for r in rows]
+    return JSONResponse({"members": members})
+
+
+# ── LLM Proxy: share Codex OAuth with external services (e.g. OpenMAIC) ──
+
+async def llm_proxy_completions(request: Request) -> Response:
+    """Lightweight OpenAI Chat Completions proxy using Codex OAuth.
+
+    Accepts standard OpenAI /chat/completions requests, forwards them through
+    the Codex Responses API, and returns a standard completions response.
+    This lets services like OpenMAIC use nanobot's auth without their own key.
+    """
+    import asyncio as _asyncio
+    from nanobot.providers.openai_codex_provider import (
+        OpenAICodexProvider,
+        _convert_messages,
+        _build_headers,
+        _strip_model_prefix,
+        _request_codex,
+        _prompt_cache_key,
+        _iter_sse,
+    )
+    from oauth_cli_kit import get_token as _get_token
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": {"message": "Invalid JSON body"}}, status_code=400)
+
+    messages = body.get("messages", [])
+    raw_model = body.get("model", "gpt-4o")
+    temperature = body.get("temperature", 0.7)
+    max_tokens = body.get("max_tokens", 4096)
+    stream = body.get("stream", False)
+
+    # Map common OpenAI model names to Codex-compatible equivalents
+    # Codex OAuth only supports specific model IDs
+    _CODEX_MODEL_MAP = {
+        "gpt-4o": "gpt-5.4",
+        "gpt-4o-mini": "gpt-5.4",
+        "gpt-4-turbo": "gpt-5.4",
+        "gpt-4": "gpt-5.4",
+        "gpt-3.5-turbo": "gpt-5.4",
+        "gpt-5.1-codex": "gpt-5.4",
+    }
+    model = _CODEX_MODEL_MAP.get(raw_model, raw_model)
+
+    # Convert standard messages to Codex Responses format
+    system_prompt, input_items = _convert_messages(messages)
+
+    token = await _asyncio.to_thread(_get_token)
+    headers = _build_headers(token.account_id, token.access)
+
+    codex_body: dict[str, Any] = {
+        "model": _strip_model_prefix(model),
+        "store": False,
+        "stream": True,
+        "instructions": system_prompt,
+        "input": input_items,
+        "text": {"verbosity": "medium"},
+        "include": ["reasoning.encrypted_content"],
+        "prompt_cache_key": _prompt_cache_key(messages),
+    }
+
+    if stream:
+        # SSE streaming — translate Codex SSE events to OpenAI streaming format
+        async def _stream_proxy():
+            import httpx as _httpx
+            request_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+            created = int(time.time())
+
+            try:
+                async with _httpx.AsyncClient(timeout=120.0, verify=True) as client:
+                    async with client.stream(
+                        "POST",
+                        "https://chatgpt.com/backend-api/codex/responses",
+                        headers=headers,
+                        json=codex_body,
+                    ) as resp:
+                        if resp.status_code != 200:
+                            raw = await resp.aread()
+                            error_chunk = {
+                                "id": request_id, "object": "chat.completion.chunk",
+                                "created": created, "model": model,
+                                "choices": [{"index": 0, "delta": {"content": f"[Error: HTTP {resp.status_code}]"}, "finish_reason": "stop"}],
+                            }
+                            yield f"data: {json.dumps(error_chunk)}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+
+                        # Emit initial role chunk (required by @ai-sdk/openai)
+                        role_chunk = {
+                            "id": request_id, "object": "chat.completion.chunk",
+                            "created": created, "model": model,
+                            "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": None}],
+                        }
+                        yield f"data: {json.dumps(role_chunk)}\n\n"
+
+                        async for event in _iter_sse(resp):
+                            event_type = event.get("type")
+                            if event_type == "response.output_text.delta":
+                                delta_text = event.get("delta", "")
+                                chunk = {
+                                    "id": request_id, "object": "chat.completion.chunk",
+                                    "created": created, "model": model,
+                                    "choices": [{"index": 0, "delta": {"content": delta_text}, "finish_reason": None}],
+                                }
+                                yield f"data: {json.dumps(chunk)}\n\n"
+                            elif event_type == "response.completed":
+                                done_chunk = {
+                                    "id": request_id, "object": "chat.completion.chunk",
+                                    "created": created, "model": model,
+                                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                                }
+                                yield f"data: {json.dumps(done_chunk)}\n\n"
+                                yield "data: [DONE]\n\n"
+                                return
+            except Exception as exc:
+                logger.error(f"LLM proxy stream error: {exc}")
+                error_chunk = {
+                    "id": request_id, "object": "chat.completion.chunk",
+                    "created": created, "model": model,
+                    "choices": [{"index": 0, "delta": {"content": f"[Error: {exc}]"}, "finish_reason": "stop"}],
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_stream_proxy(), media_type="text/event-stream")
+    else:
+        # Non-streaming — collect full response
+        try:
+            content, tool_calls, finish_reason = await _request_codex(
+                "https://chatgpt.com/backend-api/codex/responses",
+                headers, codex_body, verify=True,
+            )
+        except Exception as e:
+            err_str = str(e).upper()
+            is_ssl = any(kw in err_str for kw in ("CERTIFICATE_VERIFY_FAILED", "SSL", "TLS"))
+            if is_ssl:
+                content, tool_calls, finish_reason = await _request_codex(
+                    "https://chatgpt.com/backend-api/codex/responses",
+                    headers, codex_body, verify=False,
+                )
+            else:
+                return JSONResponse(
+                    {"error": {"message": str(e), "type": "server_error"}},
+                    status_code=502,
+                )
+
+        # Build standard OpenAI response
+        response_data = {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": finish_reason,
+            }],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        }
+        return JSONResponse(response_data)
+
+
+async def llm_proxy_models(request: Request) -> JSONResponse:
+    """Return available models for the LLM proxy."""
+    return JSONResponse({
+        "object": "list",
+        "data": [
+            {"id": "gpt-5.4", "object": "model", "owned_by": "nanobot-proxy"},
+            {"id": "gpt-4o", "object": "model", "owned_by": "nanobot-proxy"},
+        ],
+    })
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
@@ -1681,6 +2520,16 @@ app = Starlette(
         Route("/shared/{filename:path}", serve_shared_asset, methods=["GET"]),
         Route("/api/article-image/generate", generate_article_image, methods=["POST"]),
         Route("/article-images/{filename:path}", serve_article_image, methods=["GET"]),
+        # ── LLM Proxy (Codex OAuth passthrough for OpenMAIC etc.) ──
+        Route("/v1/llm-proxy/chat/completions", llm_proxy_completions, methods=["POST"]),
+        Route("/v1/llm-proxy/models", llm_proxy_models, methods=["GET"]),
+        # ── Academy proxy to SBP backend ──
+        Route("/api/academy/{path:path}", academy_proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
+        # ── Groups / Agent Teams ──
+        Route("/groups", groups_api, methods=["GET"]),
+        Route("/groups/{group_id:int}/messages", group_messages, methods=["GET"]),
+        Route("/groups/{group_id:int}/messages", group_send_message, methods=["POST"]),
+        Route("/groups/{group_id:int}/members", group_members, methods=["GET"]),
         # ── Deep Agent Harness endpoints ──
         Route("/v1/memory", memory_api, methods=["GET", "POST"]),
         Route("/v1/memory/context/{agent_name}", memory_context_api, methods=["GET"]),

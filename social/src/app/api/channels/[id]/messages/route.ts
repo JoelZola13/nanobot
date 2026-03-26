@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { invokeAgentStreaming } from "@/lib/nanobot";
+import { getIO } from "@/lib/socketServer";
 
 // GET /api/channels/[id]/messages — fetch messages
 export async function GET(
@@ -84,11 +85,6 @@ function formatMessage(msg: {
   };
 }
 
-function getIO() {
-  return (globalThis as Record<string, unknown>).__socketio as
-    | { to: (room: string) => { emit: (event: string, data: unknown) => void } }
-    | undefined;
-}
 
 // POST /api/channels/[id]/messages — send a message
 export async function POST(
@@ -237,16 +233,18 @@ async function triggerAgentResponseStreaming(
       conversationHistory,
       (progressText: string) => {
         // Parse progress hints and broadcast as activity
-        // Progress format: "⏳ Calling tool: tool_name" or "⏳ Delegating to agent/xxx"
         let activityType = "working";
-        const text = progressText.replace(/⏳\s*/g, "").trim();
+        const text = progressText.replace(/[⏳🤖🔀⚡📋]\s*/g, "").replace(/\*\*/g, "").trim();
         let delegatedTo: string | undefined;
 
         if (text.toLowerCase().includes("delegat")) {
           activityType = "delegating";
-          // Extract target agent name
           const delegateMatch = text.match(/agent[\/](\w+)/i);
           delegatedTo = delegateMatch?.[1]?.replace(/_/g, " ");
+        } else if (text.toLowerCase().includes("routed to")) {
+          activityType = "delegating";
+          const routeMatch = text.match(/routed to\s+(\w+)/i);
+          delegatedTo = routeMatch?.[1];
         } else if (text.toLowerCase().includes("calling tool")) {
           activityType = "tool_call";
         }

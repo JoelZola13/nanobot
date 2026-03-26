@@ -25,8 +25,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Config ──────────────────────────────────────────────────────────
 const RELAY_PORT = 3050;
-const NANOBOT_API = "http://127.0.0.1:18790";
-const PAPERCLIP_API = "http://127.0.0.1:3100/api";
+const NANOBOT_API = process.env.NANOBOT_API_URL || "http://127.0.0.1:18790";
+const PAPERCLIP_API = process.env.PAPERCLIP_API_URL || "http://127.0.0.1:3100/api";
 const COMPANY_ID = "78940514-fbb0-4c2d-8cee-09bcfd5399a4";
 const PROJECT_ID = "645c5cd9-caa1-46c7-be50-da6e6001df14"; // "Nanobot" project with workspace
 

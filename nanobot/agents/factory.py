@@ -1,5 +1,6 @@
 """Tool factory for building per-agent tool sets."""
 
+import asyncio
 import fnmatch
 from pathlib import Path
 from typing import Any
@@ -71,13 +72,24 @@ class ToolFactory:
         tool_config: dict[str, Any] | None = None,
         provider: LLMProvider | None = None,
         mcp_tools: dict[str, Tool] | None = None,
+        mcp_ready: asyncio.Event | None = None,
     ):
         self._agent_registry = agent_registry
         self._workspace = workspace or Path.cwd()
         self._tool_config = tool_config or {}
         self._provider = provider
         # MCP tools keyed by their full name (e.g. "mcp_airtable_list_records")
-        self._mcp_tools: dict[str, Tool] = mcp_tools or {}
+        self._mcp_tools: dict[str, Tool] = mcp_tools if mcp_tools is not None else {}
+        self._mcp_ready: asyncio.Event | None = mcp_ready
+
+    async def ensure_mcp_ready(self, timeout: float = 30.0):
+        """Wait for MCP tools to be injected before building agent tool sets."""
+        if self._mcp_ready and not self._mcp_ready.is_set():
+            logger.info("Waiting for MCP tools to be ready...")
+            try:
+                await asyncio.wait_for(self._mcp_ready.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"MCP tools not ready after {timeout}s — proceeding with available tools")
 
     def build_tools(self, spec: AgentSpec) -> ToolRegistry:
         """

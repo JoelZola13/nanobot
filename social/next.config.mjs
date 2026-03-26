@@ -14,6 +14,8 @@ const nextConfig = {
     AUTH_CASDOOR_SECRET: process.env.AUTH_CASDOOR_SECRET || "social-casdoor-secret-2026",
     AUTH_SECRET: process.env.AUTH_SECRET || "street-voices-social-secret-2026",
     DATABASE_URL: process.env.DATABASE_URL || "postgresql://lobehub:lobehub_password@localhost:5433/social",
+    NANOBOT_API_URL: process.env.NANOBOT_API_URL || "http://localhost:18790/v1",
+    NANOBOT_API_KEY: process.env.NANOBOT_API_KEY || "nanobot",
   },
 };
 

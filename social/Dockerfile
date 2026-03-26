@@ -9,13 +9,13 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 
-# Generate Prisma client
+# Copy Prisma schema (for layer caching) and source
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
-RUN npx prisma generate
-
-# Copy source
 COPY . .
+
+# Generate Prisma client (after full copy so src/generated/ is fresh)
+RUN npx prisma generate
 
 # Build Next.js — env vars must be set at build time for App Router
 # (Next.js App Router route handlers only see build-time env values)
@@ -57,3 +57,4 @@ COPY --from=base /app/src/generated ./src/generated
 CMD ["node", "server.mjs"]
 
 EXPOSE 3182
+EXPOSE 3183

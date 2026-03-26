@@ -1,0 +1,542 @@
+version: 1.3.3
+cache: true
+
+registration:
+  allowedDomains: []
+
+mcpServers:
+  postiz:
+    type: stdio
+    command: node
+    args:
+      - /app/scripts/postiz-mcp.js
+    env:
+      POSTIZ_API_KEY: "${POSTIZ_API_KEY}"
+      POSTIZ_API_URL: "http://host.docker.internal:4007/api"
+    timeout: 30000
+    initTimeout: 10000
+
+speech:
+  tts:
+    openai:
+      apiKey: "nanobot"
+      url: "http://nanobot-api:18790/v1/audio/speech"
+      model: "tts-1"
+      voices: ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+  stt:
+    openai:
+      apiKey: "nanobot"
+      url: "http://nanobot-api:18790/v1/audio/transcriptions"
+      model: "whisper-1"
+
+endpoints:
+  custom:
+    - name: "Street Bot"
+      apiKey: "nanobot"
+      baseURL: "http://nanobot-api:18790/v1"
+      models:
+        default: ["agent/auto", "agent/ceo", "agent/communication_manager", "agent/content_manager", "agent/development_manager", "agent/finance_manager", "agent/grant_manager", "agent/research_manager", "agent/scraping_manager", "openai-codex/gpt-5.4", "gpt-5.4", "gpt-5.1", "gpt-5"]
+        fetch: false
+      titleConvo: true
+      titleModel: "openai-codex/gpt-5.4"
+      modelDisplayLabel: "Street Bot"
+      dropParams:
+        - stop
+        - user
+        - frequency_penalty
+        - presence_penalty
+        - top_p
+
+modelSpecs:
+  enforce: false
+  prioritize: true
+  list:
+    # ─── Executive Team ───────────────────────────────────────────────
+    - name: "agent/ceo"
+      label: "CEO"
+      description: "Central coordinator and entry point. Delegates tasks to the right team manager and handles cross-team coordination."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-tie.svg"
+      default: true
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/ceo"
+      spec:
+        name: "agent/ceo"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/ceo"
+
+    - name: "agent/executive_memory"
+      label: "Executive Memory"
+      description: "Apex memory node — aggregates insights from all departments into organizational knowledge."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/brain.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/executive_memory"
+      spec:
+        name: "agent/executive_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/executive_memory"
+
+    - name: "agent/security_compliance"
+      label: "Security & Compliance"
+      description: "Organization-wide security oversight, compliance monitoring, and risk assessment."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/shield-check.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/security_compliance"
+      spec:
+        name: "agent/security_compliance"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/security_compliance"
+
+    # ─── Communication Team ───────────────────────────────────────────
+    - name: "agent/communication_manager"
+      label: "Communication Manager"
+      description: "Coordinates all cross-channel communication — email, Slack, WhatsApp, calendar."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/message-text.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/communication_manager"
+      spec:
+        name: "agent/communication_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/communication_manager"
+
+    - name: "agent/email_agent"
+      label: "Email Agent"
+      description: "Manages email via Gmail — drafts, sends, reads, and organizes messages."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/email.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/email_agent"
+      spec:
+        name: "agent/email_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/email_agent"
+
+    - name: "agent/slack_agent"
+      label: "Slack Agent"
+      description: "Monitors Slack channels, sends messages, handles notifications and workflows."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/slack.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/slack_agent"
+      spec:
+        name: "agent/slack_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/slack_agent"
+
+    - name: "agent/whatsapp_agent"
+      label: "WhatsApp Agent"
+      description: "Handles WhatsApp personal and group conversations via Whapi."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/whatsapp.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/whatsapp_agent"
+      spec:
+        name: "agent/whatsapp_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/whatsapp_agent"
+
+    - name: "agent/calendar_agent"
+      label: "Calendar Agent"
+      description: "Manages scheduling, availability, meetings, and deadline tracking."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/calendar-clock.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/calendar_agent"
+      spec:
+        name: "agent/calendar_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/calendar_agent"
+
+    - name: "agent/communication_memory"
+      label: "Communication Memory"
+      description: "Background worker capturing conversation data and communication patterns."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/communication_memory"
+      spec:
+        name: "agent/communication_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/communication_memory"
+
+    # ─── Content Team ─────────────────────────────────────────────────
+    - name: "agent/content_manager"
+      label: "Content Manager"
+      description: "Street Voices daily news pipeline — orchestrates research and writing of local, national, and international articles on homelessness, housing, and social justice."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/newspaper-variant-multiple.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/content_manager"
+      spec:
+        name: "agent/content_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/content_manager"
+
+    - name: "agent/article_researcher"
+      label: "Article Researcher"
+      description: "Researches breaking news on homelessness, housing policy, harm reduction, and community advocacy for Street Voices articles."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/book-search.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/article_researcher"
+      spec:
+        name: "agent/article_researcher"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/article_researcher"
+
+    - name: "agent/article_writer"
+      label: "Article Writer"
+      description: "Writes Street Voices articles with empathetic, advocacy-oriented voice and generates branded cover images."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/typewriter.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/article_writer"
+      spec:
+        name: "agent/article_writer"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/article_writer"
+
+    - name: "agent/social_media_manager"
+      label: "Social Media Manager"
+      description: "Creates posts, schedules content, monitors engagement across platforms."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/share-variant.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/social_media_manager"
+      spec:
+        name: "agent/social_media_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/social_media_manager"
+
+    - name: "agent/content_memory"
+      label: "Content Memory"
+      description: "Background worker capturing content lifecycle and performance metrics."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/content_memory"
+      spec:
+        name: "agent/content_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/content_memory"
+
+    # ─── Development Team ─────────────────────────────────────────────
+    - name: "agent/development_manager"
+      label: "Development Manager"
+      description: "Coordinates backend, frontend, database, and DevOps work across projects."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces-box.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/development_manager"
+      spec:
+        name: "agent/development_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/development_manager"
+
+    - name: "agent/backend_developer"
+      label: "Backend Developer"
+      description: "Server-side code, APIs, services, and business logic implementation."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/server.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/backend_developer"
+      spec:
+        name: "agent/backend_developer"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/backend_developer"
+
+    - name: "agent/frontend_developer"
+      label: "Frontend Developer"
+      description: "Client-side UI, interactive experiences, and frontend architecture."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/monitor-dashboard.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/frontend_developer"
+      spec:
+        name: "agent/frontend_developer"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/frontend_developer"
+
+    - name: "agent/database_manager"
+      label: "Database Manager"
+      description: "Schema design, migrations, query optimization, and data integrity."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/database_manager"
+      spec:
+        name: "agent/database_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/database_manager"
+
+    - name: "agent/devops"
+      label: "DevOps Engineer"
+      description: "Infrastructure, CI/CD, deployment, monitoring, and system reliability."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cloud-cog.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/devops"
+      spec:
+        name: "agent/devops"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/devops"
+
+    - name: "agent/development_memory"
+      label: "Development Memory"
+      description: "Background worker tracking architecture decisions, bugs, and deployments."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/development_memory"
+      spec:
+        name: "agent/development_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/development_memory"
+
+    # ─── Finance Team ─────────────────────────────────────────────────
+    - name: "agent/finance_manager"
+      label: "Finance Manager"
+      description: "Oversees bookkeeping, crypto, reporting, and financial operations."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/finance.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/finance_manager"
+      spec:
+        name: "agent/finance_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/finance_manager"
+
+    - name: "agent/accounting_agent"
+      label: "Accounting Agent"
+      description: "Manages bookkeeping, invoicing, and tax preparation."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/calculator-variant.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/accounting_agent"
+      spec:
+        name: "agent/accounting_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/accounting_agent"
+
+    - name: "agent/crypto_agent"
+      label: "Crypto Agent"
+      description: "Portfolio tracking, wallet monitoring, DeFi operations, and crypto tax."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/bitcoin.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/crypto_agent"
+      spec:
+        name: "agent/crypto_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/crypto_agent"
+
+    - name: "agent/finance_memory"
+      label: "Finance Memory"
+      description: "Background worker capturing financial events and transaction histories."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/finance_memory"
+      spec:
+        name: "agent/finance_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/finance_memory"
+
+    # ─── Grant Writing Team ───────────────────────────────────────────
+    - name: "agent/grant_manager"
+      label: "Grant Manager"
+      description: "Oversees grant lifecycle — opportunity identification, applications, and funder relations."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/file-document-edit.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/grant_manager"
+      spec:
+        name: "agent/grant_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/grant_manager"
+
+    - name: "agent/grant_writer"
+      label: "Grant Writer"
+      description: "Crafts compelling grant narratives and proposals."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/text-box-edit.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/grant_writer"
+      spec:
+        name: "agent/grant_writer"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/grant_writer"
+
+    - name: "agent/budget_manager"
+      label: "Budget Manager"
+      description: "Builds and tracks grant budgets with detailed financial planning."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cash-multiple.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/budget_manager"
+      spec:
+        name: "agent/budget_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/budget_manager"
+
+    - name: "agent/project_manager"
+      label: "Project Manager"
+      description: "Creates project plans, tracks milestones and deliverables for grants."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/clipboard-check.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/project_manager"
+      spec:
+        name: "agent/project_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/project_manager"
+
+    - name: "agent/grant_memory"
+      label: "Grant Memory"
+      description: "Background worker indexing grant activity and institutional knowledge."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/grant_memory"
+      spec:
+        name: "agent/grant_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/grant_memory"
+
+    # ─── Research Team ────────────────────────────────────────────────
+    - name: "agent/research_manager"
+      label: "Research Manager"
+      description: "Coordinates research operations and delivers intelligence briefs."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/magnify-scan.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/research_manager"
+      spec:
+        name: "agent/research_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/research_manager"
+
+    - name: "agent/media_platform_researcher"
+      label: "Media Platform Researcher"
+      description: "Analyzes social media platforms, algorithms, and engagement strategies."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cellphone-link.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/media_platform_researcher"
+      spec:
+        name: "agent/media_platform_researcher"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/media_platform_researcher"
+
+    - name: "agent/media_program_researcher"
+      label: "Media Program Researcher"
+      description: "Researches grants, fellowships, and residencies in the media space."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/television-classic.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/media_program_researcher"
+      spec:
+        name: "agent/media_program_researcher"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/media_program_researcher"
+
+    - name: "agent/street_bot_researcher"
+      label: "Street Bot Researcher"
+      description: "Gathers hyperlocal intelligence and community data for Street Bot Pro."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/map-marker-radius.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/street_bot_researcher"
+      spec:
+        name: "agent/street_bot_researcher"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/street_bot_researcher"
+
+    - name: "agent/research_memory"
+      label: "Research Memory"
+      description: "Background layer indexing research and tracking source reliability."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/research_memory"
+      spec:
+        name: "agent/research_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/research_memory"
+
+    # ─── Scraping Team ────────────────────────────────────────────────
+    - name: "agent/scraping_manager"
+      label: "Scraping Manager"
+      description: "Coordinates web scraping operations with ethical and rate-limit awareness."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/spider-web.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/scraping_manager"
+      spec:
+        name: "agent/scraping_manager"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/scraping_manager"
+
+    - name: "agent/scraping_agent"
+      label: "Scraping Agent"
+      description: "Executes web scraping tasks, data extraction, and content parsing."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/web.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/scraping_agent"
+      spec:
+        name: "agent/scraping_agent"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/scraping_agent"
+
+    - name: "agent/scraper_memory"
+      label: "Scraper Memory"
+      description: "Tracks site structures, extraction patterns, and scraping job history."
+      iconURL: "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/database-sync.svg"
+      preset:
+        endpoint: "Street Bot"
+        model: "agent/scraper_memory"
+      spec:
+        name: "agent/scraper_memory"
+        preset:
+          endpoint: "Street Bot"
+          model: "agent/scraper_memory"

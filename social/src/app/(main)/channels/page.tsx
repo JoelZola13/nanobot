@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "@/components/layout/TopBar";
 import { Hash, Plus, Users } from "lucide-react";
+import { apiUrl } from "@/lib/apiUrl";
 
 export default function ChannelsPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function ChannelsPage() {
     if (!name.trim() || creating) return;
     setCreating(true);
     try {
-      const res = await fetch("/api/channels", {
+      const res = await fetch(apiUrl("/api/channels"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description }),

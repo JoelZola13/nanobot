@@ -107,9 +107,8 @@ class GatewayServer:
         # Add gateway.routes to the Starlette app routes list
     """
 
-    def __init__(self, agent=None, auth: GatewayAuth | None = None, config=None, harness=None):
+    def __init__(self, agent=None, auth: GatewayAuth | None = None, config=None):
         self.agent = agent  # AgentLoop instance
-        self.harness = harness  # DeepAgentHarness instance (optional)
         self.auth = auth or GatewayAuth()
         self.config = config
         self._connections: dict[str, GatewayConnection] = {}
@@ -250,28 +249,14 @@ class GatewayServer:
         conn.role = frame.role.value
         logger.info(f"WS {conn.id} authenticated as {conn.role}")
 
-        # Build capability lists including harness info
-        methods = list(METHODS)
-        events = list(EVENTS)
-        from nanobot import api_server
-        harness = getattr(api_server, '_harness', None)
-        if harness and harness.is_initialized:
-            methods.append("harness.status")
-            events.append("harness.ready")
-
         await conn.send_frame(HelloOkFrame(
             id=frame.id,
-            methods=methods,
-            events=events,
+            methods=METHODS,
+            events=EVENTS,
         ))
 
     async def _handle_chat_send(self, conn: GatewayConnection, frame: ChatSendFrame) -> None:
-        # Check if either agent or harness is available
-        from nanobot import api_server
-        harness = getattr(api_server, '_harness', None)
-        has_engine = self.agent is not None or (harness is not None and harness.is_initialized)
-
-        if not has_engine:
+        if not self.agent:
             await conn.send_frame(ErrorFrame(
                 id=frame.id,
                 code="no_agent",
@@ -286,46 +271,9 @@ class GatewayServer:
             await self._handle_chat_blocking(conn, frame)
 
     async def _handle_chat_stream(self, conn: GatewayConnection, frame: ChatSendFrame) -> None:
-        """Process chat with streaming — uses deepagents harness if available."""
+        """Process chat with token-by-token streaming."""
         try:
-            # Prefer deepagents harness if available
-            harness = self.harness
-            if harness is None:
-                # Try to get it from api_server global
-                from nanobot import api_server
-                harness = getattr(api_server, '_harness', None)
-
-            if harness is not None and harness.is_initialized:
-                messages = [{"role": "user", "content": frame.content}]
-                full_response = ""
-                async for chunk in harness.run_stream(
-                    agent_name="ceo",
-                    messages=messages,
-                    session_id=frame.session_key,
-                ):
-                    # Extract content from SSE chunk
-                    delta = ""
-                    if isinstance(chunk, dict):
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {}).get("content", "")
-                    if delta:
-                        full_response += delta
-                        await conn.send_frame(ChatTokenFrame(
-                            id=frame.id,
-                            session_key=frame.session_key,
-                            token=delta,
-                        ))
-
-                await conn.send_frame(ChatResponseFrame(
-                    id=frame.id,
-                    session_key=frame.session_key,
-                    content=full_response,
-                    model="deepagents",
-                ))
-                return
-
-            # Fallback to direct agent loop
+            # Use the agent's process_direct method for simplicity
             response = await self.agent.process_direct(
                 content=frame.content,
                 session_key=frame.session_key,
@@ -349,31 +297,8 @@ class GatewayServer:
             ))
 
     async def _handle_chat_blocking(self, conn: GatewayConnection, frame: ChatSendFrame) -> None:
-        """Process chat and return complete response — uses deepagents harness if available."""
+        """Process chat and return complete response."""
         try:
-            # Prefer deepagents harness
-            harness = self.harness
-            if harness is None:
-                from nanobot import api_server
-                harness = getattr(api_server, '_harness', None)
-
-            if harness is not None and harness.is_initialized:
-                messages = [{"role": "user", "content": frame.content}]
-                result = await harness.run(
-                    agent_name="ceo",
-                    messages=messages,
-                    session_id=frame.session_key,
-                )
-                content = result.get("content", "") if isinstance(result, dict) else str(result)
-                await conn.send_frame(ChatResponseFrame(
-                    id=frame.id,
-                    session_key=frame.session_key,
-                    content=content,
-                    model="deepagents",
-                ))
-                return
-
-            # Fallback
             response = await self.agent.process_direct(
                 content=frame.content,
                 session_key=frame.session_key,
@@ -458,43 +383,6 @@ class GatewayServer:
                 },
             }
 
-        # Include harness/orchestrator info
-        from nanobot import api_server
-        harness = getattr(api_server, '_harness', None)
-        orchestrator = getattr(api_server, '_orchestrator', None)
-        if harness and harness.is_initialized:
-            safe_config["harness"] = {
-                "engine": "deepagents",
-                "agents": harness.agent_count,
-                "universal_memory": True,
-            }
-        if orchestrator:
-            try:
-                safe_config["orchestrator"] = {
-                    "agents": len(orchestrator.registry.agent_names),
-                    "teams": list(orchestrator.registry.get_teams()),
-                }
-            except Exception:
-                pass
-
-        # Include enabled channels
-        if self.config and hasattr(self.config, 'channels'):
-            channels = {}
-            for name in ('email', 'slack', 'whatsapp'):
-                ch = getattr(self.config.channels, name, None)
-                if ch and getattr(ch, 'enabled', False):
-                    channels[name] = {"enabled": True}
-            if channels:
-                safe_config["channels"] = channels
-
-        # Include MCP servers
-        if self.config and hasattr(self.config, 'tools'):
-            mcp = getattr(self.config.tools, 'mcp_servers', None)
-            if mcp:
-                safe_config.setdefault("tools", {})["mcpServers"] = {
-                    name: True for name in mcp
-                }
-
         await conn.send_frame(ConfigValueFrame(
             id=frame.id,
             config=safe_config,
@@ -540,30 +428,10 @@ class GatewayServer:
 
     async def _handle_session_list(self, conn: GatewayConnection, frame: SessionListFrame) -> None:
         sessions: list[dict[str, Any]] = []
-
-        # Pull from agent loop's session manager
         if self.agent and hasattr(self.agent, "session_manager") and self.agent.session_manager:
             try:
                 session_keys = self.agent.session_manager.list_sessions()
                 sessions = [{"key": k} for k in session_keys]
-            except Exception:
-                pass
-
-        # Also pull from deepagents harness memory
-        from nanobot import api_server
-        harness = getattr(api_server, '_harness', None)
-        if harness and harness.is_initialized and hasattr(harness, 'memory'):
-            try:
-                recent = harness.memory._get_recent_sessions(limit=20, agent_name=None)
-                for s in recent:
-                    key = s.get("session_id", s.get("id", ""))
-                    if key and not any(existing.get("key") == key for existing in sessions):
-                        sessions.append({
-                            "key": key,
-                            "agent": s.get("agent", ""),
-                            "summary": s.get("summary", ""),
-                            "source": "harness",
-                        })
             except Exception:
                 pass
 

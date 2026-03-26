@@ -95,8 +95,14 @@ class ImageSearchTool(Tool):
                 lines.append(f"   Dimensions: {width}x{height}")
             if img_url:
                 lines.append(f"   Image URL: {img_url}")
+                # Include markdown image so agent can embed it inline
+                lines.append(f"   Preview: ![{title}]({img_url})")
             if source_url and source_url != img_url:
                 lines.append(f"   Page URL: {source_url}")
             lines.append("")
 
+        lines.append(
+            "TIP: To show any image inline in the conversation, include it as "
+            "markdown: ![description](image_url)"
+        )
         return "\n".join(lines)

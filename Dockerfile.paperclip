@@ -1,0 +1,22 @@
+FROM node:20-bookworm-slim
+
+RUN npm install -g paperclipai@latest
+
+# Create non-root user for Postgres compatibility
+RUN groupadd -r paperclip && useradd -r -g paperclip -m paperclip
+
+# Pre-create all directories paperclip needs with correct ownership
+RUN mkdir -p /home/paperclip/.paperclip/instances/default/db \
+             /home/paperclip/.paperclip/instances/default/data/backups \
+             /home/paperclip/.paperclip/instances/default/data/storage \
+             /home/paperclip/.paperclip/instances/default/logs \
+             /home/paperclip/.paperclip/instances/default/secrets && \
+    chown -R paperclip:paperclip /home/paperclip/.paperclip
+
+WORKDIR /home/paperclip
+
+USER paperclip
+
+EXPOSE 3100
+
+CMD ["paperclipai", "run"]

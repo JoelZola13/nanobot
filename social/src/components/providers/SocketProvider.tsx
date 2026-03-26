@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
 import { getSocket, disconnectSocket } from "@/lib/socket";
 import { usePresenceStore } from "@/stores/presenceStore";
@@ -30,6 +30,7 @@ export default function SocketProvider({
   userName?: string;
   children: React.ReactNode;
 }) {
+  const [socketState, setSocketState] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const setPresence = usePresenceStore((s) => s.setStatus);
   const setAllPresence = usePresenceStore((s) => s.setAll);
@@ -39,6 +40,7 @@ export default function SocketProvider({
   useEffect(() => {
     const socket = getSocket(userId);
     socketRef.current = socket;
+    setSocketState(socket);
 
     // Pass userName in auth for call signaling
     if (userName) {
@@ -160,7 +162,7 @@ export default function SocketProvider({
   }, [userId]);
 
   return (
-    <SocketContext.Provider value={socketRef.current}>
+    <SocketContext.Provider value={socketState}>
       {children}
     </SocketContext.Provider>
   );
