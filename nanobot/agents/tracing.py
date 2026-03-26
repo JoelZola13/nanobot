@@ -34,29 +34,69 @@ from typing import Any
 
 from loguru import logger
 
-# Agents SDK tracing imports
-from agents.tracing import (
-    TracingProcessor,
-    add_trace_processor,
-    set_trace_processors,
-    trace as sdk_trace,
-    agent_span as sdk_agent_span,
-    function_span as sdk_function_span,
-    generation_span as sdk_generation_span,
-    handoff_span as sdk_handoff_span,
-    custom_span as sdk_custom_span,
-    get_current_trace as sdk_get_current_trace,
-    get_current_span as sdk_get_current_span,
-)
-from agents.tracing import (
-    Trace as SDKTrace,
-    Span as SDKSpan,
-    AgentSpanData,
-    FunctionSpanData,
-    GenerationSpanData,
-    HandoffSpanData,
-    CustomSpanData,
-)
+# Agents SDK tracing imports — optional dependency
+try:
+    from agents.tracing import (
+        TracingProcessor,
+        add_trace_processor,
+        set_trace_processors,
+        trace as sdk_trace,
+        agent_span as sdk_agent_span,
+        function_span as sdk_function_span,
+        generation_span as sdk_generation_span,
+        handoff_span as sdk_handoff_span,
+        custom_span as sdk_custom_span,
+        get_current_trace as sdk_get_current_trace,
+        get_current_span as sdk_get_current_span,
+    )
+    from agents.tracing import (
+        Trace as SDKTrace,
+        Span as SDKSpan,
+        AgentSpanData,
+        FunctionSpanData,
+        GenerationSpanData,
+        HandoffSpanData,
+        CustomSpanData,
+    )
+    _HAS_AGENTS_SDK = True
+except ImportError:
+    logger.debug("OpenAI Agents SDK not installed — tracing stubs active")
+    _HAS_AGENTS_SDK = False
+
+    # ── Stub types so the rest of the module works without the SDK ──
+    class TracingProcessor:  # type: ignore[no-redef]
+        def on_trace_start(self, trace: Any) -> None: ...
+        def on_trace_end(self, trace: Any) -> None: ...
+        def on_span_start(self, span: Any) -> None: ...
+        def on_span_end(self, span: Any) -> None: ...
+        def shutdown(self) -> None: ...
+        def force_flush(self) -> None: ...
+
+    def add_trace_processor(p: Any) -> None: pass  # noqa: E704
+    def set_trace_processors(p: Any) -> None: pass  # noqa: E704
+
+    class _NullCtx:
+        """No-op context manager returned by stub span/trace helpers."""
+        def __enter__(self) -> "_NullCtx": return self
+        def __exit__(self, *a: Any) -> None: pass
+        def set_error(self, *a: Any) -> None: pass
+
+    def sdk_trace(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_agent_span(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_function_span(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_generation_span(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_handoff_span(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_custom_span(**kw: Any) -> _NullCtx: return _NullCtx()  # noqa: E704
+    def sdk_get_current_trace() -> None: return None  # noqa: E704
+    def sdk_get_current_span() -> None: return None  # noqa: E704
+
+    SDKTrace = Any  # type: ignore[assignment,misc]
+    SDKSpan = Any  # type: ignore[assignment,misc]
+    AgentSpanData = None  # type: ignore[assignment,misc]
+    FunctionSpanData = None  # type: ignore[assignment,misc]
+    GenerationSpanData = None  # type: ignore[assignment,misc]
+    HandoffSpanData = None  # type: ignore[assignment,misc]
+    CustomSpanData = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +215,11 @@ class AgentSpan:
         if self._sdk_span is not None:
             try:
                 if error:
-                    from agents.tracing import SpanError
-                    self._sdk_span.set_error(SpanError(message=error))
+                    if _HAS_AGENTS_SDK:
+                        from agents.tracing import SpanError
+                        self._sdk_span.set_error(SpanError(message=error))
+                    else:
+                        self._sdk_span.set_error(error)
                 self._sdk_span.__exit__(None, None, None)
             except Exception:
                 pass  # SDK span already closed or unavailable
