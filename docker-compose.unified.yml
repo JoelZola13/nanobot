@@ -144,6 +144,9 @@ services:
         source: ./deploy/custom-ui/accounting.js
         target: /app/client/dist/accounting.js
       - type: bind
+        source: ./deploy/custom-ui/images/sidebar-icons/accounting.svg
+        target: /app/client/public/images/sidebar-icons/accounting.svg
+      - type: bind
         source: ./LibreChat/scripts
         target: /app/scripts
       - ./LibreChat/images:/app/client/public/images
