@@ -651,6 +651,13 @@ export default function GalleryPage() {
   // Artworks state
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+
+  // Auto-open submit modal when navigating to /gallery/upload
+  useEffect(() => {
+    if (location.pathname === "/gallery/upload") {
+      setShowSubmitModal(true);
+    }
+  }, [location.pathname]);
   const [artworksLoading, setArtworksLoading] = useState(true);
   const [artworksError, setArtworksError] = useState<string | null>(null);
 
