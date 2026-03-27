@@ -1,0 +1,5 @@
+- generic [ref=e4]:
+  - generic [ref=e5]: Thank you for submitting your organization information. A verification link has been sent your email address. Click the link in the email to verify your account and create a password.
+  - paragraph
+  - link "Return to login screen" [ref=e6] [cursor=pointer]:
+    - /url: /portal

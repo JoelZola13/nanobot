@@ -1,0 +1,36 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - img "NBA Foundation" [ref=e6]
+    - heading "NBA Foundation" [level=1] [ref=e7]
+    - generic [ref=e8]:
+      - text: Login (all fields required)
+      - generic [ref=e9]:
+        - paragraph [ref=e10]:
+          - textbox "Username" [ref=e11]
+        - paragraph [ref=e12]:
+          - textbox "Password" [ref=e13]
+        - paragraph [ref=e14]:
+          - button "Sign in" [ref=e15] [cursor=pointer]
+        - link "Forgot Password?" [ref=e17] [cursor=pointer]:
+          - /url: /forgot_password
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - heading "New to the Grants Portal?" [level=3] [ref=e20]:
+          - strong [ref=e21]: New to the Grants Portal?
+        - heading "Create Your Organizational Profile" [level=3] [ref=e22]
+        - paragraph [ref=e23]: In order to be considered for funding, the first step is for you to introduce yourself and tell us about your organization. Please click on the "Create an account Now" button below to start. You will not be able to edit your profile after submission, so please ensure you have entered accurate information (including email address) when completing the registration form.
+        - paragraph [ref=e24]:
+          - text: You will then receive an email notification from the Foundation with a link to verify your account, which will give you access to the portal and our application forms.
+          - strong [ref=e25]: Please click this link within 24 hours
+          - text: or it will expire and you'll need to reach out to us to activate your account. Should your funding application be successful, this portal will give you access to our reporting templates.
+      - paragraph
+      - paragraph [ref=e27]:
+        - button "Create an account now" [ref=e28] [cursor=pointer]
+  - generic [ref=e29]:
+    - paragraph [ref=e30]:
+      - img "Powered by Fluxx" [ref=e31]
+    - generic [ref=e32]:
+      - link "Privacy Policy" [ref=e34] [cursor=pointer]:
+        - /url: https://www.fluxx.io/privacy-policy
+      - link "Accessibility" [ref=e36] [cursor=pointer]:
+        - /url: /accessibility_statement.html

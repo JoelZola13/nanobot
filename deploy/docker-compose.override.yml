@@ -32,6 +32,7 @@ services:
       - nanobot-api
       - paperclip
       - sv-social
+      - casdoor
     restart: always
 
   mongodb:
@@ -144,6 +145,42 @@ services:
       - paperclip
     restart: always
 
+  # ── Casdoor (SSO for Social App) ─────────────────────────────
+  casdoor:
+    container_name: nanobot-casdoor
+    image: casbin/casdoor
+    ports:
+      - "8380:8000"
+    environment:
+      RUNNING_IN_DOCKER: "true"
+    volumes:
+      - type: bind
+        source: ../LobeHub/casdoor/init_data.json
+        target: /init_data.json
+      - type: bind
+        source: ../deploy/casdoor-app.conf
+        target: /conf/app.conf
+    depends_on:
+      casdoor-postgres:
+        condition: service_healthy
+    restart: always
+
+  casdoor-postgres:
+    container_name: nanobot-casdoor-postgres
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=lobehub
+      - POSTGRES_PASSWORD=lobehub_password
+      - POSTGRES_DB=casdoor
+    volumes:
+      - casdoor-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U lobehub -d casdoor
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: always
+
   # ── SV Social (Street Voices Social Pages) ─────────────────────
   sv-social:
     container_name: nanobot-social
@@ -168,6 +205,8 @@ services:
     depends_on:
       social-postgres:
         condition: service_healthy
+      casdoor:
+        condition: service_started
     restart: always
 
   social-postgres:
@@ -283,6 +322,7 @@ services:
     restart: always
 
 volumes:
+  casdoor-postgres-data:
   social-postgres-data:
   postiz-postgres-data:
   postiz-redis-data:

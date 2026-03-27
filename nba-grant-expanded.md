@@ -1,0 +1,532 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - link "Skip to main content" [ref=e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - navigation "Primary" [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - link "NBA Foundation" [ref=e8] [cursor=pointer]:
+            - /url: /
+            - img "NBA Foundation" [ref=e9]
+          - button "Toggle menu" [ref=e10] [cursor=pointer]
+        - generic:
+          - link "Home" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - button "About Us" [ref=e16] [cursor=pointer]:
+            - generic [ref=e17]: About Us
+            - img [ref=e19]
+          - link "Grant Information" [ref=e21] [cursor=pointer]:
+            - /url: /grant-information/
+          - generic [ref=e22]:
+            - button "Signature Programs" [expanded] [ref=e23] [cursor=pointer]:
+              - generic [ref=e24]: Signature Programs
+              - img [ref=e26]
+            - navigation [ref=e469]:
+              - link "All-Star Pitch Competition" [ref=e470] [cursor=pointer]:
+                - /url: /all-star-pitch-competition/
+              - link "HBCU Fellowship" [ref=e471] [cursor=pointer]:
+                - /url: /hbcu-fellowship/
+              - link "Tech Challenge" [ref=e472] [cursor=pointer]:
+                - /url: /tech-challenge/
+          - link "Nonprofit Partners" [ref=e28] [cursor=pointer]:
+            - /url: /nonprofit-partners/
+          - link "News" [ref=e29] [cursor=pointer]:
+            - /url: /news/
+          - search "site search" [ref=e32]:
+            - searchbox "Search…" [ref=e33]
+            - button "Submit search" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+    - main [ref=e37]:
+      - generic [ref=e40]:
+        - heading "Grant Information" [level=1] [ref=e41]
+        - generic [ref=e42]:
+          - paragraph [ref=e43]: The NBA Foundation invests in making grants to local and national organizations serving under-resourced youth ages 14-24, that promote school-to-career employment opportunities, including job readiness, skill training, job placement, and career advancement.
+          - paragraph [ref=e44]: The Spring grant application is now open through March 31st
+        - link "Apply Today" [ref=e46] [cursor=pointer]:
+          - /url: https://nbafoundation.fluxx.io/user_sessions/new
+          - generic [ref=e47]: Apply Today
+      - generic [ref=e53]:
+        - paragraph [ref=e55]: Making an Impact
+        - heading "Grant Overview" [level=2] [ref=e56]
+        - generic [ref=e57]:
+          - paragraph [ref=e58]: NBA Foundation grants are designed to spark meaningful change by investing in nonprofit partners that support workforce development and career readiness. These grants fund defined projects that equip young people with the tools, training, and opportunities they need to thrive professionally.
+          - paragraph [ref=e59]: At the heart of our mission is a commitment to economic empowerment and social mobility. By addressing employment disparities and expanding access to career pathways, the NBA Foundation is helping young people in NBA team markets build brighter futures.
+      - generic [ref=e61]:
+        - generic [ref=e63]:
+          - paragraph [ref=e64]: Get Involved
+          - heading "The Process" [level=2] [ref=e65]
+          - paragraph [ref=e67]: Discover how your organization can partner with the NBA Foundation to empower youth, drive career readiness, and create lasting change in NBA team markets.
+          - link "Apply Today" [ref=e69] [cursor=pointer]:
+            - /url: https://nbafoundation.fluxx.io/user_sessions/new
+            - generic [ref=e70]: Apply Today
+        - generic [ref=e72]:
+          - generic [ref=e74]:
+            - generic [ref=e77]: "1"
+            - generic [ref=e83]:
+              - heading "Step 1" [level=3] [ref=e84]
+              - paragraph [ref=e85]: Create an account on the grant application portal, FLUXX, using the link above.
+          - generic [ref=e86]:
+            - generic [ref=e89]: "2"
+            - generic [ref=e94]:
+              - heading "Step 2" [level=3] [ref=e95]
+              - paragraph [ref=e96]: Once your organization is registered, you will receive a confirmation email with credentials for login. We recommend you click this link within 48 hours, as it will expire.
+          - generic [ref=e97]:
+            - generic [ref=e100]: "3"
+            - generic [ref=e106]:
+              - heading "Step 3" [level=3] [ref=e107]
+              - paragraph [ref=e108]: Complete the grant application within the portal and provide a Form 990, current fiscal year organizational budget, project budget, and board list with your application.
+      - generic [ref=e114]:
+        - paragraph [ref=e115]: Lead the Change. Apply Today
+        - heading "Grant Application- Apply Here" [level=2] [ref=e116]
+        - paragraph [ref=e118]: If your organization is committed to uplifting young people through career readiness, workforce development, or economic empowerment, the NBA Foundation wants to support your mission. Our grants are designed to help nonprofits expand their reach, deepen their impact, and create lasting opportunities for youth in NBA team markets. By applying, you’ll gain access to resources, visibility, and a powerful network dedicated to driving change where it matters most.
+        - link "Fluxx Application Portal" [ref=e120] [cursor=pointer]:
+          - /url: https://nbafoundation.fluxx.io/user_sessions/new
+          - generic [ref=e121]: Fluxx Application Portal
+      - generic [ref=e124]:
+        - generic [ref=e125]:
+          - generic [ref=e127]:
+            - paragraph [ref=e128]: Purpose-Driven Partnerships
+            - heading "Support That Sparks Change" [level=2] [ref=e129]
+            - paragraph [ref=e131]: Discover what makes being part of the NBA Foundation family truly unique—from transformative opportunities to a shared commitment to uplifting communities and creating lasting impact.
+          - generic [ref=e132]:
+            - generic [ref=e134]:
+              - heading "Capital" [level=3] [ref=e135]
+              - paragraph [ref=e137]: The NBA Foundation manages and distributes critical resources to its nonprofit partners, supporting their efforts to create economic opportunities for underserved youth. This also helps grant partners secure additional funding and achieve long-term sustainability.
+            - generic [ref=e139]:
+              - heading "Connection" [level=3] [ref=e140]
+              - paragraph [ref=e142]: The NBA Foundation connects nonprofits and NBA teams. It facilitates the sharing of best practices by, hosting quarterly “learning community” meetings; cultivating relationships through in-person and virtual meetings and site visits; and developing collaborative opportunities at NBA Tent-Pole Events.
+            - generic [ref=e144]:
+              - heading "Content" [level=3] [ref=e145]
+              - paragraph [ref=e147]: The NBA Foundation leverages its brand to amplify the visibility of its grant partners, featuring them on the NBA App, NBA.com, and social media to extend their global reach.
+        - link "Discover More" [ref=e149] [cursor=pointer]:
+          - /url: https://nbafoundation.nba.com/news/
+          - generic [ref=e150]: Discover More
+      - generic [ref=e154]:
+        - img "CTA image" [ref=e156]
+        - generic [ref=e157]:
+          - heading "Current Nonprofit Partners" [level=2] [ref=e158]
+          - paragraph [ref=e160]: Take a look at the nonprofit partners making a real difference in the lives of young people across NBA team markets. Their work shows what’s possible when mission-driven organizations receive the right support. Your organization could be featured here next—if you’re focused on empowering youth, explore how an NBA Foundation grant can help bring your vision to life.
+          - link "See all partners" [ref=e162] [cursor=pointer]:
+            - /url: https://nbafoundation.nba.com/nonprofit-partners/
+            - generic [ref=e163]: See all partners
+      - generic [ref=e167]:
+        - img "document with magnifying glass icon" [ref=e169]
+        - heading "FAQs" [level=2] [ref=e170]
+        - paragraph [ref=e172]:
+          - generic [ref=e173]:
+            - text: Check out our list of frequently asked questions for additional information. For questions not listed here, contact us at
+            - link "grants@nba.com" [ref=e174] [cursor=pointer]:
+              - /url: mailto:grants@nba.com
+            - text: .
+      - generic [ref=e176]:
+        - generic [ref=e177]:
+          - heading "Eligibility Criteria" [level=2] [ref=e178]
+          - link "Contact us" [ref=e180] [cursor=pointer]:
+            - /url: mailto:grants@Nba.com
+            - generic [ref=e181]: Contact us
+        - generic [ref=e182]:
+          - heading "What are the grant requirements for an organization to be considered for funding?" [level=3] [ref=e184]:
+            - button "What are the grant requirements for an organization to be considered for funding?" [ref=e185]:
+              - text: What are the grant requirements for an organization to be considered for funding?
+              - img [ref=e186]
+          - heading "When can eligible nonprofits apply for funding?" [level=3] [ref=e189]:
+            - button "When can eligible nonprofits apply for funding?" [ref=e190]:
+              - text: When can eligible nonprofits apply for funding?
+              - img [ref=e191]
+          - heading "How does the NBA Foundation define under-resourced youth?" [level=3] [ref=e194]:
+            - button "How does the NBA Foundation define under-resourced youth?" [ref=e195]:
+              - text: How does the NBA Foundation define under-resourced youth?
+              - img [ref=e196]
+          - heading "What qualifies my application to be considered National vs Local?" [level=3] [ref=e199]:
+            - button "What qualifies my application to be considered National vs Local?" [ref=e200]:
+              - text: What qualifies my application to be considered National vs Local?
+              - img [ref=e201]
+          - heading "If our organization supports youth and individuals outside of the designated age range (for example ages 10-18 or 21-35), are we still eligible to apply for funding?" [level=3] [ref=e204]:
+            - button "If our organization supports youth and individuals outside of the designated age range (for example ages 10-18 or 21-35), are we still eligible to apply for funding?" [ref=e205]:
+              - text: If our organization supports youth and individuals outside of the designated age range (for example ages 10-18 or 21-35), are we still eligible to apply for funding?
+              - img [ref=e206]
+          - heading "How do I apply for a grant at the NBA Foundation?" [level=3] [ref=e209]:
+            - button "How do I apply for a grant at the NBA Foundation?" [ref=e210]:
+              - text: How do I apply for a grant at the NBA Foundation?
+              - img [ref=e211]
+          - heading "My organization does not have a 501(c)(3) status and we plan to apply/applied for status already." [level=3] [ref=e214]:
+            - button "My organization does not have a 501(c)(3) status and we plan to apply/applied for status already." [ref=e215]:
+              - text: My organization does not have a 501(c)(3) status and we plan to apply/applied for status already.
+              - img [ref=e216]
+          - heading "My organization is partnered with a fiscal sponsor. Do I need to upload the fiscal sponsor’s organizational budget and IRS Form 990, 990-EZ, 990-PF, or Canadian T3010?" [level=3] [ref=e219]:
+            - button "My organization is partnered with a fiscal sponsor. Do I need to upload the fiscal sponsor’s organizational budget and IRS Form 990, 990-EZ, 990-PF, or Canadian T3010?" [ref=e220]:
+              - text: My organization is partnered with a fiscal sponsor. Do I need to upload the fiscal sponsor’s organizational budget and IRS Form 990, 990-EZ, 990-PF, or Canadian T3010?
+              - img [ref=e221]
+          - heading "My organization is brand new and we have not yet filed an IRS Form 990, 990-EZ, 990-PF, or Canadian T3010." [level=3] [ref=e224]:
+            - button "My organization is brand new and we have not yet filed an IRS Form 990, 990-EZ, 990-PF, or Canadian T3010." [ref=e225]:
+              - text: My organization is brand new and we have not yet filed an IRS Form 990, 990-EZ, 990-PF, or Canadian T3010.
+              - img [ref=e226]
+          - heading "My organization does not have an IRS Form 990, 990-EZ, 990-PF or Canadian T3010 from the most recent fiscal year." [level=3] [ref=e229]:
+            - button "My organization does not have an IRS Form 990, 990-EZ, 990-PF or Canadian T3010 from the most recent fiscal year." [ref=e230]:
+              - text: My organization does not have an IRS Form 990, 990-EZ, 990-PF or Canadian T3010 from the most recent fiscal year.
+              - img [ref=e231]
+          - heading "What documents are required to apply?" [level=3] [ref=e234]:
+            - button "What documents are required to apply?" [ref=e235]:
+              - text: What documents are required to apply?
+              - img [ref=e236]
+          - heading "My organization does not operate or provide programming/services in one of the 28 NBA markets." [level=3] [ref=e239]:
+            - button "My organization does not operate or provide programming/services in one of the 28 NBA markets." [ref=e240]:
+              - text: My organization does not operate or provide programming/services in one of the 28 NBA markets.
+              - img [ref=e241]
+          - heading "We are a Canadian Organization, and our Zip Code was not listed on the excel sheet. Can we apply for the Grant Cycle?" [level=3] [ref=e244]:
+            - button "We are a Canadian Organization, and our Zip Code was not listed on the excel sheet. Can we apply for the Grant Cycle?" [ref=e245]:
+              - text: We are a Canadian Organization, and our Zip Code was not listed on the excel sheet. Can we apply for the Grant Cycle?
+              - img [ref=e246]
+          - heading "My organization is headquartered outside an NBA market but does work with under resourced youth in an NBA market." [level=3] [ref=e249]:
+            - button "My organization is headquartered outside an NBA market but does work with under resourced youth in an NBA market." [ref=e250]:
+              - text: My organization is headquartered outside an NBA market but does work with under resourced youth in an NBA market.
+              - img [ref=e251]
+      - generic [ref=e254]:
+        - heading "Renewed Applicants" [level=2] [ref=e256]
+        - generic [ref=e257]:
+          - heading "I was awarded a grant award from the NBA Foundation and my grant contract is ending. What is the renewal process?" [level=3] [ref=e259]:
+            - button "I was awarded a grant award from the NBA Foundation and my grant contract is ending. What is the renewal process?" [ref=e260]:
+              - text: I was awarded a grant award from the NBA Foundation and my grant contract is ending. What is the renewal process?
+              - img [ref=e261]
+          - heading "Once granted, what do nonprofit organizations receive as partners of the NBA Foundation?" [level=3] [ref=e264]:
+            - button "Once granted, what do nonprofit organizations receive as partners of the NBA Foundation?" [ref=e265]:
+              - text: Once granted, what do nonprofit organizations receive as partners of the NBA Foundation?
+              - img [ref=e266]
+      - generic [ref=e269]:
+        - heading "Organization Requirements" [level=2] [ref=e271]
+        - generic [ref=e272]:
+          - heading "My organization is a local affiliate of a national nonprofit organization. Can our affiliate still apply for funding?" [level=3] [ref=e274]:
+            - button "My organization is a local affiliate of a national nonprofit organization. Can our affiliate still apply for funding?" [ref=e275]:
+              - text: My organization is a local affiliate of a national nonprofit organization. Can our affiliate still apply for funding?
+              - img [ref=e276]
+          - heading "My organization is a national nonprofit with affiliates both inside and outside NBA markets. Can our organization apply for funding?" [level=3] [ref=e279]:
+            - button "My organization is a national nonprofit with affiliates both inside and outside NBA markets. Can our organization apply for funding?" [ref=e280]:
+              - text: My organization is a national nonprofit with affiliates both inside and outside NBA markets. Can our organization apply for funding?
+              - img [ref=e281]
+          - heading "Does the NBA Foundation fund programs and/or organizations based at colleges or universities?" [level=3] [ref=e284]:
+            - button "Does the NBA Foundation fund programs and/or organizations based at colleges or universities?" [ref=e285]:
+              - text: Does the NBA Foundation fund programs and/or organizations based at colleges or universities?
+              - img [ref=e286]
+          - heading "Does the proposed project have to be sports or male-centered?" [level=3] [ref=e289]:
+            - button "Does the proposed project have to be sports or male-centered?" [ref=e290]:
+              - text: Does the proposed project have to be sports or male-centered?
+              - img [ref=e291]
+      - generic [ref=e294]:
+        - heading "Grant Application" [level=2] [ref=e296]
+        - generic [ref=e297]:
+          - heading "What types of funding support do NBA Foundation grants offer?" [level=3] [ref=e299]:
+            - button "What types of funding support do NBA Foundation grants offer?" [ref=e300]:
+              - text: What types of funding support do NBA Foundation grants offer?
+              - img [ref=e301]
+          - heading "Does the NBA Foundation offer multi-year grants?" [level=3] [ref=e304]:
+            - button "Does the NBA Foundation offer multi-year grants?" [ref=e305]:
+              - text: Does the NBA Foundation offer multi-year grants?
+              - img [ref=e306]
+          - heading "Will nonprofits be able to re-apply for grants?" [level=3] [ref=e309]:
+            - button "Will nonprofits be able to re-apply for grants?" [ref=e310]:
+              - text: Will nonprofits be able to re-apply for grants?
+              - img [ref=e311]
+          - heading "How soon will nonprofit organizations hear from the NBA Foundation after submission?" [level=3] [ref=e314]:
+            - button "How soon will nonprofit organizations hear from the NBA Foundation after submission?" [ref=e315]:
+              - text: How soon will nonprofit organizations hear from the NBA Foundation after submission?
+              - img [ref=e316]
+          - heading "Can we contact a member of your staff before applying?" [level=3] [ref=e319]:
+            - button "Can we contact a member of your staff before applying?" [ref=e320]:
+              - text: Can we contact a member of your staff before applying?
+              - img [ref=e321]
+          - heading "How is AI being used in my Grant Cycle Application?" [level=3] [ref=e324]:
+            - button "How is AI being used in my Grant Cycle Application?" [ref=e325]:
+              - text: How is AI being used in my Grant Cycle Application?
+              - img [ref=e326]
+          - heading "My organization uploaded the wrong document (Org or Program Budget, 990N, etc) during the Fall/Spring Cycle. Can I go back to FLUXX and re-upload the correct documentation onto my application before the last day of the grant application deadline submission?" [level=3] [ref=e329]:
+            - button "My organization uploaded the wrong document (Org or Program Budget, 990N, etc) during the Fall/Spring Cycle. Can I go back to FLUXX and re-upload the correct documentation onto my application before the last day of the grant application deadline submission?" [ref=e330]:
+              - text: My organization uploaded the wrong document (Org or Program Budget, 990N, etc) during the Fall/Spring Cycle. Can I go back to FLUXX and re-upload the correct documentation onto my application before the last day of the grant application deadline submission?
+              - img [ref=e331]
+          - heading "My application has been declined by the NBA Foundation. Can I request feedback on my application?" [level=3] [ref=e334]:
+            - button "My application has been declined by the NBA Foundation. Can I request feedback on my application?" [ref=e335]:
+              - text: My application has been declined by the NBA Foundation. Can I request feedback on my application?
+              - img [ref=e336]
+      - generic [ref=e339]:
+        - heading "Team Partnership" [level=2] [ref=e341]
+        - generic [ref=e342]:
+          - heading "Will the local market teams be involved in the grant selection process?" [level=3] [ref=e344]:
+            - button "Will the local market teams be involved in the grant selection process?" [ref=e345]:
+              - text: Will the local market teams be involved in the grant selection process?
+              - img [ref=e346]
+          - heading "Does my organization need a connection to an NBA team?" [level=3] [ref=e349]:
+            - button "Does my organization need a connection to an NBA team?" [ref=e350]:
+              - text: Does my organization need a connection to an NBA team?
+              - img [ref=e351]
+          - heading "My organization does not have a direct connection to an NBA Team, but we do work with a local sports or entertainment agency that donates game tickets to our organization. Does this count as an NBA Team partnership?" [level=3] [ref=e354]:
+            - button "My organization does not have a direct connection to an NBA Team, but we do work with a local sports or entertainment agency that donates game tickets to our organization. Does this count as an NBA Team partnership?" [ref=e355]:
+              - text: My organization does not have a direct connection to an NBA Team, but we do work with a local sports or entertainment agency that donates game tickets to our organization. Does this count as an NBA Team partnership?
+              - img [ref=e356]
+          - heading "Can I ask my local NBA Team for funding if I do not receive funding from the NBA Foundation?" [level=3] [ref=e359]:
+            - button "Can I ask my local NBA Team for funding if I do not receive funding from the NBA Foundation?" [ref=e360]:
+              - text: Can I ask my local NBA Team for funding if I do not receive funding from the NBA Foundation?
+              - img [ref=e361]
+      - generic [ref=e364]:
+        - heading "Budget" [level=2] [ref=e366]
+        - generic [ref=e367]:
+          - heading "What is an appropriate grant request amount or grant size?" [level=3] [ref=e369]:
+            - button "What is an appropriate grant request amount or grant size?" [ref=e370]:
+              - text: What is an appropriate grant request amount or grant size?
+              - img [ref=e371]
+          - heading "Are funds able to support direct program costs only?" [level=3] [ref=e374]:
+            - button "Are funds able to support direct program costs only?" [ref=e375]:
+              - text: Are funds able to support direct program costs only?
+              - img [ref=e376]
+          - heading "Do you fund summer programs or internship stipends?" [level=3] [ref=e379]:
+            - button "Do you fund summer programs or internship stipends?" [ref=e380]:
+              - text: Do you fund summer programs or internship stipends?
+              - img [ref=e381]
+      - generic [ref=e384]:
+        - heading "Technical Assistance" [level=2] [ref=e386]
+        - generic [ref=e387]:
+          - heading "I have registered for an account in FLUXX, however I am receiving an error message when I try to submit my application." [level=3] [ref=e389]:
+            - button "I have registered for an account in FLUXX, however I am receiving an error message when I try to submit my application." [ref=e390]:
+              - text: I have registered for an account in FLUXX, however I am receiving an error message when I try to submit my application.
+              - img [ref=e391]
+          - heading "I have registered my account in FLUXX following the link on the website, but FLUXX never sent an email confirmation." [level=3] [ref=e394]:
+            - button "I have registered my account in FLUXX following the link on the website, but FLUXX never sent an email confirmation." [ref=e395]:
+              - text: I have registered my account in FLUXX following the link on the website, but FLUXX never sent an email confirmation.
+              - img [ref=e396]
+          - heading "The Primary Contact listed is no longer with the organization. How do I update my Primary Contact for our organization on FLUXX?" [level=3] [ref=e399]:
+            - button "The Primary Contact listed is no longer with the organization. How do I update my Primary Contact for our organization on FLUXX?" [ref=e400]:
+              - text: The Primary Contact listed is no longer with the organization. How do I update my Primary Contact for our organization on FLUXX?
+              - img [ref=e401]
+          - heading "When I try to register an account, it says that my account already exists or the link has expired." [level=3] [ref=e404]:
+            - button "When I try to register an account, it says that my account already exists or the link has expired." [ref=e405]:
+              - text: When I try to register an account, it says that my account already exists or the link has expired.
+              - img [ref=e406]
+          - heading "I created a new organization profile with my current email, however my organization has an old profile with a prior declined grant under a different primary contact, but both with the same tax ID. Should I delete the old profile?" [level=3] [ref=e409]:
+            - button "I created a new organization profile with my current email, however my organization has an old profile with a prior declined grant under a different primary contact, but both with the same tax ID. Should I delete the old profile?" [ref=e410]:
+              - text: I created a new organization profile with my current email, however my organization has an old profile with a prior declined grant under a different primary contact, but both with the same tax ID. Should I delete the old profile?
+              - img [ref=e411]
+      - generic [ref=e414]:
+        - heading "Other/Non-Grant Related Requests" [level=2] [ref=e416]
+        - generic [ref=e417]:
+          - heading "Does the NBA Foundation provide free tickets to NBA Games or tentpole events (All-Star, Summer League, NBA Draft, etc.) to nonprofit organizations?" [level=3] [ref=e419]:
+            - button "Does the NBA Foundation provide free tickets to NBA Games or tentpole events (All-Star, Summer League, NBA Draft, etc.) to nonprofit organizations?" [ref=e420]:
+              - text: Does the NBA Foundation provide free tickets to NBA Games or tentpole events (All-Star, Summer League, NBA Draft, etc.) to nonprofit organizations?
+              - img [ref=e421]
+          - heading "Does the NBA Foundation provide in-kind donations such as jerseys or sports memorabilia?" [level=3] [ref=e424]:
+            - button "Does the NBA Foundation provide in-kind donations such as jerseys or sports memorabilia?" [ref=e425]:
+              - text: Does the NBA Foundation provide in-kind donations such as jerseys or sports memorabilia?
+              - img [ref=e426]
+          - heading "Does the NBA Foundation support NBA Players charitable organization?" [level=3] [ref=e429]:
+            - button "Does the NBA Foundation support NBA Players charitable organization?" [ref=e430]:
+              - text: Does the NBA Foundation support NBA Players charitable organization?
+              - img [ref=e431]
+          - heading "Can the NBA Foundation/local NBA team support player asks such as a player attending an event, receiving an award, or attendance at a gala, etc.?" [level=3] [ref=e434]:
+            - button "Can the NBA Foundation/local NBA team support player asks such as a player attending an event, receiving an award, or attendance at a gala, etc.?" [ref=e435]:
+              - text: Can the NBA Foundation/local NBA team support player asks such as a player attending an event, receiving an award, or attendance at a gala, etc.?
+              - img [ref=e436]
+          - heading "Can my nonprofit organization request for the NBA Foundation to sponsor a table at our annual gala?" [level=3] [ref=e439]:
+            - button "Can my nonprofit organization request for the NBA Foundation to sponsor a table at our annual gala?" [ref=e440]:
+              - text: Can my nonprofit organization request for the NBA Foundation to sponsor a table at our annual gala?
+              - img [ref=e441]
+      - generic [ref=e444]:
+        - generic [ref=e446]:
+          - heading "Follow the Action" [level=2] [ref=e447]
+          - paragraph [ref=e473]: Follow along to see what the Foundation has been up to.
+          - generic [ref=e450]:
+            - link "Instagram Link" [ref=e451] [cursor=pointer]:
+              - /url: https://www.instagram.com/nbafoundation/
+              - img [ref=e452]
+            - link "X Link" [ref=e453] [cursor=pointer]:
+              - /url: https://x.com/nbafoundation?lang=en
+              - img [ref=e454]
+            - link "Facebook Link" [ref=e455] [cursor=pointer]:
+              - /url: https://www.facebook.com/nbafoundation/
+              - img [ref=e456]
+        - region [ref=e457]:
+          - generic [ref=e459]:
+            - group [ref=e474]:
+              - link "You heard it here first 😎 Our Fall application window… You heard it here first 😎 Our Fall application window…" [ref=e475] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DPRHvAFERQP/
+                - img "You heard it here first 😎 Our Fall application window…" [ref=e476]
+                - generic [ref=e477]:
+                  - img [ref=e478]
+                  - generic [ref=e479]: You heard it here first 😎 Our Fall application window…
+            - group [ref=e480]:
+              - link "Last week we took a trip to the visit the… Last week we took a trip to the visit the…" [ref=e481] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DPO9GJgkas1/
+                - img "Last week we took a trip to the visit the…" [ref=e482]
+                - generic [ref=e483]:
+                  - img [ref=e484]
+                  - generic [ref=e485]: Last week we took a trip to the visit the…
+            - group [ref=e486]:
+              - link "Happy Foundation Friday 🥳😎 It’s back to school month and… Happy Foundation Friday 🥳😎 It’s back to school month and…" [ref=e487] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DOyc8Joiflt/
+                - img "Happy Foundation Friday 🥳😎 It’s back to school month and…" [ref=e488]
+                - generic [ref=e489]:
+                  - img [ref=e490]
+                  - generic [ref=e491]: Happy Foundation Friday 🥳😎 It’s back to school month and…
+            - group [ref=e492]:
+              - link "Surprise, Surprise 🥳Celebrating @youthcodejam as the latest NBA Foundation nonprofit… Surprise, Surprise 🥳Celebrating @youthcodejam as the latest NBA Foundation nonprofit…" [ref=e493] [cursor=pointer]:
+                - /url: https://www.instagram.com/reel/DNn9b50RPMr/
+                - img "Surprise, Surprise 🥳Celebrating @youthcodejam as the latest NBA Foundation nonprofit…" [ref=e494]
+                - generic [ref=e495]:
+                  - img [ref=e496]
+                  - generic [ref=e497]: Surprise, Surprise 🥳Celebrating @youthcodejam as the latest NBA Foundation nonprofit…
+            - group [ref=e498]:
+              - link "Celebrating @projectfword as our newest nonprofit partner in Toronto 🎉… Celebrating @projectfword as our newest nonprofit partner in Toronto 🎉…" [ref=e499] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DNl1QEWhu89/
+                - img "Celebrating @projectfword as our newest nonprofit partner in Toronto 🎉…" [ref=e500]
+                - generic [ref=e501]:
+                  - img [ref=e502]
+                  - generic [ref=e503]: Celebrating @projectfword as our newest nonprofit partner in Toronto 🎉…
+            - group [ref=e504]:
+              - link "Another day, another cool nonprofit parter to highlight 😎 We’re… Another day, another cool nonprofit parter to highlight 😎 We’re…" [ref=e505] [cursor=pointer]:
+                - /url: https://www.instagram.com/reel/DNjDDVdP2bx/
+                - img "Another day, another cool nonprofit parter to highlight 😎 We’re…" [ref=e506]
+                - generic [ref=e507]:
+                  - img [ref=e508]
+                  - generic [ref=e509]: Another day, another cool nonprofit parter to highlight 😎 We’re…
+            - group [ref=e510]:
+              - link "Next up we have @proyouthandfamilies 🥳 Pro Youth and Families… Next up we have @proyouthandfamilies 🥳 Pro Youth and Families…" [ref=e511] [cursor=pointer]:
+                - /url: https://www.instagram.com/reel/DNgrwzfBtbt/
+                - img "Next up we have @proyouthandfamilies 🥳 Pro Youth and Families…" [ref=e512]
+                - generic [ref=e513]:
+                  - img [ref=e514]
+                  - generic [ref=e515]: Next up we have @proyouthandfamilies 🥳 Pro Youth and Families…
+            - group [ref=e516]:
+              - link "Orlando truly has all the magic 🪄 🌟 look at… Orlando truly has all the magic 🪄 🌟 look at…" [ref=e517] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DNgLP9ExWgW/
+                - img "Orlando truly has all the magic 🪄 🌟 look at…" [ref=e518]
+                - generic [ref=e519]:
+                  - img [ref=e520]
+                  - generic [ref=e521]: Orlando truly has all the magic 🪄 🌟 look at…
+            - group [ref=e522]:
+              - link "@metcaresfoundation is our newest nonprofit partner in the @thundercares community… @metcaresfoundation is our newest nonprofit partner in the @thundercares community…" [ref=e523] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DNeNw9UBifm/
+                - img "@metcaresfoundation is our newest nonprofit partner in the @thundercares community…" [ref=e524]
+                - generic [ref=e525]:
+                  - img [ref=e526]
+                  - generic [ref=e527]: "@metcaresfoundation is our newest nonprofit partner in the @thundercares community…"
+            - group [ref=e528]:
+              - link "Next up is @directemployersinstitute 🎉 Direct Employers Institute is our… Next up is @directemployersinstitute 🎉 Direct Employers Institute is our…" [ref=e529] [cursor=pointer]:
+                - /url: https://www.instagram.com/p/DNeJn9aBqVl/
+                - img "Next up is @directemployersinstitute 🎉 Direct Employers Institute is our…" [ref=e530]
+                - generic [ref=e531]:
+                  - img [ref=e532]
+                  - generic [ref=e533]: Next up is @directemployersinstitute 🎉 Direct Employers Institute is our…
+          - generic [ref=e462]:
+            - generic [ref=e463]:
+              - button "Previous slide" [ref=e534] [cursor=pointer]:
+                - img [ref=e535]
+                - generic [ref=e537]: Previous slide
+              - button "Next slide" [ref=e538] [cursor=pointer]:
+                - img [ref=e539]
+                - generic [ref=e541]: Next slide
+            - generic [ref=e542]:
+              - button [ref=e543] [cursor=pointer]
+              - button [ref=e544] [cursor=pointer]
+              - button [ref=e545] [cursor=pointer]
+              - button [ref=e546] [cursor=pointer]
+              - button [ref=e547] [cursor=pointer]
+              - button [ref=e548] [cursor=pointer]
+              - button [ref=e549] [cursor=pointer]
+              - button [ref=e550] [cursor=pointer]
+              - button [ref=e551] [cursor=pointer]
+              - button [ref=e552] [cursor=pointer]
+    - contentinfo [ref=e465]:
+      - generic [ref=e466]:
+        - generic [ref=e553]:
+          - generic [ref=e554]:
+            - button "NBA Organization" [ref=e555]:
+              - generic [ref=e556]: NBA Organization
+            - list "NBA Organization" [ref=e557]:
+              - listitem [ref=e558]:
+                - link "NBA Official" [ref=e559] [cursor=pointer]:
+                  - /url: https://official.nba.com/
+              - listitem [ref=e560]:
+                - link "NBA Careers" [ref=e561] [cursor=pointer]:
+                  - /url: https://careers.nba.com/
+          - generic [ref=e562]:
+            - button "NBA Initiatives" [ref=e563]:
+              - generic [ref=e564]: NBA Initiatives
+            - list "NBA Initiatives" [ref=e565]:
+              - listitem [ref=e566]:
+                - link "NBA Cares" [ref=e567] [cursor=pointer]:
+                  - /url: https://cares.nba.com/
+              - listitem [ref=e568]:
+                - link "Jr. NBA" [ref=e569] [cursor=pointer]:
+                  - /url: https://jr.nba.com/
+              - listitem [ref=e570]:
+                - link "NBA Voices" [ref=e571] [cursor=pointer]:
+                  - /url: https://voices.nba.com/
+              - listitem [ref=e572]:
+                - link "NBA FIT" [ref=e573] [cursor=pointer]:
+                  - /url: https://fit.nba.com/
+              - listitem [ref=e574]:
+                - link "Hoops for Troops" [ref=e575] [cursor=pointer]:
+                  - /url: https://hoopsfortroops.nba.com/
+          - generic [ref=e576]:
+            - button "Across The League" [ref=e577]:
+              - generic [ref=e578]: Across The League
+            - list "Across The League" [ref=e579]:
+              - listitem [ref=e580]:
+                - link "NBA Communications" [ref=e581] [cursor=pointer]:
+                  - /url: https://pr.nba.com/
+              - listitem [ref=e582]:
+                - link "Lockervision" [ref=e583] [cursor=pointer]:
+                  - /url: https://lockervision.nba.com/
+              - listitem [ref=e584]:
+                - link "NBA Transactions" [ref=e585] [cursor=pointer]:
+                  - /url: https://www.nba.com/stats/transactions
+              - listitem [ref=e586]:
+                - link "Apple Music BASE:LINE Playlist" [ref=e587] [cursor=pointer]:
+                  - /url: https://www.nba.com/watch/page/music
+          - generic [ref=e588]:
+            - button "Shop" [ref=e589]:
+              - generic [ref=e590]: Shop
+            - list "Shop" [ref=e591]:
+              - listitem [ref=e592]:
+                - link "Global Stores" [ref=e593] [cursor=pointer]:
+                  - /url: https://global.nba.com/store-link-handler
+              - listitem [ref=e594]:
+                - link "NYC Store" [ref=e595] [cursor=pointer]:
+                  - /url: https://store.nba.com/
+              - listitem [ref=e596]:
+                - link "NBA Auctions" [ref=e597] [cursor=pointer]:
+                  - /url: https://auctions.nba.com/
+              - listitem [ref=e598]:
+                - link "NBA Photostore" [ref=e599] [cursor=pointer]:
+                  - /url: https://photostore.nba.com/
+          - generic [ref=e600]:
+            - button "Subscriptions" [active] [ref=e601]:
+              - generic [ref=e602]: Subscriptions
+            - list "Subscriptions" [ref=e603]:
+              - listitem [ref=e604]:
+                - link "NBA TV" [ref=e605] [cursor=pointer]:
+                  - /url: https://www.nba.com/watch/streaming-subscriptions
+              - listitem [ref=e606]:
+                - link "League Pass" [ref=e607] [cursor=pointer]:
+                  - /url: https://www.nba.com/watch/streaming-subscriptions
+        - separator [ref=e608]
+        - generic [ref=e610]:
+          - generic [ref=e611]: © 2025 NBA Media Ventures, LLC. All rights reserved.
+          - paragraph [ref=e612]:
+            - text: If you are having difficulty accessing any content on this website, please visit our
+            - link "Accessibility page" [ref=e613] [cursor=pointer]:
+              - /url: https://www.nba.com/accessibility
+            - text: .
+  - alert [ref=e468]
+  - region "Cookie banner" [ref=e614]:
+    - dialog "We Care About Your Privacy" [ref=e615]:
+      - generic [ref=e617]:
+        - generic [ref=e619]:
+          - heading "We Care About Your Privacy" [level=2] [ref=e620]
+          - generic [ref=e621]: We and our 327 partners store and access personal data, like browsing data or unique identifiers, on your device. Selecting I Accept enables tracking technologies to support the purposes shown under we and our partners process data to provide. Selecting Reject All or withdrawing your consent will disable them. If trackers are disabled, some content and ads you see may not be as relevant to you. You can resurface this menu to change your choices or withdraw consent at any time by clicking the Manage Preferences link on the bottom of the webpage. Your choices will have effect within our Website. For more details, refer to our Privacy Policy.
+          - generic [ref=e622]:
+            - heading "We and our partners process data to provide:" [level=3] [ref=e623]
+            - paragraph [ref=e625]:
+              - text: Use precise geolocation data. Actively scan device characteristics for identification. Store and/or access information on a device. Use limited data to select advertising. Measure content performance. Use profiles to select personalised advertising. Create profiles for personalised advertising. Use profiles to select personalised content. Create profiles to personalise content. Measure advertising performance. Understand audiences through statistics or combinations of data from different sources. Develop and improve services. Use limited data to select content.
+              - button "List of Partners (vendors)" [ref=e626] [cursor=pointer]
+        - generic [ref=e628]:
+          - button "I Accept" [ref=e629] [cursor=pointer]
+          - button "Reject All" [ref=e630] [cursor=pointer]
+          - button "Show Purposes, Opens the preference center dialog" [ref=e631] [cursor=pointer]: Show Purposes
+      - button "Close" [ref=e633] [cursor=pointer]

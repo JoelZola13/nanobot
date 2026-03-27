@@ -1,0 +1,218 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Skip to main content" [ref=e4] [cursor=pointer]:
+      - /url: "#card-table"
+    - generic:
+      - img "NBA Foundation"
+    - text: Legacy
+    - combobox "Filter By Organization" [ref=e5]:
+      - option "All"
+      - option "Street Voices" [selected]
+  - generic [ref=e6]:
+    - list [ref=e8]:
+      - menu [ref=e9]:
+        - list [ref=e10]:
+          - listitem [ref=e11] [cursor=pointer]:
+            - generic [ref=e12]: Information
+            - text: 
+          - listitem [ref=e13]:
+            - link "Welcome" [ref=e14] [cursor=pointer]:
+              - /url: "#fluxx-card-2"
+              - menuitem "Welcome" [ref=e15]
+          - listitem [ref=e16]:
+            - link "Apply for Funding" [ref=e17] [cursor=pointer]:
+              - /url: "#fluxx-card-3"
+              - menuitem "Apply for Funding" [ref=e18]
+      - menu [ref=e19]:
+        - list [ref=e20]:
+          - listitem [ref=e21] [cursor=pointer]:
+            - generic [ref=e22]: FAQ (46)
+            - text: 
+          - listitem [ref=e23]:
+            - link "FAQ (46)" [ref=e185] [cursor=pointer]:
+              - /url: "#fluxx-card-4"
+              - menuitem "FAQ (46)" [ref=e186]
+      - menu [ref=e26]:
+        - list [ref=e27]:
+          - listitem [ref=e28] [cursor=pointer]:
+            - generic [ref=e29]: Organizations (1)
+            - text: 
+          - listitem [ref=e30]:
+            - link "Profile 1 update" [ref=e187] [cursor=pointer]:
+              - /url: "#fluxx-card-5"
+              - menuitem "Profile" [ref=e32]
+              - generic "1 update" [ref=e188]: "1"
+      - menu [ref=e33]:
+        - list [ref=e34]:
+          - listitem [ref=e35] [cursor=pointer]:
+            - generic [ref=e36]: Requests
+            - text: 
+          - listitem [ref=e37]:
+            - link "Pending" [ref=e38] [cursor=pointer]:
+              - /url: "#fluxx-card-6"
+              - menuitem "Pending" [ref=e39]
+          - listitem [ref=e40]:
+            - link "To Edit" [ref=e41] [cursor=pointer]:
+              - /url: "#fluxx-card-7"
+              - menuitem "To Edit" [ref=e42]
+          - listitem [ref=e43]:
+            - link "Submitted" [ref=e44] [cursor=pointer]:
+              - /url: "#fluxx-card-8"
+              - menuitem "Submitted" [ref=e45]
+      - menu [ref=e46]:
+        - list [ref=e47]:
+          - listitem [ref=e48] [cursor=pointer]:
+            - generic [ref=e49]: Grants
+            - text: 
+          - listitem [ref=e50]:
+            - link "Active" [ref=e51] [cursor=pointer]:
+              - /url: "#fluxx-card-9"
+              - menuitem "Active" [ref=e52]
+          - listitem [ref=e53]:
+            - link "Closed" [ref=e54] [cursor=pointer]:
+              - /url: "#fluxx-card-10"
+              - menuitem "Closed" [ref=e55]
+      - menu [ref=e56]:
+        - list [ref=e57]:
+          - listitem [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: Reports/Requirements
+            - text: 
+          - listitem [ref=e60]:
+            - link "Pending" [ref=e61] [cursor=pointer]:
+              - /url: "#fluxx-card-11"
+              - menuitem "Pending" [ref=e62]
+          - listitem [ref=e63]:
+            - link "To Edit" [ref=e64] [cursor=pointer]:
+              - /url: "#fluxx-card-12"
+              - menuitem "To Edit" [ref=e65]
+          - listitem [ref=e66]:
+            - link "Submitted" [ref=e67] [cursor=pointer]:
+              - /url: "#fluxx-card-13"
+              - menuitem "Submitted" [ref=e68]
+      - menu [ref=e69]:
+        - list [ref=e70]:
+          - listitem [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Payments
+            - text: 
+          - listitem [ref=e73]:
+            - link "Scheduled" [ref=e74] [cursor=pointer]:
+              - /url: "#fluxx-card-14"
+              - menuitem "Scheduled" [ref=e75]
+          - listitem [ref=e76]:
+            - link "Paid" [ref=e77] [cursor=pointer]:
+              - /url: "#fluxx-card-15"
+              - menuitem "Paid" [ref=e78]
+      - menu [ref=e79]:
+        - list [ref=e80]:
+          - listitem [ref=e81] [cursor=pointer]:
+            - generic [ref=e82]: People (1)
+            - text: 
+          - listitem [ref=e83]:
+            - link "Profile 1 update" [ref=e189] [cursor=pointer]:
+              - /url: "#fluxx-card-16"
+              - menuitem "Profile" [ref=e85]
+              - generic "1 update" [ref=e190]: "1"
+    - scrollbar [ref=e87]
+  - list [ref=e89]:
+    - listitem [active] [ref=e90]:
+      - generic [ref=e91]:
+        - text:   
+        - generic [ref=e107]:
+          - generic [ref=e109]:
+            - heading "Grants Portal" [level=1] [ref=e110]
+            - link "Apply for Funding" [ref=e111] [cursor=pointer]:
+              - /url: "#fluxx-card-3"
+          - generic [ref=e114]:
+            - heading "Welcome, Joel." [level=2] [ref=e115]
+            - paragraph [ref=e116]:
+              - text: You have
+              - link "0 proposals requiring edits" [ref=e117] [cursor=pointer]:
+                - /url: "#fluxx-card-7"
+              - text: and
+              - link "0 reports requiring edits." [ref=e118] [cursor=pointer]:
+                - /url: "#fluxx-card-12"
+            - link "User Profile" [ref=e119] [cursor=pointer]:
+              - /url: "#fluxx-card-16"
+            - link "Organization Profile" [ref=e120] [cursor=pointer]:
+              - /url: "#fluxx-card-5"
+            - generic [ref=e121]:
+              - heading " Info" [level=3] [ref=e123]:
+                - generic [ref=e124]: 
+                - text: Info
+              - generic [ref=e125]:
+                - paragraph [ref=e126]: "From this website, you can:"
+                - list [ref=e127]:
+                  - listitem [ref=e128]: Submit a proposal for funding
+                  - listitem [ref=e129]: Track the status of pending proposals
+                  - listitem [ref=e130]: Review active grants and report due dates
+                  - listitem [ref=e131]: Submit progress and final reports
+                  - listitem [ref=e132]: Check the status of grant payments
+                - generic [ref=e133]:
+                  - link " How to use this portal" [ref=e134] [cursor=pointer]:
+                    - /url: nbaf_how_to_use_portal
+                    - generic [ref=e135]: 
+                    - text: How to use this portal
+                  - link " Finding your records" [ref=e136] [cursor=pointer]:
+                    - /url: nbaf_finding_records
+                    - generic [ref=e137]: 
+                    - text: Finding your records
+            - heading "How to use the grants portal" [level=3] [ref=e138]
+            - heading " General Navigation" [level=4] [ref=e139]:
+              - generic [ref=e140]: 
+              - text: General Navigation
+            - paragraph [ref=e141]: Each of the sections in the sidebar give you direct access to the various records associated with your organization, including your user profile, requests, grants, reports, and payments. Menu items designated with a number in parentheses indicate available records of that type.
+            - heading " Registering Additional Users" [level=4] [ref=e142]:
+              - generic [ref=e143]: 
+              - text: Registering Additional Users
+            - list [ref=e144]:
+              - listitem [ref=e145]: Confirm user does not currently have an account set up to avoid duplicate registrations. See instructions below for resetting passwords.
+              - listitem [ref=e146]: Forward registration link to new user to initiate access. Once approved, a New User notification will be sent to the email registered with additional information
+            - heading " Resetting Passwords" [level=4] [ref=e147]:
+              - generic [ref=e148]: 
+              - text: Resetting Passwords
+            - paragraph [ref=e149]:
+              - text: Passwords can be reset via the gear (
+              - generic [ref=e150]: 
+              - text: ) in the footer of the sidebar
+            - heading " Logging Out" [level=4] [ref=e151]:
+              - generic [ref=e152]: 
+              - text: Logging Out
+            - paragraph [ref=e153]:
+              - text: You can log out via the gear (
+              - generic [ref=e154]: 
+              - text: ) in the footer of the sidebar
+            - heading "Finding your records" [level=3] [ref=e155]
+            - paragraph [ref=e156]: The sidebar menu contains all your records related to the grants process, organized by record type.
+            - heading "Organizations" [level=4] [ref=e157]
+            - heading "Profile" [level=5] [ref=e158]
+            - paragraph [ref=e159]: Edit Organization-specific information here, including grant eligibility questions. You must complete some of this information in order to submit an application.
+            - heading "Requests" [level=4] [ref=e160]
+            - heading "Pending" [level=5] [ref=e161]
+            - paragraph [ref=e162]: Once you have started a proposal, you can continue to edit here.
+            - emphasis [ref=e163]: "Note: When working on your application, click \"Save\" often. Click \"Save and Close\" to take you back to the view-only mode, where you can submit via the \"Submit\" button once you've completed the application. Once you submit, you will no longer be able to edit."
+            - heading "To Edit" [level=5] [ref=e164]
+            - paragraph [ref=e165]: If the staff have any questions about your proposal and/or would like a revision, you will receive an email alert to login and make your edits to the proposal, found here.
+            - heading "Submitted" [level=5] [ref=e166]
+            - paragraph [ref=e167]: Once you have submitted a proposal, you can find a read-only version here.
+            - heading "Grants" [level=4] [ref=e168]
+            - heading "Active" [level=5] [ref=e169]
+            - paragraph [ref=e170]: After the staff has received the countersigned agreement, you can find a read-only version here.
+            - heading "Closed" [level=5] [ref=e171]
+            - paragraph [ref=e172]: When the grant is complete and all reports are approved, you can find the closed grants here.
+            - heading "Reports / Requirements" [level=4] [ref=e173]
+            - heading "Pending" [level=5] [ref=e174]
+            - paragraph [ref=e175]: Reports for all active grants appear here until you have submitted them. You will receive reminders as the due date approaches.
+            - heading "To Edit" [level=5] [ref=e176]
+            - paragraph [ref=e177]: If the staff have any questions about your report and/or would like a revision, you will receive an email alert to login and make your edits to the report, found here.
+            - heading "Submitted" [level=5] [ref=e178]
+            - paragraph [ref=e179]: Once you have submitted a report, you can find a read-only version here.
+            - heading "Payments" [level=4] [ref=e180]
+            - heading "Scheduled" [level=5] [ref=e181]
+            - paragraph [ref=e182]: Scheduled payments for all of your active grants appear here until they are paid.
+            - heading "Paid" [level=5] [ref=e183]
+            - paragraph [ref=e184]: Once a payment has been made, the record of the payment appears here.
+    - text:                                                                      
+  - generic [ref=e98]:
+    - img "Fluxx Logo" [ref=e100] [cursor=pointer]
+    - menu "Settings" [ref=e101] [cursor=pointer]:
+      - button "Settings" [ref=e102]: 

@@ -1,0 +1,667 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Skip to main content" [ref=e4] [cursor=pointer]:
+      - /url: "#card-table"
+    - generic:
+      - img "NBA Foundation"
+    - text: Legacy
+    - combobox "Filter By Organization" [ref=e5]:
+      - option "All"
+      - option "Street Voices" [selected]
+  - generic [ref=e6]:
+    - list [ref=e8]:
+      - menu [ref=e9]:
+        - list [ref=e10]:
+          - listitem [ref=e11] [cursor=pointer]:
+            - generic [ref=e12]: Information
+            - text: 
+          - listitem [ref=e13]:
+            - link "Welcome" [ref=e14] [cursor=pointer]:
+              - /url: "#fluxx-card-2"
+              - menuitem "Welcome" [ref=e15]
+          - listitem [ref=e16]:
+            - link "Apply for Funding" [ref=e17] [cursor=pointer]:
+              - /url: "#fluxx-card-3"
+              - menuitem "Apply for Funding" [ref=e18]
+      - menu [ref=e19]:
+        - list [ref=e20]:
+          - listitem [ref=e21] [cursor=pointer]:
+            - generic [ref=e22]: FAQ (46)
+            - text: 
+          - listitem [ref=e23]:
+            - link "FAQ (46)" [ref=e185] [cursor=pointer]:
+              - /url: "#fluxx-card-4"
+              - menuitem "FAQ (46)" [ref=e186]
+      - menu [ref=e26]:
+        - list [ref=e27]:
+          - listitem [ref=e28] [cursor=pointer]:
+            - generic [ref=e29]: Organizations (1)
+            - text: 
+          - listitem [ref=e30]:
+            - link "Profile 1 update" [ref=e187] [cursor=pointer]:
+              - /url: "#fluxx-card-5"
+              - menuitem "Profile" [ref=e32]
+              - generic "1 update" [ref=e188]: "1"
+      - menu [ref=e33]:
+        - list [ref=e34]:
+          - listitem [ref=e35] [cursor=pointer]:
+            - generic [ref=e36]: Requests
+            - text: 
+          - listitem [ref=e37]:
+            - link "Pending" [ref=e38] [cursor=pointer]:
+              - /url: "#fluxx-card-6"
+              - menuitem "Pending" [ref=e39]
+          - listitem [ref=e40]:
+            - link "To Edit" [ref=e41] [cursor=pointer]:
+              - /url: "#fluxx-card-7"
+              - menuitem "To Edit" [ref=e42]
+          - listitem [ref=e43]:
+            - link "Submitted" [ref=e44] [cursor=pointer]:
+              - /url: "#fluxx-card-8"
+              - menuitem "Submitted" [ref=e45]
+      - menu [ref=e46]:
+        - list [ref=e47]:
+          - listitem [ref=e48] [cursor=pointer]:
+            - generic [ref=e49]: Grants
+            - text: 
+          - listitem [ref=e50]:
+            - link "Active" [ref=e51] [cursor=pointer]:
+              - /url: "#fluxx-card-9"
+              - menuitem "Active" [ref=e52]
+          - listitem [ref=e53]:
+            - link "Closed" [ref=e54] [cursor=pointer]:
+              - /url: "#fluxx-card-10"
+              - menuitem "Closed" [ref=e55]
+      - menu [ref=e56]:
+        - list [ref=e57]:
+          - listitem [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: Reports/Requirements
+            - text: 
+          - listitem [ref=e60]:
+            - link "Pending" [ref=e61] [cursor=pointer]:
+              - /url: "#fluxx-card-11"
+              - menuitem "Pending" [ref=e62]
+          - listitem [ref=e63]:
+            - link "To Edit" [ref=e64] [cursor=pointer]:
+              - /url: "#fluxx-card-12"
+              - menuitem "To Edit" [ref=e65]
+          - listitem [ref=e66]:
+            - link "Submitted" [ref=e67] [cursor=pointer]:
+              - /url: "#fluxx-card-13"
+              - menuitem "Submitted" [ref=e68]
+      - menu [ref=e69]:
+        - list [ref=e70]:
+          - listitem [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Payments
+            - text: 
+          - listitem [ref=e73]:
+            - link "Scheduled" [ref=e74] [cursor=pointer]:
+              - /url: "#fluxx-card-14"
+              - menuitem "Scheduled" [ref=e75]
+          - listitem [ref=e76]:
+            - link "Paid" [ref=e77] [cursor=pointer]:
+              - /url: "#fluxx-card-15"
+              - menuitem "Paid" [ref=e78]
+      - menu [ref=e79]:
+        - list [ref=e80]:
+          - listitem [ref=e81] [cursor=pointer]:
+            - generic [ref=e82]: People (1)
+            - text: 
+          - listitem [ref=e83]:
+            - link "Profile 1 update" [ref=e189] [cursor=pointer]:
+              - /url: "#fluxx-card-16"
+              - menuitem "Profile" [ref=e85]
+              - generic "1 update" [ref=e190]: "1"
+    - scrollbar [ref=e87]
+  - list [ref=e89]:
+    - text:                                                                                  
+    - listitem [ref=e216]:
+      - generic [ref=e217]:
+        - text:   
+        - generic [ref=e219]:
+          - generic [ref=e222]:
+            - generic [ref=e226]:
+              - list [ref=e228]:
+                - listitem [ref=e229]: Organization mission must be entered on the organization profile.
+              - list [ref=e231]:
+                - listitem [ref=e232]: Year Founded must be entered on the organization profile.
+              - list [ref=e234]:
+                - listitem [ref=e235]: All Social Media Accounts must be filled out on the organization profile.
+              - list [ref=e237]:
+                - listitem [ref=e238]: The Financial Health Worksheet must be completed (in the Financial Information section of the application below).
+              - list [ref=e240]:
+                - listitem [ref=e241]: A Target NBA Market has not been selected
+            - generic [ref=e243]:
+              - generic [ref=e245]:
+                - generic [ref=e247]: Street Voices
+                - generic [ref=e251]:
+                  - generic [ref=e252]: "ID:"
+                  - generic [ref=e253]: R-202603-22246
+              - generic "Workflow status" [ref=e261]:
+                - generic [ref=e262]:
+                  - generic "New" [ref=e265]
+                  - generic "In Review" [ref=e268]
+            - generic [ref=e271]:
+              - directory [ref=e272] [cursor=pointer]: ▼ Table of Contents
+              - list [ref=e274]:
+                - listitem [ref=e275]:
+                  - link "Organization Information" [ref=e276] [cursor=pointer]:
+                    - /url: c6f36f52-3bee-4042-d0b1-549383c1e3fa
+                - listitem [ref=e277]:
+                  - link "Grant Application" [ref=e278] [cursor=pointer]:
+                    - /url: f0ec66ac-81ca-4741-b6bc-37946a103cdf
+                - listitem [ref=e279]:
+                  - link "Financial Information" [ref=e280] [cursor=pointer]:
+                    - /url: 4fc25fe3-72ae-4789-af84-1d3f3a6f8aac
+                - listitem [ref=e281]:
+                  - link "Documents/Files" [ref=e282] [cursor=pointer]:
+                    - /url: de8a215b-d8b4-4230-910f-bef963e0229e
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+                - listitem
+            - generic [ref=e283]:
+              - directory [ref=e284] [cursor=pointer]: ▼ Organization Information
+              - generic [ref=e285]:
+                - generic [ref=e286]:
+                  - paragraph [ref=e287]:
+                    - strong [ref=e288]: Primary Contact
+                    - text: ": The main point of contact for the organization regarding the grant. All primary communications will be directed to this individual."
+                  - emphasis:
+                    - emphasis
+                  - paragraph [ref=e289]:
+                    - strong [ref=e290]: Authorized Signer
+                    - text: ": This person must have the authority to sign on behalf of the organization. The grant agreement will be sent directly to their email via DocuSign."
+                  - emphasis:
+                    - emphasis
+                  - paragraph [ref=e291]:
+                    - strong [ref=e292]: Finance Contact
+                    - text: ": This individual will receive all financial-related communications. We may reach out to them with any payment inquiries or issues."
+                  - emphasis:
+                    - emphasis
+                  - paragraph [ref=e293]:
+                    - strong [ref=e294]: Additional Contact for System Notifications
+                    - text: ": This person will be cc'd on all emails sent directly from the grants management system."
+                  - emphasis:
+                    - emphasis
+                  - paragraph [ref=e295]:
+                    - strong [ref=e296]: Communications/Media Contact
+                    - text: ": This person will be responsible for completing any communication-related requirements and will be contacted for all press, media, or promotional needs from the NBA Foundation."
+                    - text: "*Please note that anyone added in one of these contacts will receive an email to create a password that gives them access to your organization's grantee portal, which includes all current and past grant applications, reports, etc."
+                - list [ref=e300]:
+                  - listitem [ref=e301]:
+                    - generic [ref=e302]: Organization
+                    - textbox "Organization" [ref=e303]: Street Voices
+                  - listitem [ref=e304]:
+                    - generic [ref=e305]:
+                      - generic [ref=e306]: Location
+                      - combobox "Location" [ref=e307]:
+                        - option
+                        - option "Street Voices - headquarters" [selected]
+                  - listitem [ref=e308]:
+                    - generic [ref=e309]:
+                      - generic [ref=e310]: Primary Contact
+                      - combobox "Primary Contact" [ref=e311]:
+                        - option
+                        - option "Joel Zola" [selected]
+                      - link "Add New" [ref=e313] [cursor=pointer]:
+                        - /url: /users/new?child_model=1&parent_model_class=GrantRequest&parent_model_id=23821287&user%5Bdefault_user_profile_id%5D=5&user%5Btemp_organization_id%5D=10973861&user%5Btemp_organization_title%5D=&user%5Btemp_program_id%5D=&user%5Btemp_roles%5D=
+                  - listitem [ref=e314]:
+                    - generic [ref=e315]:
+                      - generic [ref=e316]: Authorized Signer
+                      - combobox "Authorized Signer" [ref=e317]:
+                        - option
+                        - option "Joel Zola" [selected]
+                      - link "Add New" [ref=e319] [cursor=pointer]:
+                        - /url: /users/new?child_model=1&parent_model_class=GrantRequest&parent_model_id=23821287&user%5Bdefault_user_profile_id%5D=5&user%5Btemp_organization_id%5D=10973861&user%5Btemp_organization_title%5D=&user%5Btemp_program_id%5D=&user%5Btemp_roles%5D=
+                  - listitem [ref=e320]:
+                    - generic [ref=e321]:
+                      - generic [ref=e322]: Finance Contact
+                      - combobox "Finance Contact" [ref=e323]:
+                        - option
+                        - option "Joel Zola" [selected]
+                      - link "Add New" [ref=e325] [cursor=pointer]:
+                        - /url: /users/new?child_model=1&parent_model_class=GrantRequest&parent_model_id=23821287&user%5Bdefault_user_profile_id%5D=5&user%5Btemp_organization_id%5D=10973861&user%5Btemp_organization_title%5D=&user%5Btemp_program_id%5D=&user%5Btemp_roles%5D=
+                  - listitem [ref=e326]:
+                    - generic [ref=e327]:
+                      - generic [ref=e328]: Additional Contact for System Notifications
+                      - combobox "Additional Contact for System Notifications" [ref=e329]:
+                        - option
+                        - option "Joel Zola" [selected]
+                      - link "Add New" [ref=e331] [cursor=pointer]:
+                        - /url: /users/new?child_model=1&parent_model_class=GrantRequest&parent_model_id=23821287&user%5Bdefault_user_profile_id%5D=5&user%5Btemp_organization_id%5D=10973861&user%5Btemp_organization_title%5D=&user%5Btemp_program_id%5D=&user%5Btemp_roles%5D=
+                  - listitem [ref=e332]:
+                    - generic [ref=e333]:
+                      - generic [ref=e334]: Communications/ Media Contact
+                      - combobox "Communications/ Media Contact" [ref=e335]:
+                        - option
+                        - option "Joel Zola" [selected]
+                      - link "Add New" [ref=e337] [cursor=pointer]:
+                        - /url: /users/new?child_model=1&parent_model_class=GrantRequest&parent_model_id=23821287&user%5Bdefault_user_profile_id%5D=5&user%5Btemp_organization_id%5D=10973861&user%5Btemp_organization_title%5D=&user%5Btemp_program_id%5D=&user%5Btemp_roles%5D=
+                - generic [ref=e339]:
+                  - generic [ref=e340]:
+                    - directory [ref=e341] [cursor=pointer]: ▼ Additional Communications/Media Contact
+                    - generic [ref=e342]:
+                      - generic [ref=e343]:
+                        - emphasis [ref=e344]: Please share one more communications contact in case we cannot reach your first Communications/Media Contact so that we can efficiently manage any media or promotional requests related to your organization. Ideally, this is also someone on your communications team.
+                        - emphasis [ref=e345]: You may also choose to designate your Primary Contact as the second contact for communications/media requests by checking the box below, instead of adding a separate contact.
+                      - listitem [ref=e347]:
+                        - generic [ref=e348]:
+                          - checkbox "Please contact the Primary Contact if we cannot reach your Communications/Media Contact" [ref=e349]
+                          - text: Please contact the Primary Contact if we cannot reach your Communications/Media Contact
+                      - generic [ref=e351]:
+                        - strong [ref=e354]: "Communications/Media Contact #2:"
+                        - listitem [ref=e356]:
+                          - generic [ref=e357]: "Communications/ Media Contact #2 Name"
+                          - 'textbox "Communications/ Media Contact #2 Name" [ref=e358]'
+                        - listitem [ref=e360]:
+                          - generic [ref=e361]: "Communications/ Media Contact #2 Email"
+                          - 'textbox "Communications/ Media Contact #2 Email" [ref=e362]'
+                        - listitem [ref=e364]:
+                          - generic [ref=e365]: "Communications/ Media Contact #2 Phone Number"
+                          - 'textbox "Communications/ Media Contact #2 Phone Number" [ref=e366]'
+                  - listitem [ref=e368]:
+                    - generic [ref=e369]: Is your organization fiscally sponsored?
+                    - combobox "Is your organization fiscally sponsored?" [ref=e370]:
+                      - option [selected]
+                      - option "Yes"
+                      - option "No"
+                    - generic "Edit Dropdown"
+                  - text: 
+                  - generic [ref=e371]:
+                    - strong [ref=e372]:
+                      - text: "Staff Size:"
+                      - emphasis
+                    - emphasis [ref=e373]: Please only include paid staff
+                  - listitem [ref=e375]:
+                    - generic [ref=e376]: Full-Time
+                    - textbox "Full-Time" [ref=e377]
+                  - listitem [ref=e379]:
+                    - generic [ref=e380]: Part-Time
+                    - textbox "Part-Time" [ref=e381]
+                  - listitem [ref=e385]:
+                    - generic [ref=e386]: Organization Budget (Current Year)
+                    - textbox "Organization Budget (Current Year)" [ref=e387]
+                  - listitem [ref=e389]:
+                    - generic [ref=e390]:
+                      - text: Current/Recent Funders
+                      - generic [ref=e391]: Please list your five most recent funders for the past year.
+                    - textbox "Current/Recent Funders Please list your five most recent funders for the past year." [ref=e392]
+                    - generic [ref=e393]: "Characters left for field: 750"
+                  - generic [ref=e395]:
+                    - strong [ref=e398]: Organization Profile Information
+                    - generic [ref=e400]:
+                      - paragraph [ref=e401]:
+                        - emphasis [ref=e402]: "Ensure your organization's information is up-to-date before submitting your application. The following fields on the organization profile must be completed in order to submit:"
+                      - list [ref=e403]:
+                        - listitem [ref=e404]:
+                          - emphasis [ref=e405]: Mission
+                        - listitem [ref=e406]:
+                          - emphasis [ref=e407]: Year Founded
+                        - listitem [ref=e408]:
+                          - emphasis [ref=e409]: Social Media Accounts (3)
+                      - paragraph [ref=e410]:
+                        - emphasis [ref=e411]: Click the Edit link on the right-hand side of the table below to update the organization profile.
+                    - table [ref=e413]:
+                      - rowgroup [ref=e414]:
+                        - row "Organization Profile Information Edit" [ref=e415]:
+                          - columnheader "Organization Profile Information Edit" [ref=e416]:
+                            - text: Organization Profile Information
+                            - link "Edit" [ref=e417] [cursor=pointer]:
+                              - /url: /organizations/10973861/edit
+                      - rowgroup [ref=e418]:
+                        - row "Organization Mission" [ref=e419]:
+                          - cell "Organization Mission" [ref=e420]
+                          - cell [ref=e421]
+                        - row "Year Founded" [ref=e422]:
+                          - cell "Year Founded" [ref=e423]
+                          - cell [ref=e424]
+                        - row "Website https://www.streetvoices.ca" [ref=e425]:
+                          - cell "Website" [ref=e426]
+                          - cell "https://www.streetvoices.ca" [ref=e427]
+                        - row "Social Media Accounts" [ref=e428]:
+                          - cell "Social Media Accounts" [ref=e429]
+                        - row "Facebook" [ref=e430]:
+                          - cell "Facebook" [ref=e431]
+                          - cell [ref=e432]
+                        - row "Instagram" [ref=e433]:
+                          - cell "Instagram" [ref=e434]
+                          - cell [ref=e435]
+                        - row "X" [ref=e436]:
+                          - cell "X" [ref=e437]
+                          - cell [ref=e438]
+                  - generic [ref=e440]:
+                    - generic [ref=e442]:
+                      - generic [ref=e443]:
+                        - generic [ref=e444]: 
+                        - text: NBA Team Partnership
+                      - generic [ref=e445]:
+                        - paragraph [ref=e446]: The NBA Foundation and NBA teams collaborate to fund nonprofit organizations across our 28 NBA Markets. While a relationship with a local NBA team is not required, we do track organizations that are actively partnering with our teams for record-keeping and potential future opportunities.
+                        - paragraph [ref=e447]: "A partnership with an NBA team can include but is not limited to: receiving tickets to games or a community event hosted by an NBA team; a corporate partnership with an internal NBA department such as marketing or production for a performance during a game; receiving a memorabilia donation, swag items or merchandise; or participating in a 50/50 raffle beneficiary campaign."
+                        - paragraph [ref=e448]: You do not have to be referred by an NBA team or entity in order to be considered.
+                    - generic [ref=e450]:
+                      - generic [ref=e451]:
+                        - strong [ref=e452]:
+                          - strong [ref=e453]:
+                            - strong [ref=e454]: How strong is your nonprofit's relationship with your local NBA Team(s) on a scale of 1 (No partnership) to 5 (Strong Partnership)?
+                        - list [ref=e455]:
+                          - listitem [ref=e456]:
+                            - strong [ref=e457]: No Partnership
+                            - text: "- No contact or engagement with local NBA Team(s)."
+                          - listitem [ref=e458]:
+                            - strong [ref=e459]: Minimal Partnership
+                            - text: "- Very limited or informal interaction; for example, received tickets and/or participated in group ticket sales."
+                          - listitem [ref=e460]:
+                            - strong [ref=e461]: Emerging Partnership
+                            - text: "- Initial contact has been made; for example, involved in event programming and some interest in collaboration but minimal activity so far."
+                          - listitem [ref=e462]:
+                            - strong [ref=e463]: Moderate Partnership
+                            - text: "- Received funding and/or a grant. We work together occasionally with some shared objectives and limited coordination."
+                          - listitem [ref=e464]:
+                            - strong [ref=e465]: Strong Partnership
+                            - text: "- We collaborate closely and consistently; for example, shared goals, regular communication, and joint initiatives are in place. Engaged with a player (e.g. player participated in programming such as large-scale events or galas) or engaged with team executives (e.g team executives serves on organization board or volunteers with organization)."
+                      - listitem [ref=e467]:
+                        - generic [ref=e468]: Strengh of Partnership
+                        - combobox [ref=e469]:
+                          - option [selected]
+                          - option "1"
+                          - option "2"
+                          - option "3"
+                          - option "4"
+                          - option "5"
+                    - listitem [ref=e471]:
+                      - generic [ref=e472]: Were you referred to the NBA Foundation by an NBA team or any of its affiliates? Please note that we will be reaching out to the team(s) you name for further insight.
+                      - combobox "Were you referred to the NBA Foundation by an NBA team or any of its affiliates? Please note that we will be reaching out to the team(s) you name for further insight." [ref=e473]:
+                        - option [selected]
+                        - option "Yes"
+                        - option "No"
+                      - generic "Edit Dropdown"
+                    - listitem [ref=e477]:
+                      - generic [ref=e478]: Does your organization have an NBA connection?
+                      - combobox "Does your organization have an NBA connection?" [ref=e479]:
+                        - option [selected]
+                        - option "Yes"
+                        - option "No"
+            - generic [ref=e481]:
+              - generic [ref=e482]:
+                - directory [ref=e483] [cursor=pointer]: ▼ Grant Application
+                - generic [ref=e484]:
+                  - emphasis [ref=e486]: The following questions pertain to the program for which you are seeking funding from the NBA Foundation.
+                  - listitem [ref=e488]:
+                    - generic [ref=e489]: Program Title
+                    - textbox "Program Title" [ref=e490]
+                  - generic [ref=e492]:
+                    - listitem [ref=e494]:
+                      - generic [ref=e495]:
+                        - text: Current Issue / Statement of Need
+                        - generic [ref=e496]: Explain the issue that your program is seeking to address.
+                      - textbox "Current Issue / Statement of Need Explain the issue that your program is seeking to address." [ref=e497]
+                      - generic [ref=e498]: "Characters left for field: 1875"
+                    - listitem [ref=e500]:
+                      - generic [ref=e501]:
+                        - text: Program Description
+                        - generic [ref=e502]: Provide a brief description of the program in 2 sentences or less.
+                      - textbox "Program Description Provide a brief description of the program in 2 sentences or less." [ref=e503]
+                      - generic [ref=e504]: "Characters left for field: 500"
+                    - listitem [ref=e506]:
+                      - generic [ref=e507]:
+                        - text: Program Model
+                        - generic [ref=e508]: Describe the program for which you are seeking funding. How will you recruit and select young people for your program? Describe the strategies you will employ, the key elements of your programming, and the services you will provide to the young people enrolled in your program. Tell us about the infrastructure your organization currently has in place to execute the program successfully.
+                      - textbox "Program Model Describe the program for which you are seeking funding. How will you recruit and select young people for your program? Describe the strategies you will employ, the key elements of your programming, and the services you will provide to the young people enrolled in your program. Tell us about the infrastructure your organization currently has in place to execute the program successfully." [ref=e509]
+                      - generic [ref=e510]: "Characters left for field: 1875"
+                  - listitem [ref=e512]:
+                    - generic [ref=e513]: Amount Requested
+                    - textbox "Amount Requested" [ref=e514]
+                  - emphasis [ref=e518]: Please note our average grant size is $250,000 and award amounts are typically 10-12% of the organization’s budget. The amount requested should be proportionate to your organizational budget, project budget, and expected income from other funding sources. The lowest grant amount we deploy is $25,000.
+                  - paragraph [ref=e520]
+                  - generic [ref=e522]:
+                    - generic [ref=e524]:
+                      - generic [ref=e525]:
+                        - generic [ref=e526]: 
+                        - text: NBA Markets Served
+                      - generic [ref=e527]:
+                        - paragraph [ref=e528]:
+                          - text: The NBA Foundation makes grants that serve young people in the locations where we have NBA teams. You can use
+                          - link "this list of zip codes" [ref=e529] [cursor=pointer]:
+                            - /url: https://nbafoundation.fluxx.io/s3/config_doc/7864/3199321
+                          - text: to confirm that you are serving youth in one of the NBA team markets. Please note that your organization is still eligible if you are headquartered outside of an NBA Market, as long as you serve youth within one or more NBA Markets.
+                        - paragraph [ref=e530]: Click the plus (+) on the right to select which NBA Market(s) this grant will target.
+                    - generic [ref=e531]:
+                      - text: Target NBA Market(s)
+                      - link " " [ref=e533] [cursor=pointer]:
+                        - /url: /machine_models/new?_force_set%5Bmachine_model%5Bgrant_request%5D%5D=23821287&child_model=1&machine_model%5Bgrant_request%5D=23821287&parent_model_class=GrantRequest&parent_model_id=23821287&type=MacModelTypeDynTargetNbaMarket
+                        - generic [ref=e534]: 
+                        - generic [ref=e535]: 
+                  - generic [ref=e537]:
+                    - listitem [ref=e539]:
+                      - generic [ref=e540]:
+                        - text: Target Population
+                        - generic [ref=e541]: Describe the population served by the proposed program.
+                      - textbox "Target Population Describe the population served by the proposed program." [ref=e542]
+                      - generic [ref=e543]: "Characters left for field: 500"
+                    - generic [ref=e545]:
+                      - generic [ref=e546]:
+                        - generic [ref=e547]: 
+                        - text: Target Breakdown
+                      - paragraph [ref=e549]: Please provide the breakdown for all age groups your program will target. Click the plus (+) on the right to select all age ranges that apply.
+                    - listitem [ref=e551]:
+                      - generic [ref=e552]:
+                        - text: "Please provide the breakdown for all age groups your program will target:"
+                        - generic [ref=e553] [cursor=pointer]:
+                          - generic "Edit Dropdown"
+                          - link " " [ref=e554]:
+                            - /url: /model_attribute_choices/new?form_element_uid=6783c08d-7035-4032-d3c8-a8f5d6de21ae&label=Percentages&model_attribute_id=194417&no_spell_check=1&searchable_ui=false
+                            - generic [ref=e555]: 
+                            - generic [ref=e556]: 
+                        - list
+                    - listitem [ref=e558]:
+                      - generic [ref=e559]:
+                        - text: Projected Outcomes
+                        - generic [ref=e560]: "Please insert a minimum of four outcomes, maximum five, that would occur as a result of funding from the NBA Foundation. These outcomes should be directly related to the program seeking funding. Please use future tense, include the number of youth served, and, if possible, the number of postsecondary outputs (job placements, college enrollments, etc.) that will be secured during the grant period. Example: “25 youth will be placed in internships through the Career Readiness Internship Program”"
+                      - 'textbox "Projected Outcomes Please insert a minimum of four outcomes, maximum five, that would occur as a result of funding from the NBA Foundation. These outcomes should be directly related to the program seeking funding. Please use future tense, include the number of youth served, and, if possible, the number of postsecondary outputs (job placements, college enrollments, etc.) that will be secured during the grant period. Example: “25 youth will be placed in internships through the Career Readiness Internship Program”" [ref=e561]'
+                      - generic [ref=e562]: "Characters left for field: 1000"
+                    - generic [ref=e563]:
+                      - directory [ref=e564] [cursor=pointer]: Quantitative Projected Outcomes for Youth
+                      - generic [ref=e565]:
+                        - listitem [ref=e567]:
+                          - generic [ref=e568]: Total number of youth projected to serve
+                          - textbox "Total number of youth projected to serve" [ref=e569]
+                        - generic [ref=e571]:
+                          - emphasis [ref=e573]:
+                            - strong [ref=e574]: Please fill in the following projected program outcomes. I
+                            - text: nput "0" if you do not project reaching any youth in an outcome.
+                          - listitem [ref=e576]:
+                            - generic [ref=e577]: Number of youth completing job-readiness trainings
+                            - textbox "Number of youth completing job-readiness trainings" [ref=e578]
+                          - listitem [ref=e580]:
+                            - generic [ref=e581]: Number of youth completing certificate or credential programs
+                            - textbox "Number of youth completing certificate or credential programs" [ref=e582]
+                          - listitem [ref=e584]:
+                            - generic [ref=e585]: Number of youth graduating high school
+                            - textbox "Number of youth graduating high school" [ref=e586]
+                          - listitem [ref=e588]:
+                            - generic [ref=e589]: Number of youth being accepted to college or university
+                            - textbox "Number of youth being accepted to college or university" [ref=e590]
+                          - listitem [ref=e592]:
+                            - generic [ref=e593]: Number of youth persisting through college
+                            - textbox "Number of youth persisting through college" [ref=e594]
+                          - listitem [ref=e596]:
+                            - generic [ref=e597]: Number of youth graduating college
+                            - textbox "Number of youth graduating college" [ref=e598]
+                          - listitem [ref=e600]:
+                            - generic [ref=e601]: Number of youth securing a job after college
+                            - textbox "Number of youth securing a job after college" [ref=e602]
+                          - listitem [ref=e604]:
+                            - generic [ref=e605]: Number of youth securing an internship/apprenticeship/experience
+                            - textbox "Number of youth securing an internship/apprenticeship/experience" [ref=e606]
+                          - listitem [ref=e608]:
+                            - generic [ref=e609]: Number of youth securing a job (FT or PT)
+                            - textbox "Number of youth securing a job (FT or PT)" [ref=e610]
+                          - listitem [ref=e612]:
+                            - text: Other Projected Outcomes for Youth
+                            - textbox "Other Projected Outcomes for Youth" [ref=e613]
+                    - generic [ref=e615]:
+                      - listitem [ref=e617]:
+                        - generic [ref=e618]:
+                          - text: Track Record of Delivering Programming
+                          - generic [ref=e619]: Please tell us about your history of delivering this program or programming similar to this one and/or your history of working with the target population. If you have results from past years of programming, please include that information here.
+                        - textbox "Track Record of Delivering Programming Please tell us about your history of delivering this program or programming similar to this one and/or your history of working with the target population. If you have results from past years of programming, please include that information here." [ref=e620]
+                        - generic [ref=e621]: "Characters left for field: 1875"
+                      - listitem [ref=e623]:
+                        - generic [ref=e624]:
+                          - text: Evaluation
+                          - generic [ref=e625]: What indicators - both quantitative and qualitative - do you use in assessing whether your organization has been successful in achieving the desired outcomes?
+                        - textbox "Evaluation What indicators - both quantitative and qualitative - do you use in assessing whether your organization has been successful in achieving the desired outcomes?" [ref=e626]
+                        - generic [ref=e627]: "Characters left for field: 1000"
+                  - generic [ref=e629]:
+                    - generic [ref=e631]:
+                      - generic [ref=e632]:
+                        - generic [ref=e633]: 
+                        - text: Financial Information
+                      - paragraph [ref=e635]: Use your Form 990, Form 990-EZ, or T3010 to fill out the Financial Health Worksheet. Click the green plus (+) on the right to begin the worksheet and press "Save" when complete.
+                    - generic [ref=e636]:
+                      - text: Financial Health Worksheet
+                      - link " " [ref=e638] [cursor=pointer]:
+                        - /url: /machine_models/new?_force_set%5Bmachine_model%5Bgrant_request%5D%5D=23821287&_force_set%5Bmachine_model%5Bmodel_theme_id%5D%5D=21346&child_model=1&machine_model%5Bgrant_request%5D=23821287&machine_model%5Bmodel_theme_id%5D=21346&parent_model_class=GrantRequest&parent_model_id=23821287&type=MacModelTypeDynDueDiligence1
+                        - generic [ref=e639]: 
+                        - generic [ref=e640]: 
+                    - generic [ref=e642]:
+                      - generic [ref=e643]:
+                        - generic [ref=e644]: 
+                        - text: Program Budget
+                      - paragraph [ref=e646]:
+                        - text: Please download this
+                        - link "budget template" [ref=e647] [cursor=pointer]:
+                          - /url: https://nbafoundation.fluxx.io/s3/config_doc/7864/3198170
+                        - text: ", fill it in and upload to this application in the Documents section below."
+                    - listitem [ref=e649]:
+                      - generic [ref=e650]:
+                        - checkbox "I have downloaded the program budget template and will upload the completed template to this application." [ref=e651]
+                        - text: I have downloaded the program budget template and will upload the completed template to this application.
+                    - generic [ref=e653]:
+                      - generic [ref=e654]:
+                        - generic [ref=e655]: 
+                        - text: General Operating Support
+                      - paragraph [ref=e657]: The NBA Foundation allows organizations to apply for a combination of programmatic funds and general operating support. Programmatic support refers to funding for the various activities involved in the planning, management, and execution of a specific project within an organization. General operating support is defined as unrestricted financial support that supports the general operations of an organization (staff salaries, supplies, etc.)
+                    - listitem [ref=e659]:
+                      - generic [ref=e660]:
+                        - text: General Operating Support Explanation
+                        - generic [ref=e661]: If you are requesting general operating funds in addition to program funds, please explain here for what purposes you will use the general operating support. Please note that the NBA Foundation does not fund capital campaign projects. Indicate the amount of these funds in the budget template.
+                      - textbox "General Operating Support Explanation If you are requesting general operating funds in addition to program funds, please explain here for what purposes you will use the general operating support. Please note that the NBA Foundation does not fund capital campaign projects. Indicate the amount of these funds in the budget template." [ref=e662]
+              - generic [ref=e666]:
+                - generic [ref=e668]:
+                  - generic [ref=e669]: Required Documents/Files
+                  - generic [ref=e670]:
+                    - paragraph [ref=e671]: "To submit the application, you must upload the required documents/files:"
+                    - list [ref=e672]:
+                      - listitem [ref=e673]: Program Budget
+                      - listitem [ref=e674]: 990 Form (Canadian organizations, please upload your most recent T3010 Registered Charity Information Return in place of the 990 Form.)
+                      - listitem [ref=e675]: Board List
+                      - listitem [ref=e676]: Organizational Budget
+                      - listitem [ref=e677]: Organization Logo
+                    - paragraph [ref=e678]: Uploading the Annual Report is optional.
+                - list [ref=e680]:
+                  - listitem [ref=e681]:
+                    - text: 990 Form
+                    - link "Upload 990 Form" [ref=e682] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=23821287&model_document%5Bdocumentable_type%5D=GrantRequest&model_document%5Bmodel_document_type_id%5D=3421&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e683]: 
+                      - generic [ref=e684]: 
+                  - listitem [ref=e685]:
+                    - text: Program Budget
+                    - link "Upload Program Budget" [ref=e686] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=23821287&model_document%5Bdocumentable_type%5D=GrantRequest&model_document%5Bmodel_document_type_id%5D=14894&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e687]: 
+                      - generic [ref=e688]: 
+                  - listitem [ref=e689]:
+                    - text: Board List
+                    - link "Upload Board List" [ref=e690] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=10973861&model_document%5Bdocumentable_type%5D=Organization&model_document%5Bmodel_document_type_id%5D=3423&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e691]: 
+                      - generic [ref=e692]: 
+                  - listitem [ref=e693]:
+                    - text: Organization Logo
+                    - link "Upload Organization Logo" [ref=e694] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=10973861&model_document%5Bdocumentable_type%5D=Organization&model_document%5Bmodel_document_type_id%5D=20969&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e695]: 
+                      - generic [ref=e696]: 
+                  - listitem [ref=e697]:
+                    - text: Organizational Budget
+                    - link "Upload Organizational Budget" [ref=e698] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=10973861&model_document%5Bdocumentable_type%5D=Organization&model_document%5Bmodel_document_type_id%5D=3426&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e699]: 
+                      - generic [ref=e700]: 
+                - list [ref=e702]:
+                  - listitem [ref=e703]:
+                    - text: Annual Report
+                    - link "Upload Annual Report" [ref=e704] [cursor=pointer]:
+                      - /url: /model_documents?model_document%5Bdoc_label%5D=default&model_document%5Bdocumentable_id%5D=10973861&model_document%5Bdocumentable_type%5D=Organization&model_document%5Bmodel_document_type_id%5D=3427&authenticity_token=MTRqvBesNHXhjXncEoN%2FiyskMdaOUtaR3q3O8Mzrw6LbEWFz%2B1M4T31Y3RKqH0NQ%2BxmmWGKj6ohc7oLXbleDzQ%3D%3D
+                      - generic [ref=e705]: 
+                      - generic [ref=e706]: 
+                - generic [ref=e708]:
+                  - generic [ref=e710]:
+                    - text: Request Documents
+                    - button "Upload document" [ref=e712] [cursor=pointer]:
+                      - generic [ref=e713]: 
+                      - generic [ref=e714]: 
+                  - list [ref=e715]:
+                    - listitem [ref=e716]
+                - generic [ref=e719]:
+                  - generic [ref=e721]:
+                    - text: Organization Documents
+                    - button "Upload document" [ref=e723] [cursor=pointer]:
+                      - generic [ref=e724]: 
+                      - generic [ref=e725]: 
+                  - list [ref=e726]:
+                    - listitem [ref=e727]
+          - generic [ref=e729]:
+            - button "scroll back to top" [ref=e738] [cursor=pointer]:
+              - generic [ref=e739]: 
+              - generic [ref=e740]: Top
+              - text: Back to Top
+            - list:
+              - listitem [ref=e730]:
+                - link "Save and Close" [ref=e731] [cursor=pointer]:
+                  - /url: /grant_requests/23821287.json
+              - listitem [ref=e732]:
+                - link "Save" [ref=e733] [cursor=pointer]:
+                  - /url: /grant_requests/23821287.json
+              - listitem
+              - listitem [ref=e734]:
+                - link "Cancel" [ref=e735] [cursor=pointer]:
+                  - /url: /grant_requests/23821287?unlock=1
+      - generic [ref=e845]:
+        - list [ref=e846]:
+          - listitem [ref=e847]:
+            - link "Close" [ref=e848] [cursor=pointer]:
+              - /url: "#"
+              - text: ×
+        - generic [ref=e850]: Add Please provide the breakdown...
+        - generic [ref=e854]:
+          - listitem
+          - generic [ref=e855]:
+            - searchbox "Search" [ref=e856]
+            - generic [ref=e857]:
+              - generic [ref=e859] [cursor=pointer]: Ages < 13
+              - generic [ref=e862] [cursor=pointer]: Ages 14-24
+              - generic [ref=e865] [cursor=pointer]: Ages 25-55
+              - generic [ref=e868] [cursor=pointer]: Ages 55+
+            - link "" [ref=e870] [cursor=pointer]:
+              - /url: "#"
+            - link "" [ref=e871] [cursor=pointer]:
+              - /url: "#"
+        - list [ref=e874]:
+          - listitem [ref=e875]:
+            - link "Add Percentages" [ref=e876]:
+              - /url: /model_attribute_choices
+  - generic [ref=e98]:
+    - img "Fluxx Logo" [ref=e100] [cursor=pointer]
+    - menu "Settings" [ref=e101] [cursor=pointer]:
+      - button "Settings" [ref=e102]: 

@@ -1,0 +1,102 @@
+[
+  {
+    "name": "Community Radio Education Training (CRET)",
+    "organization": "Community Radio Education Society (CRES)",
+    "location": "Vancouver, British Columbia",
+    "focus_area": "Community radio, sound art, technical audio skills, workshops and apprenticeships",
+    "funding_model": "Charitable non-profit; training, workshops, and access programming supported by society operations and likely grants/donations",
+    "target_demographics": "People with low income; economically or socially disadvantaged groups; community members seeking radio/audio skills",
+    "key_outcomes": "Provides training, classes, workshops, and apprenticeships in radio skills, technical skills, sound art, and community development; expands access to radio/audio production for underserved groups",
+    "source": "https://cresbc.org/"
+  },
+  {
+    "name": "Media Arts Committee (MAC)",
+    "organization": "Community Radio Education Society (CRES)",
+    "location": "Vancouver, British Columbia",
+    "focus_area": "Audio art, artist residencies, commissioned experimental audio work, media arts workshops",
+    "funding_model": "Charitable non-profit media arts program; supported through organization resources and arts/community funding",
+    "target_demographics": "Artists, audio creators, and community participants including disadvantaged groups via CRES access mandate",
+    "key_outcomes": "Provides workshops and training in audio art; funds artist residencies and commissions experimental audio art pieces",
+    "source": "https://cresbc.org/"
+  },
+  {
+    "name": "Volunteer Training and Workshops",
+    "organization": "CKUT 90.3 FM",
+    "location": "Montreal, Quebec",
+    "focus_area": "Campus-community radio, journalism, podcasting, audio production, DJing, media organizing",
+    "funding_model": "Non-profit, member-owned campus/community radio station supported by members, volunteers, and institutional/community funding",
+    "target_demographics": "Montreal community members and students, especially people underserved by mainstream media",
+    "key_outcomes": "Offers multi-level training for volunteers in DJing, production, podcasting, news, and radio research; builds technical, interviewing, coordinating, and promotion skills; serves as a training ground for community and student populations",
+    "source": "https://ckut.ca/get-involved/ ; https://ckut.ca/about/"
+  },
+  {
+    "name": "Community News Collective Workshop",
+    "organization": "CKUT 90.3 FM",
+    "location": "Montreal, Quebec",
+    "focus_area": "Community journalism, local news production, collaborative radio reporting",
+    "funding_model": "Embedded in non-profit campus/community radio operations",
+    "target_demographics": "New and existing volunteers interested in local journalism; no prior experience required",
+    "key_outcomes": "Develops critical thinking, radio research, and collaborative journalism skills; contributes to community news programming underrepresented in mainstream media",
+    "source": "https://ckut.ca/get-involved/"
+  },
+  {
+    "name": "Podcasting 101 Workshop",
+    "organization": "CKUT 90.3 FM",
+    "location": "Montreal, Quebec",
+    "focus_area": "Podcast production and entry-level audio storytelling",
+    "funding_model": "Station-based workshop within non-profit volunteer training ecosystem",
+    "target_demographics": "Active volunteers, students, and community participants new to audio storytelling",
+    "key_outcomes": "Introduces volunteers to podcasting fundamentals and supports pathways into station production and community storytelling",
+    "source": "https://ckut.ca/get-involved/"
+  },
+  {
+    "name": "Production Workshops",
+    "organization": "CKUT 90.3 FM",
+    "location": "Montreal, Quebec",
+    "focus_area": "Audio recording and editing using digital audio workstations",
+    "funding_model": "Non-profit station workshop offering through volunteer training",
+    "target_demographics": "Active volunteers and community members developing radio production skills",
+    "key_outcomes": "Teaches audio recording and editing skills; supports participant capacity to produce station content and independent projects",
+    "source": "https://ckut.ca/get-involved/"
+  },
+  {
+    "name": "Digital Storytelling Facilitation and Mentorship Network",
+    "organization": "INDIGITAL Storytelling / McMaster University collaborators",
+    "location": "Hamilton, Ontario (with broader network relevance)",
+    "focus_area": "Indigenous digital storytelling, facilitator development, mentorship, community-engaged storytelling",
+    "funding_model": "University- and research-network-linked initiative tied to Canada Research Chairs and CIHR/NEIHR-related networks",
+    "target_demographics": "Indigenous facilitators, researchers, communities, and participants interested in digital storytelling methods",
+    "key_outcomes": "Supports people who want to become digital storytelling facilitators; connects storytelling practice to Indigenous well-being, mentorship, and research networks",
+    "source": "https://www.indigitalstorytelling.ca/"
+  },
+  {
+    "name": "Hands on Media Education digital storytelling workshops",
+    "organization": "Hands on Media Education",
+    "location": "Whitehorse, Yukon / workshop-based delivery",
+    "focus_area": "Digital storytelling, intergenerational Indigenous media education",
+    "funding_model": "Workshop-based educational delivery, likely partnership-supported",
+    "target_demographics": "Indigenous youth and Elders",
+    "key_outcomes": "Led a week-long workshop bringing youth and Elders together to create digital stories; supports intergenerational storytelling and cultural knowledge sharing",
+    "source": "https://www.cbc.ca/news/canada/north/youth-elders-digital-storytelling-workshop-1.7292634"
+  },
+  {
+    "name": "Community digital storytelling practice",
+    "organization": "AMES (Access to Media Education)",
+    "location": "Canada (organization referenced nationally; exact location not confirmed from source snippet)",
+    "focus_area": "Digital media, artistic collaboration, creative facilitation, community digital storytelling",
+    "funding_model": "Small non-profit",
+    "target_demographics": "Marginalized youth",
+    "key_outcomes": "Uses digital media and artistic collaboration to engage marginalized youth in personally and socially transformative storytelling work",
+    "source": "https://digitalstories.ca/telling-community-digital-stories/"
+  },
+  {
+    "name": "Community radio and sound art workshops",
+    "organization": "Community Radio Education Society (CRES)",
+    "location": "Vancouver, British Columbia",
+    "focus_area": "Radio, technical training, sound art, community educational uses of audio",
+    "funding_model": "Charitable non-profit",
+    "target_demographics": "General community participants with emphasis on disadvantaged groups and low-income participants",
+    "key_outcomes": "Provides facilities and instruction for community educational uses of radio and audio; emphasizes access, experimentation, and community development",
+    "source": "https://cresbc.org/"
+  }
+]

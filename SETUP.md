@@ -14,22 +14,21 @@ This guide walks you through everything from scratch. No coding experience neede
 
 ---
 
-## Step 1: Install Docker Desktop
+## Step 1: Install a Docker Runtime
 
 Docker runs the entire platform inside containers on your computer. Think of it as a mini server that lives on your laptop.
 
-### Mac
+### Mac (recommended: OrbStack)
 
-1. Go to https://www.docker.com/products/docker-desktop/
-2. Click **Download for Mac**
-   - If you have a newer Mac (2020 or later): choose **Apple Silicon**
-   - If you have an older Mac: choose **Intel**
-   - Not sure? Click the Apple menu () → **About This Mac** → look for "Chip" (Apple Silicon) or "Processor" (Intel)
-3. Open the downloaded `.dmg` file
-4. Drag the Docker icon to your **Applications** folder
-5. Open **Docker Desktop** from Applications
-6. It will ask for your password and permissions — click **Allow** / **OK** for everything
-7. Wait until you see a **green whale icon** in your menu bar (top of screen) — this means Docker is running
+We recommend **OrbStack** for Mac — it's faster and uses less battery than Docker Desktop.
+
+1. Go to https://orbstack.dev/download
+2. Download and open the `.dmg` file
+3. Drag **OrbStack** to your **Applications** folder
+4. Open OrbStack — it will set everything up automatically
+5. When it says "Running" in the menu bar, you're good
+
+> **Alternative:** If you prefer Docker Desktop, go to https://www.docker.com/products/docker-desktop/ and follow the install instructions. Both work the same way.
 
 ### Windows
 
@@ -40,7 +39,7 @@ Docker runs the entire platform inside containers on your computer. Think of it 
 5. Open **Docker Desktop** from the Start menu
 6. Wait until the Docker icon in your system tray (bottom-right) shows "running"
 
-**Important:** Docker Desktop must be running whenever you use the platform. Leave it open.
+**Important:** OrbStack (Mac) or Docker Desktop (Windows) must be running whenever you use the platform. Leave it open.
 
 ---
 
