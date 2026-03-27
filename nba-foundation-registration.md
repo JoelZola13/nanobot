@@ -1,0 +1,453 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e6]:
+      - img "NBA Foundation" [ref=e8]
+      - heading "NBA Foundation" [level=1] [ref=e9]
+      - group [ref=e10]:
+        - list [ref=e11]:
+          - generic [ref=e12]:
+            - generic [ref=e13]:
+              - directory [ref=e14]: Organization Info
+              - generic [ref=e15]:
+                - listitem [ref=e17]:
+                  - generic [ref=e18]: Address 1
+                  - textbox [active] [ref=e19]: 192 Spadina Ave., Toronto, ON M5T 2C2
+                - listitem [ref=e21]:
+                  - generic [ref=e22]: Address 2
+                  - textbox [ref=e23]
+                - listitem [ref=e25]:
+                  - generic [ref=e26]: City
+                  - textbox [ref=e27]: Toronto
+                - list [ref=e29]:
+                  - listitem [ref=e30]:
+                    - generic [ref=e31]: Country
+                    - combobox "Country" [ref=e32]:
+                      - option
+                      - option "Afghanistan"
+                      - option "Aland Islands"
+                      - option "Albania"
+                      - option "Algeria"
+                      - option "American Samoa"
+                      - option "Andorra"
+                      - option "Angola"
+                      - option "Anguilla"
+                      - option "Antarctica"
+                      - option "Antigua and Barbuda"
+                      - option "Argentina"
+                      - option "Armenia"
+                      - option "Aruba"
+                      - option "Australia"
+                      - option "Austria"
+                      - option "Azerbaijan"
+                      - option "Bahamas"
+                      - option "Bahrain"
+                      - option "Bangladesh"
+                      - option "Barbados"
+                      - option "Belarus"
+                      - option "Belgium"
+                      - option "Belize"
+                      - option "Benin"
+                      - option "Bermuda"
+                      - option "Bhutan"
+                      - option "Bolivia"
+                      - option "Bonaire, Saint Eustatius and Saba"
+                      - option "Bosnia and Herzegovina"
+                      - option "Botswana"
+                      - option "Bouvet Island"
+                      - option "Brazil"
+                      - option "British Indian Ocean Territory"
+                      - option "British Virgin Islands"
+                      - option "Brunei"
+                      - option "Bulgaria"
+                      - option "Burkina Faso"
+                      - option "Burundi"
+                      - option "Cabo Verde"
+                      - option "Cambodia"
+                      - option "Cameroon"
+                      - option "Canada" [selected]
+                      - option "Cayman Islands"
+                      - option "Central African Republic"
+                      - option "Chad"
+                      - option "Chile"
+                      - option "China"
+                      - option "Christmas Island"
+                      - option "Cocos Islands"
+                      - option "Colombia"
+                      - option "Comoros"
+                      - option "Cook Islands"
+                      - option "Costa Rica"
+                      - option "Croatia"
+                      - option "Cuba"
+                      - option "Curacao"
+                      - option "Cyprus"
+                      - option "Czechia"
+                      - option "Democratic Republic of the Congo"
+                      - option "Denmark"
+                      - option "Djibouti"
+                      - option "Dominica"
+                      - option "Dominican Republic"
+                      - option "Ecuador"
+                      - option "Egypt"
+                      - option "El Salvador"
+                      - option "Equatorial Guinea"
+                      - option "Eritrea"
+                      - option "Estonia"
+                      - option "Eswatini"
+                      - option "Ethiopia"
+                      - option "Falkland Islands"
+                      - option "Faroe Islands"
+                      - option "Fiji"
+                      - option "Finland"
+                      - option "France"
+                      - option "French Guiana"
+                      - option "French Polynesia"
+                      - option "French Southern Territories"
+                      - option "Gabon"
+                      - option "Gambia"
+                      - option "Georgia"
+                      - option "Germany"
+                      - option "Ghana"
+                      - option "Gibraltar"
+                      - option "Greece"
+                      - option "Greenland"
+                      - option "Grenada"
+                      - option "Guadeloupe"
+                      - option "Guam"
+                      - option "Guatemala"
+                      - option "Guernsey"
+                      - option "Guinea"
+                      - option "Guinea-Bissau"
+                      - option "Guyana"
+                      - option "Haiti"
+                      - option "Heard Island and McDonald Islands"
+                      - option "Honduras"
+                      - option "Hong Kong"
+                      - option "Hungary"
+                      - option "Iceland"
+                      - option "India"
+                      - option "Indonesia"
+                      - option "Iran"
+                      - option "Iraq"
+                      - option "Ireland"
+                      - option "Isle of Man"
+                      - option "Israel"
+                      - option "Italy"
+                      - option "Ivory Coast"
+                      - option "Jamaica"
+                      - option "Japan"
+                      - option "Jersey"
+                      - option "Jordan"
+                      - option "Kazakhstan"
+                      - option "Kenya"
+                      - option "Kiribati"
+                      - option "Kosovo"
+                      - option "Kuwait"
+                      - option "Kyrgyzstan"
+                      - option "Laos"
+                      - option "Latvia"
+                      - option "Lebanon"
+                      - option "Lesotho"
+                      - option "Liberia"
+                      - option "Libya"
+                      - option "Liechtenstein"
+                      - option "Lithuania"
+                      - option "Luxembourg"
+                      - option "Macao"
+                      - option "Madagascar"
+                      - option "Malawi"
+                      - option "Malaysia"
+                      - option "Maldives"
+                      - option "Mali"
+                      - option "Malta"
+                      - option "Marshall Islands"
+                      - option "Martinique"
+                      - option "Mauritania"
+                      - option "Mauritius"
+                      - option "Mayotte"
+                      - option "Mexico"
+                      - option "Micronesia"
+                      - option "Moldova"
+                      - option "Monaco"
+                      - option "Mongolia"
+                      - option "Montenegro"
+                      - option "Montserrat"
+                      - option "Morocco"
+                      - option "Mozambique"
+                      - option "Myanmar"
+                      - option "Namibia"
+                      - option "Nauru"
+                      - option "Nepal"
+                      - option "New Caledonia"
+                      - option "New Zealand"
+                      - option "Nicaragua"
+                      - option "Niger"
+                      - option "Nigeria"
+                      - option "Niue"
+                      - option "Norfolk Island"
+                      - option "North Korea"
+                      - option "North Macedonia"
+                      - option "Northern Mariana Islands"
+                      - option "Norway"
+                      - option "Oman"
+                      - option "Pakistan"
+                      - option "Palau"
+                      - option "Palestinian Territory"
+                      - option "Panama"
+                      - option "Papua New Guinea"
+                      - option "Paraguay"
+                      - option "Peru"
+                      - option "Philippines"
+                      - option "Pitcairn"
+                      - option "Poland"
+                      - option "Portugal"
+                      - option "Puerto Rico"
+                      - option "Qatar"
+                      - option "Republic of the Congo"
+                      - option "Reunion"
+                      - option "Romania"
+                      - option "Russia"
+                      - option "Rwanda"
+                      - option "Saint Barthelemy"
+                      - option "Saint Helena"
+                      - option "Saint Kitts and Nevis"
+                      - option "Saint Lucia"
+                      - option "Saint Martin"
+                      - option "Saint Pierre and Miquelon"
+                      - option "Saint Vincent and the Grenadines"
+                      - option "Samoa"
+                      - option "San Marino"
+                      - option "Sao Tome and Principe"
+                      - option "Saudi Arabia"
+                      - option "Senegal"
+                      - option "Serbia"
+                      - option "Seychelles"
+                      - option "Sierra Leone"
+                      - option "Singapore"
+                      - option "Sint Maarten"
+                      - option "Slovakia"
+                      - option "Slovenia"
+                      - option "Solomon Islands"
+                      - option "Somalia"
+                      - option "South Africa"
+                      - option "South Georgia and the South Sandwich Islands"
+                      - option "South Korea"
+                      - option "South Sudan"
+                      - option "Spain"
+                      - option "Sri Lanka"
+                      - option "Sudan"
+                      - option "Suriname"
+                      - option "Svalbard and Jan Mayen"
+                      - option "Sweden"
+                      - option "Switzerland"
+                      - option "Syria"
+                      - option "Taiwan"
+                      - option "Tajikistan"
+                      - option "Tanzania"
+                      - option "Thailand"
+                      - option "The Netherlands"
+                      - option "Timor-Leste"
+                      - option "Togo"
+                      - option "Tokelau"
+                      - option "Tonga"
+                      - option "Trinidad and Tobago"
+                      - option "Tunisia"
+                      - option "Turkey"
+                      - option "Turkmenistan"
+                      - option "Turks and Caicos Islands"
+                      - option "Tuvalu"
+                      - option "U.S. Virgin Islands"
+                      - option "Uganda"
+                      - option "Ukraine"
+                      - option "United Arab Emirates"
+                      - option "United Kingdom"
+                      - option "United States"
+                      - option "United States Minor Outlying Islands"
+                      - option "Uruguay"
+                      - option "Uzbekistan"
+                      - option "Vanuatu"
+                      - option "Vatican"
+                      - option "Venezuela"
+                      - option "Vietnam"
+                      - option "Wallis and Futuna"
+                      - option "Western Sahara"
+                      - option "Yemen"
+                      - option "Zambia"
+                      - option "Zimbabwe"
+                  - listitem [ref=e33]:
+                    - generic [ref=e34]: State/Province
+                    - combobox "State/Province" [ref=e35]:
+                      - option
+                      - option "Alberta, Canada"
+                      - option "British Columbia, Canada"
+                      - option "Manitoba, Canada"
+                      - option "New Brunswick, Canada"
+                      - option "Newfoundland and Labrador, Canada"
+                      - option "Northwest Territories, Canada"
+                      - option "Nova Scotia, Canada"
+                      - option "Nunavut, Canada"
+                      - option "Ontario, Canada" [selected]
+                      - option "Prince Edward Island, Canada"
+                      - option "Quebec, Canada"
+                      - option "Saskatchewan, Canada"
+                      - option "Yukon, Canada"
+                - listitem [ref=e37]:
+                  - generic [ref=e38]: Organization Name
+                  - textbox [ref=e39]: Street Voices
+                - listitem [ref=e41]:
+                  - generic [ref=e42]: Postal Code (Zip)
+                  - textbox [ref=e43]: M5H 2N2
+                - listitem [ref=e47]:
+                  - generic [ref=e48]: NBA Market(s) Served (place where youth are actively participating in programming)
+                  - generic [ref=e49]:
+                    - listbox [ref=e50]:
+                      - option [ref=e51]
+                      - option "Atlanta Hawks" [ref=e52]
+                      - option "Boston Celtics" [ref=e53]
+                      - option "Brooklyn Nets" [ref=e54]
+                      - option "Charlotte Hornets" [ref=e55]
+                      - option "Chicago Bulls" [ref=e56]
+                      - option "Cleveland Cavaliers" [ref=e57]
+                      - option "Dallas Mavericks" [ref=e58]
+                      - option "Denver Nuggets" [ref=e59]
+                      - option "Detroit Pistons" [ref=e60]
+                      - option "Golden State Warriors" [ref=e61]
+                      - option "Houston Rockets" [ref=e62]
+                      - option "Indiana Pacers" [ref=e63]
+                      - option "Los Angeles Clippers" [ref=e64]
+                      - option "Los Angeles Lakers" [ref=e65]
+                      - option "Memphis Grizzlies" [ref=e66]
+                      - option "Miami Heat" [ref=e67]
+                      - option "Milwaukee Bucks" [ref=e68]
+                      - option "Minnesota Timberwolves" [ref=e69]
+                      - option "New Orleans Pelicans" [ref=e70]
+                      - option "New York Knicks" [ref=e71]
+                      - option "Oklahoma City Thunder" [ref=e72]
+                      - option "Orlando Magic" [ref=e73]
+                      - option "Philadelphia 76ers" [ref=e74]
+                      - option "Phoenix Suns" [ref=e75]
+                      - option "Portland Trailblazers" [ref=e76]
+                      - option "Sacramento Kings" [ref=e77]
+                      - option "San Antonio Spurs" [ref=e78]
+                      - option "Utah Jazz" [ref=e80]
+                      - option "Washington Wizards" [ref=e81]
+                    - generic [ref=e82]:
+                      - button ">" [ref=e83] [cursor=pointer]
+                      - button "<" [ref=e85] [cursor=pointer]
+                    - listbox [ref=e86]:
+                      - option "Toronto Raptors" [selected] [ref=e79]
+                  - generic "Edit Dropdown"
+                - listitem [ref=e88]:
+                  - generic [ref=e89]: Organization E-mail
+                  - textbox [ref=e90]: joel@streetvoices.ca
+                - listitem [ref=e92]:
+                  - generic [ref=e93]: Organization Phone
+                  - textbox [ref=e94]: 416-000-0000
+                - listitem [ref=e98]:
+                  - generic [ref=e99]: Website
+                  - textbox [ref=e100]: https://www.streetvoices.ca
+                - listitem [ref=e193]:
+                  - generic [ref=e194]: "Tax ID #"
+                  - textbox [ref=e195]
+                - generic:
+                  - listitem:
+                    - generic [ref=e107]:
+                      - checkbox [checked] [ref=e108]
+                      - text: Use Canadian Tax Registration Number Format
+                - paragraph [ref=e110]
+            - generic [ref=e111]:
+              - directory [ref=e112]: Grant Eligibility
+              - generic [ref=e113]:
+                - emphasis [ref=e115]: The following questions will determine if your organization is eligible to apply for a grant from the NBA Foundation. You can view your eligibility status once you login to the Grantee Portal on your Organization Profile or on the "How to Apply" page. You may update your answers to these questions on your Organization Profile at any time.
+                - listitem [ref=e117]:
+                  - generic [ref=e118]: Are you domiciled in the US (registered 501(c)(3) entity) or Canada (T3010 Registered Charity or Nonprofit Organization)?
+                  - combobox [ref=e119]:
+                    - option
+                    - option "Yes" [selected]
+                    - option "No"
+                  - generic "Edit Dropdown"
+                - emphasis [ref=e121]: If you are fiscally sponsored by another charitable organization, please select Yes.
+                - listitem [ref=e123]:
+                  - generic [ref=e124]: Has your organization filed an official Form 990, Form 990-EZ, or T3010?
+                  - combobox [ref=e125]:
+                    - option
+                    - option "Yes" [selected]
+                    - option "No"
+                  - generic "Edit Dropdown"
+                - generic [ref=e126]:
+                  - text: The NBA Foundation requires all applicants to submit an official Form 990 or Form 990-EZ to be eligible for funding.
+                  - emphasis [ref=e127]:
+                    - strong [ref=e129]: If your organization filed a Form 990-N (e-Postcard), select No.
+                    - text: Organizations in their first year of tax-exempt status who have not yet filed a Form 990 should select No. Canadian organizations should upload the most recent T3010 Registered Charity Information Return.
+                - listitem [ref=e131]:
+                  - generic [ref=e132]: Does your organization serve youth between the ages of 14-24 in a market with an NBA team?
+                  - combobox [ref=e133]:
+                    - option
+                    - option "Yes" [selected]
+                    - option "No"
+                  - generic "Edit Dropdown"
+                - emphasis [ref=e135]:
+                  - strong [ref=e136]:
+                    - generic [ref=e137]:
+                      - text: Check if you’re operating in an NBA Market via the Zip Code list
+                      - link "here" [ref=e138] [cursor=pointer]:
+                        - /url: https://nbafoundation.fluxx.io/s3/config_doc/7864/3199321
+                - listitem [ref=e140]:
+                  - generic [ref=e141]: Does your organization provide programming within the scope of college attainment, career readiness, job training, youth employment, school-to-career opportunities, entrepreneurship, credentialing, and/or internships?
+                  - combobox [ref=e142]:
+                    - option
+                    - option "Yes" [selected]
+                    - option "No"
+                  - generic "Edit Dropdown"
+                - listitem [ref=e144]:
+                  - generic [ref=e145]: Is your organization a hospital, child day care program, or a K-12 public or private school?
+                  - combobox [ref=e146]:
+                    - option
+                    - option "Yes"
+                    - option "No" [selected]
+                  - generic "Edit Dropdown"
+                - emphasis [ref=e148]: Select Yes if any of these apply.
+            - generic [ref=e149]:
+              - directory [ref=e150]: Primary Contact Info
+              - generic [ref=e151]:
+                - listitem [ref=e153]:
+                  - generic [ref=e154]: First Name
+                  - textbox [ref=e155]: Joel
+                - listitem [ref=e157]:
+                  - generic [ref=e158]: Last Name
+                  - textbox [ref=e159]: Zola
+                - listitem [ref=e161]:
+                  - generic [ref=e162]: Title
+                  - textbox [ref=e163]: Executive Director
+                - listitem [ref=e165]:
+                  - generic [ref=e166]: Work Phone
+                  - textbox [ref=e167]
+                - listitem [ref=e169]:
+                  - generic [ref=e170]: Mobile Phone
+                  - textbox [ref=e171]: 416-697-6626
+                - listitem [ref=e173]:
+                  - generic [ref=e174]: E-mail
+                  - textbox [ref=e175]: joel@streetvoices.ca
+          - generic [ref=e176]:
+            - button "Cancel" [ref=e177] [cursor=pointer]
+            - button "Submit Request" [ref=e178] [cursor=pointer]
+    - generic [ref=e179]:
+      - paragraph [ref=e180]:
+        - img "Powered by Fluxx" [ref=e181]
+      - generic [ref=e182]:
+        - link "Privacy Policy" [ref=e184] [cursor=pointer]:
+          - /url: https://www.fluxx.io/privacy-policy
+        - link "Accessibility" [ref=e186] [cursor=pointer]:
+          - /url: /accessibility_statement.html
+  - iframe [ref=e189]:
+    - generic [ref=f9e2]:
+      - generic [ref=f9e5]:
+        - link "Privacy" [ref=f9e6] [cursor=pointer]:
+          - /url: https://www.google.com/intl/en/policies/privacy/
+        - text: "-"
+        - link "Terms" [ref=f9e7] [cursor=pointer]:
+          - /url: https://www.google.com/intl/en/policies/terms/
+      - generic [ref=f9e8]:
+        - generic [ref=f9e9]:
+          - text: protected by
+          - strong [ref=f9e10]: reCAPTCHA
+        - generic [ref=f9e11]: "-"

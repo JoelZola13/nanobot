@@ -1,0 +1,94 @@
+@utility aside {
+  @apply w-[240px];
+}
+
+@utility main {
+  width: calc(100% - 240px);
+}
+
+@utility calendar-month-height {
+  height: calc(100vh - 139px);
+}
+
+@utility calendar-week-height-sm {
+  height: calc(100vh - 181px);
+}
+
+@utility calendar-week-height-md {
+  height: calc(100vh - 131px);
+}
+
+@utility calendar-week-height {
+  height: calc(100vh - 90px);
+}
+
+@utility form-field {
+  @apply max-w-(--container-xl);
+}
+
+@utility link {
+  @apply text-blue-500 hover:text-blue-400 transition-colors ease-in-out duration-200;
+}
+
+@utility link-lighter {
+  @apply text-blue-300 hover:text-blue-200 transition-colors ease-in-out duration-200;
+}
+
+@utility row-px {
+  @apply px-3 sm:px-6 lg:px-8;
+}
+
+@utility row-py {
+  @apply py-3 sm:py-6 lg:py-8;
+}
+
+@utility row-mb {
+  @apply mb-3 sm:mb-6 lg:mb-8;
+}
+
+@utility row-pb {
+  @apply pb-3 sm:pb-6 lg:pb-8;
+}
+
+@utility row-mt {
+  @apply mt-3 sm:mt-6 lg:mb-8;
+}
+
+@utility row-pt {
+  @apply pt-3 sm:pt-6 lg:pt-8;
+}
+
+@utility m-container {
+  @apply max-w-(--container-6xl);
+}
+
+@utility s-container {
+  @apply max-w-(--container-3xl);
+}
+
+@utility mixpost-scroll-style {
+  /* Firefox */
+  scrollbar-width: thin;
+  /*scrollbar-color: var(--secondary) var(--primary);*/
+
+  /* Chrome, Edge, and Safari */
+  &::-webkit-scrollbar {
+    @apply invisible w-3;
+  }
+
+  &::-webkit-scrollbar-track {
+    @apply bg-gray-50 rounded-sm;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-md border-4 border-solid border-white transition-colors ease-in-out duration-200;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+@utility group-visible {
+  @apply opacity-0 group-hover:opacity-100 transition-opacity ease-in-out duration-200;
+}

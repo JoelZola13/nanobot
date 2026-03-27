@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "voicebox": {
+      "type": "local",
+      "command": ["bin/voicebox-opencode", "--mcp"],
+      "enabled": true
+    }
+  }
+}
