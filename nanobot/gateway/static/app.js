@@ -34,6 +34,7 @@ window.app = {
       config: window.ConfigPage,
       nodes: window.NodesPage,
       health: window.HealthPage,
+      accounting: window.AccountingPage,
     };
 
     const page = pages[hash];

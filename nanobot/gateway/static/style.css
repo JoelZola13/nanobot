@@ -680,6 +680,259 @@ html, body {
   background: var(--border-focus);
 }
 
+/* ── Accounting Page ─────────────────────── */
+
+.acct-icon {
+  font-size: 12px;
+  opacity: 1;
+}
+
+.nav-item[data-page="accounting"] .acct-icon {
+  color: var(--green);
+}
+
+.nav-item[data-page="accounting"].active .acct-icon {
+  color: var(--accent);
+}
+
+.acct-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.acct-btn-export {
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.acct-btn-export:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Summary Cards */
+.acct-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.acct-summary-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.acct-summary-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.acct-summary-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.acct-summary-value.income { color: var(--green); }
+.acct-summary-value.expense { color: var(--red); }
+.acct-summary-value.positive { color: var(--green); }
+.acct-summary-value.negative { color: var(--red); }
+.acct-summary-value.neutral { color: var(--accent); }
+
+/* Toolbar */
+.acct-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.acct-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.acct-filter-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.acct-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.acct-filter-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.acct-search {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+  width: 220px;
+  transition: border-color 0.15s;
+}
+
+.acct-search:focus {
+  border-color: var(--accent-dim);
+}
+
+.acct-search::placeholder {
+  color: var(--text-muted);
+}
+
+/* Transaction Form */
+.acct-form {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.acct-form-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.acct-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.acct-form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.acct-form-field label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.acct-form-field input,
+.acct-form-field select {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.acct-form-field input:focus,
+.acct-form-field select:focus {
+  border-color: var(--accent-dim);
+}
+
+.acct-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.acct-btn-cancel {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.acct-btn-cancel:hover {
+  color: var(--text-primary);
+}
+
+/* Table */
+.acct-table-wrap {
+  overflow-x: auto;
+}
+
+.acct-table .acct-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.acct-table .acct-sortable:hover {
+  color: var(--accent);
+}
+
+.acct-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.acct-amount.income { color: var(--green); }
+.acct-amount.expense { color: var(--red); }
+
+.acct-cat-pill {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.acct-actions-cell {
+  white-space: nowrap;
+}
+
+.acct-row-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.acct-row-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.acct-del-btn:hover {
+  color: var(--red);
+}
+
+.acct-edit-btn:hover {
+  color: var(--accent);
+}
+
 /* ── Responsive ──────────────────────────── */
 
 @media (max-width: 768px) {
