@@ -114,13 +114,13 @@ services:
         source: ./LibreChat/librechat.yaml
         target: /app/librechat.yaml
       - type: bind
-        source: ./LibreChat/custom-index.html
+        source: ./deploy/custom-ui/custom-index.html
         target: /app/client/dist/index.html
       - type: bind
         source: ./LibreChat/client/public/automations.js
         target: /app/client/dist/automations.js
       - type: bind
-        source: ./LibreChat/client/public/unified-nav.js
+        source: ./deploy/custom-ui/unified-nav.js
         target: /app/client/dist/unified-nav.js
       - type: bind
         source: ./LibreChat/client/public/mission-control.js
@@ -140,6 +140,9 @@ services:
       - type: bind
         source: ./LibreChat/client/public/sv-platform.js
         target: /app/client/dist/sv-platform.js
+      - type: bind
+        source: ./deploy/custom-ui/accounting.js
+        target: /app/client/dist/accounting.js
       - type: bind
         source: ./LibreChat/scripts
         target: /app/scripts
