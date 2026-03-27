@@ -15,6 +15,18 @@ services:
       - type: bind
         source: ./scripts
         target: /app/scripts
+      - type: bind
+        source: ../deploy/custom-ui/custom-index.html
+        target: /app/client/dist/index.html
+      - type: bind
+        source: ../deploy/custom-ui/unified-nav.js
+        target: /app/client/dist/unified-nav.js
+      - type: bind
+        source: ../deploy/custom-ui/accounting.js
+        target: /app/client/dist/accounting.js
+      - type: bind
+        source: ../deploy/custom-ui/images/sidebar-icons/accounting.svg
+        target: /app/client/public/images/sidebar-icons/accounting.svg
 
   nginx:
     container_name: nanobot-nginx
