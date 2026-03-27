@@ -32,6 +32,14 @@ cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
 # LibreChat YAML (agent models, endpoints, MCP servers)
 cp deploy/librechat.yaml LibreChat/librechat.yaml
 
+# Nginx config (routes for gallery, social, agents)
+cp deploy/nginx-unified.conf LibreChat/nginx-unified.conf
+
+# Street Voices frontend patches (gallery submit, etc.)
+if [ -d "deploy/streetbot-patches" ]; then
+  cp -r deploy/streetbot-patches/gallery/* LibreChat/client/src/components/streetbot/gallery/ 2>/dev/null || true
+fi
+
 # LibreChat .env (OAuth, DB, UI settings) — only create if missing
 if [ ! -f "LibreChat/.env" ]; then
   cp deploy/librechat.env.example LibreChat/.env
