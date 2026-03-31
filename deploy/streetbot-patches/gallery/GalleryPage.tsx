@@ -648,15 +648,7 @@ export default function GalleryPage() {
 
   // Check if we're on an artwork detail page
   const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
-
-  // Render full-page upload if on /gallery/upload
-  if (location.pathname === "/gallery/upload") {
-    return (
-      <Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>Loading...</div>}>
-        <SubmitArtPage />
-      </Suspense>
-    );
-  }
+  const isUploadPage = location.pathname === "/gallery/upload";
 
   // Artworks state
   const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -889,6 +881,15 @@ export default function GalleryPage() {
   // Artwork detail view — checked after all hooks
   if (artworkMatch) {
     return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} />;
+  }
+
+  // Render full-page upload if on /gallery/upload
+  if (isUploadPage) {
+    return (
+      <Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>Loading...</div>}>
+        <SubmitArtPage />
+      </Suspense>
+    );
   }
 
   return (
