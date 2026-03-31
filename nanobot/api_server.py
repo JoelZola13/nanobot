@@ -21,6 +21,8 @@ from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
 SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
+GALLERY_DIR = Path.home() / ".nanobot" / "workspace" / "gallery"
+GALLERY_DB_FILE = Path.home() / ".nanobot" / "workspace" / "gallery" / "artworks.json"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
@@ -2499,6 +2501,167 @@ async def llm_proxy_models(request: Request) -> JSONResponse:
     })
 
 
+# ── Gallery API (local artwork uploads) ──────────────────────────────────────
+
+def _load_gallery_db() -> list[dict]:
+    GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+    if GALLERY_DB_FILE.exists():
+        try:
+            return json.loads(GALLERY_DB_FILE.read_text())
+        except Exception:
+            return []
+    return []
+
+
+def _save_gallery_db(artworks: list[dict]) -> None:
+    GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+    GALLERY_DB_FILE.write_text(json.dumps(artworks, indent=2))
+
+
+async def gallery_upload(request: Request) -> JSONResponse:
+    """POST /gallery/upload — Upload artwork image + metadata."""
+    import uuid as _uuid
+
+    GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+    images_dir = GALLERY_DIR / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    form = await request.form()
+    image = form.get("image")
+    if not image or not hasattr(image, "read"):
+        return JSONResponse({"error": "No image file provided"}, status_code=400)
+
+    title = form.get("title", "Untitled")
+    description = form.get("description", "")
+    artist_name = form.get("artist_name", "Anonymous")
+    medium = form.get("medium", "")
+    style = form.get("style", "")
+    tags = form.get("tags", "")
+    user_id = form.get("user_id", "")
+    is_for_sale = form.get("is_for_sale", "false").lower() == "true"
+    price = form.get("price", "")
+
+    ext = Path(image.filename or "upload.jpg").suffix or ".jpg"
+    artwork_id = _uuid.uuid4().hex[:12]
+    filename = f"{artwork_id}{ext}"
+    filepath = images_dir / filename
+    content = await image.read()
+    filepath.write_bytes(content)
+
+    artwork = {
+        "id": artwork_id,
+        "user_id": user_id,
+        "artist_name": str(artist_name),
+        "title": str(title),
+        "description": str(description),
+        "medium": str(medium),
+        "style": str(style),
+        "tags": [t.strip() for t in str(tags).split(",") if t.strip()],
+        "image_url": f"/sbapi/gallery/images/{filename}",
+        "thumbnail_url": f"/sbapi/gallery/images/{filename}",
+        "is_for_sale": is_for_sale,
+        "price": float(price) if price else None,
+        "currency": "CAD",
+        "is_public": True,
+        "is_approved": True,
+        "view_count": 0,
+        "favorite_count": 0,
+        "comment_count": 0,
+        "share_count": 0,
+        "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+    }
+
+    artworks = _load_gallery_db()
+    artworks.insert(0, artwork)
+    _save_gallery_db(artworks)
+
+    logger.info(f"Gallery upload: {title} by {artist_name} ({filename})")
+    return JSONResponse(artwork, status_code=201)
+
+
+async def gallery_list_artworks(request: Request) -> JSONResponse:
+    """GET /gallery/artworks — List all artworks."""
+    artworks = _load_gallery_db()
+    search = request.query_params.get("search", "").lower()
+    medium = request.query_params.get("medium", "")
+    style = request.query_params.get("style", "")
+
+    filtered = artworks
+    if search:
+        filtered = [a for a in filtered if search in a.get("title", "").lower()
+                     or search in a.get("artist_name", "").lower()
+                     or search in a.get("description", "").lower()]
+    if medium:
+        filtered = [a for a in filtered if a.get("medium", "").lower() == medium.lower()]
+    if style:
+        filtered = [a for a in filtered if a.get("style", "").lower() == style.lower()]
+
+    return JSONResponse({"artworks": filtered, "total": len(filtered)})
+
+
+async def gallery_get_artwork(request: Request) -> JSONResponse:
+    artwork_id = request.path_params["artwork_id"]
+    artworks = _load_gallery_db()
+    artwork = next((a for a in artworks if a["id"] == artwork_id), None)
+    if not artwork:
+        return JSONResponse({"error": "Artwork not found"}, status_code=404)
+    return JSONResponse(artwork)
+
+
+async def gallery_list_uploads(request: Request) -> JSONResponse:
+    user_id = request.query_params.get("user_id", "")
+    artworks = _load_gallery_db()
+    uploads = [a for a in artworks if a.get("user_id") == user_id] if user_id else artworks
+    return JSONResponse({"uploads": uploads})
+
+
+async def gallery_list_mediums(request: Request) -> JSONResponse:
+    artworks = _load_gallery_db()
+    mediums = sorted(set(a.get("medium", "") for a in artworks if a.get("medium")))
+    return JSONResponse({"mediums": mediums})
+
+
+async def gallery_list_tags(request: Request) -> JSONResponse:
+    artworks = _load_gallery_db()
+    tag_counts: dict[str, int] = {}
+    for a in artworks:
+        for tag in a.get("tags", []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    tags = sorted(tag_counts.items(), key=lambda x: -x[1])[:20]
+    return JSONResponse({"tags": [{"name": t, "count": c} for t, c in tags]})
+
+
+async def gallery_serve_image(request: Request) -> FileResponse | JSONResponse:
+    filename = request.path_params["filename"]
+    images_dir = GALLERY_DIR / "images"
+    filepath = images_dir / filename
+    if ".." in filename or not filepath.resolve().is_relative_to(images_dir.resolve()):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Image not found"}, status_code=404)
+    suffix = filepath.suffix.lower()
+    media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                   ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml"}
+    return FileResponse(filepath, media_type=media_types.get(suffix, "application/octet-stream"))
+
+
+async def gallery_delete_artwork(request: Request) -> JSONResponse:
+    artwork_id = request.path_params["artwork_id"]
+    artworks = _load_gallery_db()
+    artwork = next((a for a in artworks if a["id"] == artwork_id), None)
+    if not artwork:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    image_url = artwork.get("image_url", "")
+    if image_url:
+        img_name = image_url.rsplit("/", 1)[-1]
+        img_path = GALLERY_DIR / "images" / img_name
+        if img_path.exists():
+            img_path.unlink()
+    artworks = [a for a in artworks if a["id"] != artwork_id]
+    _save_gallery_db(artworks)
+    return JSONResponse({"ok": True})
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
@@ -2525,6 +2688,15 @@ app = Starlette(
         Route("/v1/llm-proxy/models", llm_proxy_models, methods=["GET"]),
         # ── Academy proxy to SBP backend ──
         Route("/api/academy/{path:path}", academy_proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
+        # ── Gallery (local artwork uploads) ──
+        Route("/gallery/upload", gallery_upload, methods=["POST"]),
+        Route("/gallery/artworks/mediums", gallery_list_mediums, methods=["GET"]),
+        Route("/gallery/artworks/{artwork_id}", gallery_get_artwork, methods=["GET"]),
+        Route("/gallery/artworks/{artwork_id}", gallery_delete_artwork, methods=["DELETE"]),
+        Route("/gallery/artworks", gallery_list_artworks, methods=["GET"]),
+        Route("/gallery/uploads", gallery_list_uploads, methods=["GET"]),
+        Route("/gallery/tags", gallery_list_tags, methods=["GET"]),
+        Route("/gallery/images/{filename:path}", gallery_serve_image, methods=["GET"]),
         # ── Groups / Agent Teams ──
         Route("/groups", groups_api, methods=["GET"]),
         Route("/groups/{group_id:int}/messages", group_messages, methods=["GET"]),
