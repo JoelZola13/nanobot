@@ -35,7 +35,7 @@ services:
       - "3180:3180"
     volumes:
       - type: bind
-        source: ./nginx-unified.conf
+        source: ../deploy/nginx-unified.conf
         target: /etc/nginx/conf.d/default.conf
     extra_hosts:
       - "host.docker.internal:host-gateway"
