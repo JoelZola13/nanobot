@@ -59,6 +59,12 @@ echo "→ Setting up LibreChat configuration..."
 cp deploy/docker-compose.override.yml LibreChat/docker-compose.override.yml
 cp deploy/librechat.yaml LibreChat/librechat.yaml
 
+# Apply streetbot patches (custom components that override LibreChat defaults)
+if [ -d "deploy/streetbot-patches" ]; then
+  echo "→ Applying Street Voices patches..."
+  cp -r deploy/streetbot-patches/gallery/* LibreChat/client/src/components/streetbot/gallery/ 2>/dev/null || true
+fi
+
 # Build and start the platform
 echo "→ Building and starting all services..."
 echo "  (First run builds custom frontend + downloads images — may take 10-20 min)"
