@@ -1,7 +1,5 @@
-import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-
-const SubmitArtPage = lazy(() => import("./SubmitArtPage"));
 import {
   Filter,
   Search,
@@ -25,6 +23,7 @@ import { useGlassStyles } from "../shared/useGlassStyles";
 import { GlassBackground } from "../shared/GlassBackground";
 import { useAuthContext } from "~/hooks/AuthContext";
 import { getOrCreateUserId } from "@/lib/userId";
+import SubmitArtModal from "./SubmitArtModal";
 
 // ── Types (inlined from gallery types) ──────────────────────────────────────
 
@@ -648,10 +647,17 @@ export default function GalleryPage() {
 
   // Check if we're on an artwork detail page
   const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
-  const isUploadPage = location.pathname === "/gallery/upload";
 
   // Artworks state
   const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+
+  // Auto-open submit modal when navigating to /gallery/upload
+  useEffect(() => {
+    if (location.pathname === "/gallery/upload") {
+      setShowSubmitModal(true);
+    }
+  }, [location.pathname]);
   const [artworksLoading, setArtworksLoading] = useState(true);
   const [artworksError, setArtworksError] = useState<string | null>(null);
 
@@ -883,15 +889,6 @@ export default function GalleryPage() {
     return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} />;
   }
 
-  // Render full-page upload if on /gallery/upload
-  if (isUploadPage) {
-    return (
-      <Suspense fallback={<div style={{ padding: 40, textAlign: "center" }}>Loading...</div>}>
-        <SubmitArtPage />
-      </Suspense>
-    );
-  }
-
   return (
     <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
       <GlassBackground />
@@ -953,7 +950,7 @@ export default function GalleryPage() {
             }}
           >
             <button
-              onClick={() => navigate("/gallery/upload")}
+              onClick={() => setShowSubmitModal(true)}
               style={{
                 background: "#FFD700",
                 color: "#000",
@@ -1338,7 +1335,7 @@ export default function GalleryPage() {
               </h3>
               <button
                 type="button"
-                onClick={() => navigate("/gallery/upload")}
+                onClick={() => setShowSubmitModal(true)}
                 style={{
                   background: "rgba(255, 214, 0, 0.1)",
                   backdropFilter: "blur(10px)",
@@ -1603,7 +1600,7 @@ export default function GalleryPage() {
               <p style={{ fontSize: "1.2rem", marginBottom: 16 }}>No artworks found</p>
               <p>Be the first to submit your art to the gallery!</p>
               <button
-                onClick={() => navigate("/gallery/upload")}
+                onClick={() => setShowSubmitModal(true)}
                 style={{
                   marginTop: 16,
                   padding: "10px 20px",
@@ -1952,6 +1949,14 @@ export default function GalleryPage() {
         />
       )}
 
+      <SubmitArtModal
+        open={showSubmitModal}
+        onClose={() => setShowSubmitModal(false)}
+        onSuccess={() => {
+          loadArtworks();
+          loadUploads();
+        }}
+      />
     </div>
   );
 }
