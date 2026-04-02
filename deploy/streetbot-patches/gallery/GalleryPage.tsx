@@ -1001,3 +1001,2771 @@ function MoreByArtist({ artistId, artistName, currentArtworkId, glassCard, color
     </div>
   );
 }
+
+// ── Style Collections ────────────────────────────────────────────────────────
+
+const MEDIUM_COLLECTIONS = [
+  {
+    id: "photography",
+    name: "Photography",
+    description: "Captured moments — street scenes, portraits, landscapes, and raw visual storytelling.",
+    cover: "https://picsum.photos/seed/col-photo/600/400",
+    gradient: "linear-gradient(135deg, #232526 0%, #414345 100%)",
+  },
+  {
+    id: "digital-art",
+    name: "Digital Art",
+    description: "Born on screen — digital illustrations, 3D renders, generative art, and pixel craft.",
+    cover: "https://picsum.photos/seed/col-digital/600/400",
+    gradient: "linear-gradient(135deg, #0ff 0%, #f0f 50%, #ff0 100%)",
+  },
+  {
+    id: "oil-painting",
+    name: "Oil Painting",
+    description: "Rich textures and deep colour — the timeless tradition of oil on canvas.",
+    cover: "https://picsum.photos/seed/col-oil/600/400",
+    gradient: "linear-gradient(135deg, #8B4513 0%, #D2691E 100%)",
+  },
+  {
+    id: "watercolor",
+    name: "Watercolor",
+    description: "Soft washes, translucent layers, and flowing pigment on paper.",
+    cover: "https://picsum.photos/seed/col-watercolor/600/400",
+    gradient: "linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)",
+  },
+  {
+    id: "mixed-media",
+    name: "Mixed Media",
+    description: "Collage, assemblage, and boundary-breaking combinations of materials and technique.",
+    cover: "https://picsum.photos/seed/col-mixed/600/400",
+    gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+  },
+  {
+    id: "street-art",
+    name: "Street Art",
+    description: "Murals, stencils, wheat-paste, and graffiti — art that lives on walls and in public spaces.",
+    cover: "https://picsum.photos/seed/col-street/600/400",
+    gradient: "linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%)",
+  },
+  {
+    id: "acrylic",
+    name: "Acrylic",
+    description: "Versatile and vibrant — fast-drying acrylics from bold impasto to smooth glazes.",
+    cover: "https://picsum.photos/seed/col-acrylic/600/400",
+    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+  },
+  {
+    id: "charcoal",
+    name: "Charcoal",
+    description: "Dramatic contrasts and raw mark-making — the power of black and white.",
+    cover: "https://picsum.photos/seed/col-charcoal/600/400",
+    gradient: "linear-gradient(135deg, #434343 0%, #000000 100%)",
+  },
+  {
+    id: "ink",
+    name: "Ink",
+    description: "Bold lines, delicate washes, and the expressive flow of ink on paper.",
+    cover: "https://picsum.photos/seed/col-ink/600/400",
+    gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+  },
+];
+
+function CollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSelectMedium: (medium: string) => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Fetch artwork counts per medium
+    fetch(`${GALLERY_API_URL}/artworks`)
+      .then((r) => r.json())
+      .then((artworks: Artwork[]) => {
+        const mediumCounts: Record<string, number> = {};
+        artworks.forEach((a) => {
+          if (a.medium) {
+            mediumCounts[a.medium] = (mediumCounts[a.medium] || 0) + 1;
+          }
+        });
+        setCounts(mediumCounts);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load saved collections for this user
+  useEffect(() => {
+    if (!authUser?.id) return;
+    fetch(`${GALLERY_API_URL}/collections/saved?user_id=${authUser.id}`)
+      .then((r) => r.json())
+      .then((rows: { collection_id: string }[]) => {
+        setSavedIds(new Set(rows.map((r) => r.collection_id)));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  const toggleSave = async (collectionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!authUser?.id) return;
+    const isSaved = savedIds.has(collectionId);
+    const method = isSaved ? "DELETE" : "POST";
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/collections/save?user_id=${authUser.id}&collection_id=${collectionId}`,
+        { method },
+      );
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (isSaved) next.delete(collectionId);
+        else next.add(collectionId);
+        return next;
+      });
+    } catch {}
+  };
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "32px 20px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,214,0,0.15)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: "#FFD700" }}>
+              Collections
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Browse artwork by medium
+            </p>
+          </div>
+        </div>
+
+        {/* Collections Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: "24px",
+          }}
+        >
+          {MEDIUM_COLLECTIONS.map((col) => {
+            const count = counts[col.name] || 0;
+            return (
+              <div
+                key={col.id}
+                onClick={() => onSelectMedium(col.name)}
+                style={{
+                  ...glassCard,
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 12px 40px rgba(255, 214, 0, 0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "";
+                }}
+              >
+                {/* Cover image with gradient overlay */}
+                <div
+                  style={{
+                    height: 180,
+                    backgroundImage: `${col.gradient}, url(${col.cover})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundBlendMode: "overlay",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: "60%",
+                      background: `linear-gradient(transparent, ${colors.bg})`,
+                    }}
+                  />
+                  {/* Heart bookmark button */}
+                  <button
+                    onClick={(e) => toggleSave(col.id, e)}
+                    style={{
+                      position: "absolute",
+                      top: 12,
+                      left: 12,
+                      background: savedIds.has(col.id) ? "rgba(255, 60, 80, 0.85)" : "rgba(0,0,0,0.5)",
+                      backdropFilter: "blur(10px)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 38,
+                      height: 38,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                      boxShadow: savedIds.has(col.id) ? "0 0 12px rgba(255,60,80,0.4)" : "none",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!savedIds.has(col.id)) {
+                        e.currentTarget.style.background = "rgba(255, 60, 80, 0.6)";
+                        e.currentTarget.style.transform = "scale(1.15)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!savedIds.has(col.id)) {
+                        e.currentTarget.style.background = "rgba(0,0,0,0.5)";
+                      }
+                      e.currentTarget.style.transform = "scale(1)";
+                    }}
+                  >
+                    <Heart
+                      size={18}
+                      fill={savedIds.has(col.id) ? "#fff" : "none"}
+                      color="#fff"
+                      strokeWidth={2}
+                    />
+                  </button>
+
+                </div>
+
+                {/* Info */}
+                <div style={{ padding: "16px 20px 12px" }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 700, color: colors.text }}>
+                    {col.name}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textMuted, lineHeight: 1.5 }}>
+                    {col.description}
+                  </p>
+                </div>
+
+                {/* Footer bar */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "auto" }}>
+                  <span style={{ fontSize: "0.78rem", color: colors.textMuted, fontWeight: 500 }}>
+                    {count} {count === 1 ? "piece" : "pieces"}
+                  </span>
+                  <span style={{ fontSize: "0.78rem", color: colors.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                    View →
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Saved Collections View ──────────────────────────────────────────────────
+
+function SavedCollectionsView({ onBack, onSelectMedium }: { onBack: () => void; onSelectMedium: (medium: string) => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [counts, setCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    fetch(`${GALLERY_API_URL}/artworks`)
+      .then((r) => r.json())
+      .then((artworks: Artwork[]) => {
+        const mediumCounts: Record<string, number> = {};
+        artworks.forEach((a) => {
+          if (a.medium) mediumCounts[a.medium] = (mediumCounts[a.medium] || 0) + 1;
+        });
+        setCounts(mediumCounts);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+    fetch(`${GALLERY_API_URL}/collections/saved?user_id=${authUser.id}`)
+      .then((r) => r.json())
+      .then((rows: { collection_id: string }[]) => {
+        setSavedIds(new Set(rows.map((r) => r.collection_id)));
+      })
+      .catch(() => {});
+  }, [authUser?.id]);
+
+  const unsave = async (collectionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!authUser?.id) return;
+    try {
+      await fetch(
+        `${GALLERY_API_URL}/collections/save?user_id=${authUser.id}&collection_id=${collectionId}`,
+        { method: "DELETE" },
+      );
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(collectionId);
+        return next;
+      });
+    } catch {}
+  };
+
+  const savedCollections = MEDIUM_COLLECTIONS.filter((col) => savedIds.has(col.id));
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "32px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,214,0,0.15)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: "#FFD700" }}>
+              <Heart size={24} style={{ marginRight: 8, verticalAlign: "middle" }} fill="#ff3c50" color="#ff3c50" />
+              Saved Collections
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Your bookmarked medium collections
+            </p>
+          </div>
+        </div>
+
+        {savedCollections.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "80px 20px",
+              ...glassCard,
+            }}
+          >
+            <Heart size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
+            <h3 style={{ color: colors.text, margin: "0 0 8px" }}>No saved collections yet</h3>
+            <p style={{ color: colors.textMuted, margin: 0 }}>
+              Browse collections and click the heart to bookmark your favourites.
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              gap: "24px",
+            }}
+          >
+            {savedCollections.map((col) => {
+              const count = counts[col.name] || 0;
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => onSelectMedium(col.name)}
+                  style={{
+                    ...glassCard,
+                    overflow: "hidden",
+                    cursor: "pointer",
+                    transition: "all 0.3s ease",
+                    position: "relative",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 12px 40px rgba(255, 60, 80, 0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "";
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 180,
+                      backgroundImage: `${col.gradient}, url(${col.cover})`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      backgroundBlendMode: "overlay",
+                      position: "relative",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: "60%",
+                        background: `linear-gradient(transparent, ${colors.bg})`,
+                      }}
+                    />
+                    {/* Remove button */}
+                    <button
+                      onClick={(e) => unsave(col.id, e)}
+                      title="Remove from saved"
+                      style={{
+                        position: "absolute",
+                        top: 12,
+                        left: 12,
+                        background: "rgba(255, 60, 80, 0.85)",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: 38,
+                        height: 38,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        transition: "all 0.25s ease",
+                        boxShadow: "0 0 12px rgba(255,60,80,0.4)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(200, 30, 50, 1)";
+                        e.currentTarget.style.transform = "scale(1.15)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "rgba(255, 60, 80, 0.85)";
+                        e.currentTarget.style.transform = "scale(1)";
+                      }}
+                    >
+                      <Heart size={18} fill="#fff" color="#fff" strokeWidth={2} />
+                    </button>
+                  </div>
+                  <div style={{ padding: "16px 20px 12px" }}>
+                    <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 700, color: colors.text }}>
+                      {col.name}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: colors.textMuted, lineHeight: 1.5 }}>
+                      {col.description}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "auto" }}>
+                    <span style={{ fontSize: "0.78rem", color: colors.textMuted, fontWeight: 500 }}>
+                      {count} {count === 1 ? "piece" : "pieces"}
+                    </span>
+                    <span style={{ fontSize: "0.78rem", color: colors.accent, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                      View →
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Medium & style options for the upload form ──────────────────────────────
+
+const MEDIUM_OPTIONS = [
+  "Oil Painting",
+  "Digital Art",
+  "Photography",
+  "Watercolor",
+  "Mixed Media",
+  "Street Art",
+  "Acrylic",
+  "Charcoal",
+  "Ink",
+];
+
+const STYLE_OPTIONS = [
+  "Abstract",
+  "Contemporary",
+  "Realism",
+  "Pop Art",
+  "Minimalist",
+  "Cyberpunk",
+  "Impressionism",
+  "Surrealism",
+  "Expressionism",
+  "Urban",
+];
+
+// Medium-specific sub-styles for the filter sidebar
+const MEDIUM_STYLES: Record<string, string[]> = {
+  Photography: [
+    "Street Photography",
+    "Film Photography",
+    "Portrait Photography",
+    "Landscape Photography",
+    "Documentary",
+    "Black & White",
+    "Abstract Photography",
+    "Fashion Photography",
+  ],
+  "Digital Art": [
+    "3D Render",
+    "Pixel Art",
+    "Generative Art",
+    "Digital Illustration",
+    "Concept Art",
+    "Cyberpunk",
+    "Vaporwave",
+    "AI-Assisted",
+  ],
+  "Oil Painting": [
+    "Realism",
+    "Impressionism",
+    "Abstract",
+    "Expressionism",
+    "Surrealism",
+    "Classical",
+    "Plein Air",
+    "Figurative",
+  ],
+  Watercolor: [
+    "Botanical",
+    "Landscape",
+    "Loose / Wet-on-Wet",
+    "Illustrative",
+    "Abstract",
+    "Portraiture",
+    "Urban Sketching",
+  ],
+  "Mixed Media": [
+    "Collage",
+    "Assemblage",
+    "Found Object",
+    "Textile Art",
+    "Contemporary",
+    "Experimental",
+    "Layered",
+  ],
+  "Street Art": [
+    "Graffiti",
+    "Mural",
+    "Stencil",
+    "Wheat-Paste",
+    "Tagging",
+    "Wildstyle",
+    "Political",
+    "Pop Art",
+  ],
+  Acrylic: [
+    "Abstract",
+    "Pop Art",
+    "Impasto",
+    "Minimalist",
+    "Figurative",
+    "Geometric",
+    "Contemporary",
+  ],
+  Charcoal: [
+    "Portrait",
+    "Figure Drawing",
+    "Landscape",
+    "Hyperrealism",
+    "Gestural",
+    "Abstract",
+    "Architectural",
+  ],
+  Ink: [
+    "Line Art",
+    "Sumi-e / Brush",
+    "Cross-Hatching",
+    "Calligraphy",
+    "Illustrative",
+    "Abstract",
+    "Comic / Manga",
+  ],
+};
+
+// ── Upload Art View ─────────────────────────────────────────────────────────
+
+function UploadArtView({ onBack }: { onBack: () => void }) {
+  const { colors, glassCard, glassSurface } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const navigate = useNavigate();
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [medium, setMedium] = useState("");
+  const [style, setStyle] = useState("");
+  const [tags, setTags] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isForSale, setIsForSale] = useState(false);
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("CAD");
+  const [acceptsCommissions, setAcceptsCommissions] = useState(false);
+  const [commissionInfo, setCommissionInfo] = useState("");
+  const [yearCreated, setYearCreated] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !imageFile) {
+      setError("Title and image are required.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const userId = getOrCreateUserId(authUser?.id);
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      formData.append("artist_id", userId);
+      if (description.trim()) formData.append("description", description.trim());
+      if (medium) formData.append("medium", medium);
+      if (style) formData.append("style", style);
+      if (tags.trim()) formData.append("tags", tags.trim());
+      if (yearCreated) formData.append("year_created", yearCreated);
+      formData.append("is_for_sale", String(isForSale));
+      if (isForSale && price) {
+        formData.append("price", price);
+        formData.append("currency", currency);
+      }
+      formData.append("accepts_commissions", String(acceptsCommissions));
+      if (acceptsCommissions && commissionInfo.trim()) {
+        formData.append("commission_info", commissionInfo.trim());
+      }
+      formData.append("image", imageFile);
+
+      const resp = await fetch(`${GALLERY_API_URL}/artworks`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Upload failed (${resp.status})`);
+      }
+
+      setSuccess(true);
+      setTimeout(() => navigate("/gallery"), 1500);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "12px 16px",
+    background: "rgba(255,255,255,0.05)",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "10px",
+    color: colors.text,
+    fontSize: "0.95rem",
+    outline: "none",
+    transition: "border-color 0.2s",
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: "6px",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+  };
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+
+      <div style={{ position: "relative", zIndex: 1, maxWidth: 720, margin: "0 auto", padding: "32px 20px" }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: `1px solid ${colors.border}`,
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: colors.text,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,214,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "1.8rem", fontWeight: 800, color: colors.text }}>
+              Submit Your Art
+            </h1>
+            <p style={{ margin: "4px 0 0", color: colors.textMuted, fontSize: "0.9rem" }}>
+              Share your artwork with the Street Voices community
+            </p>
+          </div>
+        </div>
+
+        {/* Success message */}
+        {success && (
+          <div
+            style={{
+              ...glassCard,
+              padding: "24px",
+              marginBottom: 24,
+              textAlign: "center",
+              borderColor: "rgba(34,197,94,0.4)",
+            }}
+          >
+            <p style={{ fontSize: "1.2rem", color: "#22c55e", fontWeight: 700, margin: 0 }}>
+              Artwork submitted successfully!
+            </p>
+            <p style={{ color: colors.textMuted, marginTop: 8, marginBottom: 0 }}>
+              Redirecting to gallery...
+            </p>
+          </div>
+        )}
+
+        {/* Form */}
+        {!success && (
+          <form onSubmit={handleSubmit}>
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                Artwork Details
+              </h2>
+
+              {/* Title */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>
+                  Title <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Give your artwork a title"
+                  required
+                  style={inputStyle}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={labelStyle}>Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Tell the story behind your piece..."
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                />
+              </div>
+
+              {/* Medium & Style row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={labelStyle}>Medium</label>
+                  <select
+                    value={medium}
+                    onChange={(e) => { setMedium(e.target.value); setStyle(""); }}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="">Select medium...</option>
+                    {MEDIUM_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>{medium ? `${medium} Style` : "Style"}</label>
+                  <select
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    <option value="">Select style...</option>
+                    {(medium && MEDIUM_STYLES[medium] ? MEDIUM_STYLES[medium] : STYLE_OPTIONS).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tags & Year row */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={labelStyle}>Tags</label>
+                  <input
+                    type="text"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    placeholder="abstract, colorful, portrait (comma-separated)"
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Year Created</label>
+                  <input
+                    type="number"
+                    value={yearCreated}
+                    onChange={(e) => setYearCreated(e.target.value)}
+                    placeholder={String(new Date().getFullYear())}
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    style={inputStyle}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Image Upload Card */}
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                <Image size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />
+                Upload Image <span style={{ color: "#ef4444" }}>*</span>
+              </h2>
+
+              {imagePreview ? (
+                <div style={{ position: "relative", marginBottom: 16 }}>
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    style={{
+                      width: "100%",
+                      maxHeight: 400,
+                      objectFit: "contain",
+                      borderRadius: 12,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setImageFile(null); setImagePreview(null); }}
+                    style={{
+                      position: "absolute",
+                      top: 10,
+                      right: 10,
+                      background: "rgba(0,0,0,0.7)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 32,
+                      height: 32,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      color: "#fff",
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "48px 24px",
+                    border: `2px dashed ${colors.border}`,
+                    borderRadius: 12,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    textAlign: "center",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#FFD700";
+                    e.currentTarget.style.background = "rgba(255,214,0,0.05)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = colors.border;
+                    e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <Upload size={40} style={{ color: colors.textMuted, marginBottom: 12 }} />
+                  <p style={{ color: colors.text, fontWeight: 600, margin: "0 0 4px" }}>
+                    Click to upload your artwork
+                  </p>
+                  <p style={{ color: colors.textMuted, fontSize: "0.85rem", margin: 0 }}>
+                    PNG, JPG, GIF, or WebP (max 10MB)
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={handleImageChange}
+                    style={{ display: "none" }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Pricing & Commissions Card */}
+            <div style={{ ...glassCard, padding: "28px", marginBottom: 24 }}>
+              <h2 style={{ margin: "0 0 24px", fontSize: "1.1rem", color: "#FFD700", fontWeight: 700 }}>
+                Pricing & Commissions
+              </h2>
+
+              {/* For Sale toggle */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isForSale ? 16 : 20 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsForSale(!isForSale)}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+                >
+                  {isForSale ? (
+                    <ToggleRight size={28} style={{ color: "#FFD700" }} />
+                  ) : (
+                    <ToggleLeft size={28} style={{ color: colors.textMuted }} />
+                  )}
+                </button>
+                <span style={{ color: colors.text, fontWeight: 600 }}>Available for sale</span>
+              </div>
+
+              {isForSale && (
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 20 }}>
+                  <div>
+                    <label style={labelStyle}>Price</label>
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      style={inputStyle}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Currency</label>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      style={{ ...inputStyle, cursor: "pointer" }}
+                    >
+                      <option value="CAD">CAD</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Commissions toggle */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: acceptsCommissions ? 16 : 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setAcceptsCommissions(!acceptsCommissions)}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+                >
+                  {acceptsCommissions ? (
+                    <ToggleRight size={28} style={{ color: "#FFD700" }} />
+                  ) : (
+                    <ToggleLeft size={28} style={{ color: colors.textMuted }} />
+                  )}
+                </button>
+                <span style={{ color: colors.text, fontWeight: 600 }}>Open to commissions</span>
+              </div>
+
+              {acceptsCommissions && (
+                <div style={{ marginTop: 4 }}>
+                  <label style={labelStyle}>Commission Details</label>
+                  <textarea
+                    value={commissionInfo}
+                    onChange={(e) => setCommissionInfo(e.target.value)}
+                    placeholder="Describe your commission availability, pricing, turnaround time..."
+                    rows={3}
+                    style={{ ...inputStyle, resize: "vertical" }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "#FFD700"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div
+                style={{
+                  background: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  marginBottom: 16,
+                  color: "#ef4444",
+                  fontSize: "0.9rem",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={submitting || !title.trim() || !imageFile}
+              style={{
+                width: "100%",
+                padding: "16px",
+                background: submitting || !title.trim() || !imageFile
+                  ? "rgba(255,214,0,0.3)"
+                  : "#FFD700",
+                color: "#000",
+                fontWeight: 800,
+                fontSize: "1rem",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                border: "none",
+                borderRadius: "999px",
+                cursor: submitting || !title.trim() || !imageFile ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+                boxShadow: submitting || !title.trim() || !imageFile
+                  ? "none"
+                  : "0 4px 14px rgba(255, 214, 0, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 10,
+              }}
+              onMouseEnter={(e) => {
+                if (!submitting && title.trim() && imageFile) {
+                  e.currentTarget.style.transform = "scale(1.02)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = submitting || !title.trim() || !imageFile
+                  ? "none"
+                  : "0 4px 14px rgba(255, 214, 0, 0.4)";
+              }}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload size={18} />
+                  Submit Artwork
+                </>
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+/* ─── Dashboard View ─── */
+/* ─── Portfolio Stats Detail Panel ─── */
+function PortfolioStatsPanel({ onClose, glassCard }: { onClose: () => void; glassCard: React.CSSProperties }) {
+  const [activeTab, setActiveTab] = useState<string>("overview");
+
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "artworks", label: "Top Artworks" },
+    { id: "timeline", label: "Engagement Timeline" },
+  ];
+
+  const overviewStats = [
+    { label: "Total Views", value: "3,847", change: "+12%", up: true },
+    { label: "Total Saves", value: "284", change: "+8%", up: true },
+    { label: "Profile Visits", value: "1,203", change: "+23%", up: true },
+    { label: "Avg. Time on Page", value: "2m 34s", change: "-3%", up: false },
+    { label: "Share Clicks", value: "156", change: "+41%", up: true },
+  ];
+
+  const topArtworks = [
+    { title: "Urban Pulse", views: 567, saves: 42, comments: 8, medium: "Digital Art" },
+    { title: "Morning Light", views: 312, saves: 28, comments: 5, medium: "Watercolor" },
+    { title: "Concrete Dreams", views: 234, saves: 18, comments: 3, medium: "Mixed Media" },
+    { title: "Neon Reflections", views: 189, saves: 15, comments: 2, medium: "Digital Art" },
+    { title: "Golden Hour", views: 145, saves: 12, comments: 4, medium: "Photography" },
+  ];
+
+  const timeline = [
+    { period: "This Week", views: 892, saves: 67, visits: 234 },
+    { period: "Last Week", views: 743, saves: 51, visits: 198 },
+    { period: "2 Weeks Ago", views: 681, saves: 48, visits: 187 },
+    { period: "3 Weeks Ago", views: 612, saves: 43, visits: 156 },
+    { period: "4 Weeks Ago", views: 519, saves: 38, visits: 128 },
+    { period: "Last Month", views: 1840, saves: 127, visits: 489 },
+  ];
+
+  return (
+    <div style={{ ...glassCard, padding: 0, borderRadius: 16, overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <TrendingUp size={24} color="#FFD600" />
+          <h2 style={{ color: "#fff", fontSize: 22, fontWeight: 700, margin: 0 }}>Portfolio Stats</h2>
+        </div>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff", cursor: "pointer", padding: "6px 8px" }}>
+          <X size={16} />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              flex: 1,
+              padding: "14px 16px",
+              background: activeTab === tab.id ? "rgba(255,214,0,0.08)" : "transparent",
+              border: "none",
+              borderBottom: activeTab === tab.id ? "2px solid #FFD600" : "2px solid transparent",
+              color: activeTab === tab.id ? "#FFD600" : "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: 24 }}>
+        {activeTab === "overview" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
+            {overviewStats.map((stat) => (
+              <div
+                key={stat.label}
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  padding: 20,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,214,0,0.06)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,214,0,0.2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)"; }}
+              >
+                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 8, fontWeight: 500 }}>{stat.label}</div>
+                <div style={{ color: "#fff", fontSize: 28, fontWeight: 800 }}>{stat.value}</div>
+                <div style={{ color: stat.up ? "#4ade80" : "#f87171", fontSize: 13, marginTop: 6, fontWeight: 600 }}>
+                  {stat.change} <span style={{ color: "rgba(255,255,255,0.3)", fontWeight: 400 }}>vs last month</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "artworks" && (
+          <div>
+            {topArtworks.map((art, i) => (
+              <div
+                key={art.title}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "16px 12px",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ color: "#FFD600", fontSize: 18, fontWeight: 800, width: 28 }}>#{i + 1}</span>
+                  <div>
+                    <div style={{ color: "#fff", fontSize: 15, fontWeight: 600 }}>{art.title}</div>
+                    <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{art.medium}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontSize: 16, fontWeight: 700 }}>{art.views}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>views</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#FFD600", fontSize: 16, fontWeight: 700 }}>{art.saves}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>saves</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: 700 }}>{art.comments}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>comments</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "timeline" && (
+          <div>
+            {timeline.map((row) => (
+              <div
+                key={row.period}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 12px",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  cursor: "pointer",
+                  borderRadius: 8,
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <div style={{ color: "#fff", fontSize: 14, fontWeight: 600, minWidth: 120 }}>{row.period}</div>
+                <div style={{ display: "flex", gap: 24 }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{row.views.toLocaleString()}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>views</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "#FFD600", fontSize: 15, fontWeight: 700 }}>{row.saves}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>saves</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 15, fontWeight: 700 }}>{row.visits}</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>visits</div>
+                  </div>
+                </div>
+                {/* Mini bar chart */}
+                <div style={{ width: 120, height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.min(100, (row.views / 900) * 100)}%`, height: "100%", background: "linear-gradient(90deg, #FFD600, #ff9800)", borderRadius: 4 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Dashboard View ─── */
+function DashboardView({ onBack }: { onBack: () => void }) {
+  const { colors, glassCard } = useGlassStyles();
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const sections = [
+    {
+      id: "portfolio-stats",
+      icon: <TrendingUp size={28} color="#FFD600" />,
+      title: "Portfolio Stats",
+      description: "Views, saves, profile visits, and which artworks get the most engagement.",
+      items: [
+        { label: "Total Views", value: "3,847" },
+        { label: "Total Saves", value: "284" },
+        { label: "Profile Visits", value: "1,203" },
+        { label: "Top Artwork", value: "Urban Pulse" },
+        { label: "Engagement Trend", value: "+18% this month" },
+      ],
+      expandable: true,
+    },
+    {
+      id: "artwork-manager",
+      icon: <PenTool size={28} color="#FFD600" />,
+      title: "Artwork Manager",
+      description: "Upload, edit, tag by collection/style, and set availability.",
+      items: [
+        { label: "Upload new artwork", value: "→", action: () => navigate("/gallery/upload") },
+        { label: "Edit existing pieces", value: "15 artworks" },
+        { label: "Tag by collection & style", value: "8 collections" },
+        { label: "For Sale", value: "6 pieces" },
+        { label: "Commission", value: "3 open" },
+        { label: "Display Only", value: "6 pieces" },
+      ],
+    },
+    {
+      id: "collection-assignment",
+      icon: <FolderOpen size={28} color="#FFD600" />,
+      title: "Collection Assignment",
+      description: "Organise your artworks into the style collections.",
+      items: [
+        { label: "Photography", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Digital Art", value: "4 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Oil Painting", value: "1 piece", action: () => navigate("/gallery/collections") },
+        { label: "Watercolor", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Mixed Media", value: "2 pieces", action: () => navigate("/gallery/collections") },
+        { label: "Street Art", value: "1 piece", action: () => navigate("/gallery/collections") },
+      ],
+    },
+    {
+      id: "inquiry-inbox",
+      icon: <Inbox size={28} color="#FFD600" />,
+      title: "Inquiry Inbox",
+      description: "Messages from buyers and collaborators routed through the platform.",
+      items: [
+        { label: "New inquiries", value: "3 unread" },
+        { label: "From: Sarah M.", value: "Interested in 'Urban Pulse' — CA$450" },
+        { label: "From: David K.", value: "Commission request — portrait" },
+        { label: "From: Gallery XYZ", value: "Exhibition opportunity" },
+        { label: "Archived", value: "12 conversations" },
+      ],
+    },
+    {
+      id: "commission-tracker",
+      icon: <Clock size={28} color="#FFD600" />,
+      title: "Commission Status Tracker",
+      description: "Track open requests, in-progress work, and delivered commissions.",
+      items: [
+        { label: "Open Requests", value: "2" },
+        { label: "In Progress", value: "1" },
+        { label: "Delivered", value: "4" },
+        { label: "Total Revenue", value: "CA$3,200" },
+        { label: "Avg. Completion", value: "12 days" },
+      ],
+    },
+    {
+      id: "earnings-summary",
+      icon: <Wallet size={28} color="#FFD600" />,
+      title: "Earnings Summary",
+      description: "Revenue by artwork and period — ready when transactions go live.",
+      items: [
+        { label: "Total Earnings", value: "CA$5,450" },
+        { label: "This Month", value: "CA$1,200" },
+        { label: "Last Month", value: "CA$890" },
+        { label: "Top Seller", value: "Concrete Dreams — CA$1,200" },
+        { label: "Pending Payouts", value: "CA$450" },
+      ],
+    },
+  ];
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px", position: "relative", zIndex: 1 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+          <button
+            onClick={onBack}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "50%",
+              width: 42,
+              height: 42,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#fff",
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 style={{ color: "#FFD600", fontSize: 32, fontWeight: 800, margin: 0 }}>Artist Dashboard</h1>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, margin: "4px 0 0" }}>
+              Manage your gallery, track engagement, and handle inquiries
+            </p>
+          </div>
+        </div>
+
+        {/* Expanded Portfolio Stats Panel */}
+        {expandedSection === "portfolio-stats" && (
+          <div style={{ marginTop: 24, marginBottom: 24 }}>
+            <PortfolioStatsPanel onClose={() => setExpandedSection(null)} glassCard={glassCard} />
+          </div>
+        )}
+
+        {/* Dashboard Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: 24,
+            marginTop: 32,
+          }}
+        >
+          {sections.map((section) => (
+            <div
+              key={section.title}
+              onClick={() => {
+                if (section.expandable) {
+                  setExpandedSection(expandedSection === section.id ? null : section.id);
+                }
+              }}
+              style={{
+                ...glassCard,
+                padding: 28,
+                borderRadius: 16,
+                cursor: "pointer",
+                transition: "transform 0.2s, box-shadow 0.2s",
+                border: expandedSection === section.id ? "1px solid rgba(255,214,0,0.3)" : (glassCard as any).border,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 12px 40px rgba(255,214,0,0.1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "none";
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+                <div
+                  style={{
+                    background: "rgba(255,214,0,0.1)",
+                    borderRadius: 12,
+                    width: 48,
+                    height: 48,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {section.icon}
+                </div>
+                <h2 style={{ color: "#fff", fontSize: 20, fontWeight: 700, margin: 0 }}>{section.title}</h2>
+                {section.expandable && (
+                  <span style={{ marginLeft: "auto", color: "#FFD600", fontSize: 12, fontWeight: 600 }}>
+                    {expandedSection === section.id ? "▲ Collapse" : "▼ Expand"}
+                  </span>
+                )}
+              </div>
+              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, lineHeight: 1.5, margin: "0 0 16px" }}>
+                {section.description}
+              </p>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {section.items.map((item) => (
+                  <li
+                    key={item.label}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if ((item as any).action) (item as any).action();
+                    }}
+                    style={{
+                      color: "rgba(255,255,255,0.7)",
+                      fontSize: 13,
+                      padding: "10px 8px",
+                      borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      cursor: (item as any).action ? "pointer" : "default",
+                      borderRadius: 6,
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "#FFD600", fontSize: 8 }}>●</span>
+                      {item.label}
+                    </span>
+                    <span style={{ color: "#FFD600", fontSize: 13, fontWeight: 600 }}>{item.value}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function GalleryPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isDark, colors, glassCard, glassSurface, glassTag, cardHoverHandlers, buttonHoverHandlers } = useGlassStyles();
+  const { user: authUser } = useAuthContext();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
+  // Check if we're on an artwork detail page
+  const artworkMatch = location.pathname.match(/\/gallery\/artwork\/(.+)/);
+
+  // Artworks state
+  const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [artworksLoading, setArtworksLoading] = useState(true);
+  const [artworksError, setArtworksError] = useState<string | null>(null);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMedium, setSelectedMedium] = useState<string>("");
+  const [selectedStyle, setSelectedStyle] = useState<string>("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showForSale, setShowForSale] = useState(false);
+  const [priceSort, setPriceSort] = useState<"" | "low-high" | "high-low">("");
+  const [showHotOnly, setShowHotOnly] = useState(false);
+  const [mediums, setMediums] = useState<MediumOption[]>([]);
+  const [popularTags, setPopularTags] = useState<{ tag: string; count: number }[]>([]);
+
+  // Lightbox state
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // User uploads state
+  const [uploads, setUploads] = useState<GalleryUpload[]>([]);
+  const [uploadsLoading, setUploadsLoading] = useState(false);
+  const [uploadsError, setUploadsError] = useState<string | null>(null);
+  const [uploadsMessage, setUploadsMessage] = useState<string | null>(null);
+
+  // Artist profiles for enrichment (keyed by user_id)
+  const [artistProfiles, setArtistProfiles] = useState<Record<string, ArtistProfile>>({});
+
+  // Load available mediums
+  const loadMediums = useCallback(async () => {
+    try {
+      const resp = await fetch(`${GALLERY_API_URL}/artworks/mediums`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setMediums(data);
+      }
+    } catch {
+      // Ignore - mediums are optional
+    }
+  }, []);
+
+  // Load popular tags
+  const loadPopularTags = useCallback(async () => {
+    try {
+      const resp = await fetch(`${GALLERY_API_URL}/tags?limit=20`);
+      if (resp.ok) {
+        const data = await resp.json();
+        setPopularTags(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // Ignore - tags are optional
+    }
+  }, []);
+
+  // Load artworks from API
+  const loadArtworks = useCallback(async () => {
+    setArtworksLoading(true);
+    setArtworksError(null);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.set("search", searchQuery);
+      if (selectedMedium) params.set("medium", selectedMedium);
+      if (selectedStyle) params.set("style", selectedStyle);
+      if (selectedTags.length > 0) params.set("tags", selectedTags.join(","));
+      if (showForSale) params.set("is_for_sale", "true");
+
+      const url = `${GALLERY_API_URL}/artworks${params.toString() ? `?${params}` : ""}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Failed to load artworks (${resp.status})`);
+      const rawData = await resp.json();
+      let data: Artwork[] = Array.isArray(rawData) ? rawData : [];
+
+      // Hot products filter (high engagement: views + favorites)
+      if (showHotOnly) {
+        data = data.filter(a => (a.view_count || 0) + (a.favorites || 0) >= 10);
+      }
+
+      // Price sort
+      if (priceSort === "low-high") {
+        data.sort((a, b) => (a.price || 0) - (b.price || 0));
+      } else if (priceSort === "high-low") {
+        data.sort((a, b) => (b.price || 0) - (a.price || 0));
+      }
+
+      setArtworks(data);
+    } catch (error) {
+      setArtworksError(error instanceof Error ? error.message : "Failed to load artworks");
+      setArtworks([]);
+    } finally {
+      setArtworksLoading(false);
+    }
+  }, [searchQuery, selectedMedium, selectedStyle, selectedTags, showForSale, priceSort, showHotOnly]);
+
+  // Load user's artwork favorites
+  const loadFavorites = useCallback(async () => {
+    try {
+      const userId = getOrCreateUserId(authUser?.id);
+      const resp = await fetch(
+        `${GALLERY_API_URL}/user/${encodeURIComponent(userId)}/artwork-favorites`,
+      );
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (Array.isArray(data)) {
+        const ids = data
+          .map((fav: { artwork_id?: string }) => fav?.artwork_id ?? "")
+          .filter(Boolean);
+        setFavoriteIds(new Set(ids));
+      }
+    } catch {
+      setFavoriteIds(new Set());
+    }
+  }, []);
+
+  // Load user's uploads (legacy)
+  const loadUploads = useCallback(async () => {
+    setUploadsLoading(true);
+    setUploadsError(null);
+    try {
+      const userId = getOrCreateUserId(authUser?.id);
+      const resp = await fetch(
+        `${GALLERY_API_URL}/uploads?user_id=${encodeURIComponent(userId)}`,
+      );
+      if (!resp.ok) throw new Error(`Failed to load uploads (${resp.status})`);
+      const data = await resp.json();
+      setUploads(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setUploadsError(error instanceof Error ? error.message : "Failed to load uploads");
+      setUploads([]);
+    } finally {
+      setUploadsLoading(false);
+    }
+  }, []);
+
+  // Batch load artist profiles for artworks
+  const loadArtistProfiles = useCallback(async (artworkList: Artwork[]) => {
+    const artistIds = [
+      ...new Set(
+        artworkList
+          .map((a) => a.artist_id)
+          .filter((id): id is string => id !== null && id !== ""),
+      ),
+    ];
+
+    if (artistIds.length === 0) return;
+
+    try {
+      const resp = await fetch(`${SB_API_BASE}/street-profiles/batch-lookup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_ids: artistIds }),
+      });
+      if (!resp.ok) return;
+      const profiles = await resp.json();
+      setArtistProfiles(profiles);
+    } catch {
+      // Profiles are optional, don't error
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMediums();
+    loadPopularTags();
+    loadFavorites();
+    loadUploads();
+  }, [loadMediums, loadPopularTags, loadFavorites, loadUploads]);
+
+  useEffect(() => {
+    loadArtworks();
+  }, [loadArtworks]);
+
+  // Fetch artist profiles when artworks change
+  useEffect(() => {
+    if (artworks.length > 0) {
+      loadArtistProfiles(artworks);
+    }
+  }, [artworks, loadArtistProfiles]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadArtworks();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, loadArtworks]);
+
+  const toggleFavorite = useCallback(
+    async (artworkId: string) => {
+      const userId = getOrCreateUserId(authUser?.id);
+      const isFav = favoriteIds.has(artworkId);
+      try {
+        const resp = await fetch(
+          `${GALLERY_API_URL}/artworks/${encodeURIComponent(artworkId)}/favorites?user_id=${encodeURIComponent(userId)}`,
+          { method: isFav ? "DELETE" : "POST" },
+        );
+        if (!resp.ok) throw new Error();
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          if (isFav) next.delete(artworkId);
+          else next.add(artworkId);
+          return next;
+        });
+      } catch {
+        console.error("Failed to toggle favorite");
+      }
+    },
+    [favoriteIds],
+  );
+
+  const handleShareOrCopy = useCallback(async (url: string) => {
+    setUploadsMessage(null);
+    try {
+      if (typeof navigator !== "undefined" && "share" in navigator) {
+        await (navigator as Navigator).share({ url });
+        setUploadsMessage("Shared!");
+        setTimeout(() => setUploadsMessage(null), 2000);
+        return;
+      }
+    } catch {
+      // fall back to clipboard
+    }
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setUploadsMessage("Link copied!");
+    } catch {
+      setUploadsMessage("Failed to copy link");
+    }
+    setTimeout(() => setUploadsMessage(null), 2000);
+  }, []);
+
+  const formatPrice = (price: number | null, currency: string) => {
+    if (price === null) return null;
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: currency || "CAD",
+    }).format(price);
+  };
+
+  // Get unique styles from artworks for filter
+  // When a medium is selected, show medium-specific sub-styles; otherwise show styles from artworks
+  const availableStyles = selectedMedium && MEDIUM_STYLES[selectedMedium]
+    ? MEDIUM_STYLES[selectedMedium]
+    : [...new Set(artworks.map((a) => a.style).filter(Boolean))];
+
+  // Page-specific accent text color (not in shared hook)
+  const accentText = isDark ? "#FFD700" : "#000";
+
+  // Artwork detail view — checked after all hooks
+  if (artworkMatch) {
+    return <ArtworkDetailView artworkId={artworkMatch[1]} onBack={() => navigate('/gallery')} onSelectTag={(tag) => { setSelectedTags([tag]); navigate('/gallery'); }} />;
+  }
+
+  // Upload page sub-route
+  const isUploadPage = location.pathname === '/gallery/upload';
+  if (isUploadPage) {
+    return <UploadArtView onBack={() => navigate('/gallery')} />;
+  }
+
+  // Saved collections page sub-route
+  const isSavedPage = location.pathname === '/gallery/saved';
+  if (isSavedPage) {
+    return (
+      <SavedCollectionsView
+        onBack={() => navigate('/gallery')}
+        onSelectMedium={(medium) => {
+          setSelectedMedium(medium);
+          navigate('/gallery');
+        }}
+      />
+    );
+  }
+
+  // Dashboard page sub-route
+  const isDashboardPage = location.pathname === '/gallery/dashboard';
+  if (isDashboardPage) {
+    return <DashboardView onBack={() => navigate('/gallery')} />;
+  }
+
+  // Collections page sub-route
+  const isCollectionsPage = location.pathname === '/gallery/collections';
+  if (isCollectionsPage) {
+    return (
+      <CollectionsView
+        onBack={() => navigate('/gallery')}
+        onSelectMedium={(medium) => {
+          setSelectedMedium(medium);
+          navigate('/gallery');
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ background: colors.bg, minHeight: "100vh", position: "relative" }}>
+      <GlassBackground />
+
+      {/* Hero Section - Enhanced with glass effect */}
+      <div
+        style={{
+          height: "320px",
+          background: "transparent",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background:
+              "radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.15) 0%, transparent 70%)",
+          }}
+        />
+        <div style={{ position: "relative", zIndex: 2 }}>
+          <h1
+            style={{
+              fontSize: "clamp(2.5rem, 5vw, 3.5rem)",
+              marginBottom: "12px",
+              textTransform: "uppercase",
+              letterSpacing: "3px",
+              color: colors.accent,
+              textShadow: isDark ? "0 0 20px rgba(255, 215, 0, 0.5)" : "none",
+              fontWeight: 800,
+            }}
+          >
+            Street Gallery
+          </h1>
+          <p
+            style={{
+              color: colors.textSecondary,
+              marginBottom: "24px",
+              fontSize: "1.2rem",
+            }}
+          >
+            Curated digital artifacts from the underground.
+          </p>
+          <div
+            style={{
+              display: "flex",
+              gap: "15px",
+              justifyContent: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              onClick={() => navigate("/gallery/upload")}
+              style={{
+                background: "#FFD700",
+                color: "#000",
+                fontWeight: "bold",
+                padding: "12px 24px",
+                borderRadius: "999px",
+                transition: "all 0.2s",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                fontSize: "0.9rem",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(255, 214, 0, 0.4)",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "scale(1.05)";
+                e.currentTarget.style.boxShadow = "0 6px 20px rgba(255, 214, 0, 0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 14px rgba(255, 214, 0, 0.4)";
+              }}
+            >
+              Submit Art
+            </button>
+            <button
+              onClick={() => navigate("/gallery/collections")}
+              style={{
+                border: "1px solid #FFD700",
+                color: "#FFD700",
+                padding: "12px 24px",
+                borderRadius: "999px",
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                transition: "all 0.2s",
+                background: "rgba(255, 214, 0, 0.1)",
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255, 215, 0, 0.2)";
+                e.currentTarget.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(255, 214, 0, 0.1)";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              <Grid size={16} /> Collections
+            </button>
+            <button
+              onClick={() => navigate("/gallery/dashboard")}
+              style={{
+                border: `1px solid ${colors.border}`,
+                color: colors.textSecondary,
+                padding: "12px 24px",
+                borderRadius: "999px",
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                transition: "all 0.2s",
+                background: colors.surface,
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.surfaceHover;
+                e.currentTarget.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = colors.surface;
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              <BarChart3 size={16} /> Dashboard
+            </button>
+            <button
+              onClick={() => navigate("/gallery/saved")}
+              style={{
+                border: `1px solid ${colors.border}`,
+                color: colors.textSecondary,
+                padding: "12px 24px",
+                borderRadius: "999px",
+                fontWeight: "bold",
+                textTransform: "uppercase",
+                transition: "all 0.2s",
+                background: colors.surface,
+                backdropFilter: "blur(10px)",
+                WebkitBackdropFilter: "blur(10px)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255, 60, 80, 0.15)";
+                e.currentTarget.style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = colors.surface;
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              <Heart size={16} /> Saved
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      <div
+        style={{
+          display: "flex",
+          minHeight: "calc(100vh - 320px)",
+          maxWidth: "1600px",
+          margin: "0 auto",
+          width: "100%",
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        {/* Sidebar Filters - GLASSMORPHISM */}
+        <aside
+          style={{
+            width: filterOpen ? "280px" : "0",
+            borderRight: filterOpen ? `1px solid ${colors.border}` : "none",
+            padding: filterOpen ? "20px" : "20px 0",
+            background: colors.surface,
+            backdropFilter: "blur(24px) saturate(180%)",
+            WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            transition: "width 0.3s, padding 0.3s, opacity 0.3s",
+            overflow: "hidden",
+            opacity: filterOpen ? 1 : 0,
+          }}
+        >
+          <div
+            style={{
+              marginBottom: "20px",
+              paddingBottom: "10px",
+              borderBottom: `1px solid ${colors.border}`,
+            }}
+          >
+            <h3
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                margin: 0,
+                color: colors.text,
+              }}
+            >
+              <Filter size={18} /> Filters
+            </h3>
+          </div>
+
+          <div style={{ marginBottom: "25px" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontWeight: "bold",
+                marginBottom: "10px",
+                color: colors.textSecondary,
+                fontSize: "0.9rem",
+              }}
+            >
+              <Layers size={14} /> Medium
+            </label>
+            <select
+              value={selectedMedium}
+              onChange={(e) => { setSelectedMedium(e.target.value); setSelectedStyle(""); }}
+              style={{
+                width: "100%",
+                background: colors.cardBg,
+                backdropFilter: "blur(8px)",
+                border: `1px solid ${colors.border}`,
+                padding: "10px 12px",
+                borderRadius: "10px",
+                color: colors.text,
+              }}
+            >
+              <option value="">All Mediums</option>
+              {mediums.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ marginBottom: "25px" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontWeight: "bold",
+                marginBottom: "10px",
+                color: colors.textSecondary,
+                fontSize: "0.9rem",
+              }}
+            >
+              <Tag size={14} /> {selectedMedium ? `${selectedMedium} Styles` : "Style"}
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {availableStyles.slice(0, 8).map((style) => (
+                <label
+                  key={style}
+                  style={{
+                    fontWeight: "normal",
+                    color: colors.text,
+                    cursor: "pointer",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
+                    background:
+                      selectedStyle === style ? "rgba(255, 214, 0, 0.1)" : "transparent",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="style"
+                    checked={selectedStyle === style}
+                    onChange={() =>
+                      setSelectedStyle(selectedStyle === style ? "" : style!)
+                    }
+                    style={{ marginRight: "8px", accentColor: colors.accent }}
+                  />
+                  {style}
+                </label>
+              ))}
+              {selectedStyle && (
+                <button
+                  onClick={() => setSelectedStyle("")}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: accentText,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    padding: 0,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Clear style filter
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tags Filter */}
+          {popularTags.length > 0 && (
+            <div style={{ marginBottom: "25px" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontWeight: "bold",
+                  marginBottom: "10px",
+                  color: colors.textSecondary,
+                  fontSize: "0.9rem",
+                }}
+              >
+                <Tag size={14} /> Tags
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {popularTags.slice(0, 12).map((tagItem) => {
+                  const isSelected = selectedTags.includes(tagItem.tag);
+                  return (
+                    <button
+                      key={tagItem.tag}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedTags(
+                            selectedTags.filter((t) => t !== tagItem.tag),
+                          );
+                        } else {
+                          setSelectedTags([...selectedTags, tagItem.tag]);
+                        }
+                      }}
+                      style={{
+                        background: isSelected
+                          ? "rgba(255, 214, 0, 0.2)"
+                          : "transparent",
+                        border: `1px solid ${isSelected ? colors.accent : colors.border}`,
+                        borderRadius: "12px",
+                        padding: "4px 10px",
+                        fontSize: "0.75rem",
+                        color: isSelected ? accentText : colors.textSecondary,
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {tagItem.tag}
+                      <span style={{ marginLeft: 4, opacity: 0.6 }}>
+                        ({tagItem.count})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedTags.length > 0 && (
+                <button
+                  onClick={() => setSelectedTags([])}
+                  style={{
+                    marginTop: 8,
+                    background: "transparent",
+                    border: "none",
+                    color: accentText,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    padding: 0,
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Clear tags ({selectedTags.length})
+                </button>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginBottom: "25px" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                fontWeight: "bold",
+                marginBottom: "10px",
+                color: colors.textSecondary,
+                fontSize: "0.9rem",
+              }}
+            >
+              <DollarSign size={14} /> For Sale
+            </label>
+            <label
+              style={{
+                fontWeight: "normal",
+                color: colors.text,
+                cursor: "pointer",
+                padding: "6px 8px",
+                borderRadius: "8px",
+                background: showForSale ? "rgba(255, 214, 0, 0.1)" : "transparent",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showForSale}
+                onChange={(e) => setShowForSale(e.target.checked)}
+                style={{ marginRight: "8px", accentColor: colors.accent }}
+              />
+              Show only for sale
+            </label>
+          </div>
+
+          {/* Price Sort */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontWeight: "bold", fontSize: "0.85rem", color: colors.accent, display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <DollarSign size={14} /> Price
+            </label>
+            {[
+              { value: "", label: "Default" },
+              { value: "low-high", label: "Lowest to Highest" },
+              { value: "high-low", label: "Highest to Lowest" },
+            ].map(opt => (
+              <label key={opt.value} style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: 8, cursor: "pointer", background: priceSort === opt.value ? "rgba(255,214,0,0.1)" : "transparent", color: colors.text, fontWeight: "normal", marginBottom: 2 }}>
+                <input type="radio" name="priceSort" checked={priceSort === opt.value} onChange={() => setPriceSort(opt.value as "" | "low-high" | "high-low")} style={{ marginRight: 8, accentColor: colors.accent }} />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+
+          {/* Hot Products */}
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontWeight: "bold", fontSize: "0.85rem", color: "#ef4444", display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              🔥 Most Popular
+            </label>
+            <label style={{ display: "flex", alignItems: "center", padding: "6px 8px", borderRadius: 8, cursor: "pointer", background: showHotOnly ? "rgba(239,68,68,0.1)" : "transparent", color: colors.text, fontWeight: "normal" }}>
+              <input type="checkbox" checked={showHotOnly} onChange={(e) => setShowHotOnly(e.target.checked)} style={{ marginRight: 8, accentColor: "#ef4444" }} />
+              Show hot products only
+            </label>
+          </div>
+
+          <button
+            onClick={() => {
+              setSelectedMedium("");
+              setSelectedStyle("");
+              setSelectedTags([]);
+              setShowForSale(false);
+              setPriceSort("");
+              setShowHotOnly(false);
+              setSearchQuery("");
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              ...glassSurface,
+              borderRadius: "12px",
+              color: colors.text,
+              cursor: "pointer",
+              fontWeight: "bold",
+              transition: "all 0.2s",
+            }}
+            {...buttonHoverHandlers}
+          >
+            Clear All Filters
+          </button>
+        </aside>
+
+        {/* Main Grid */}
+        <div style={{ flex: 1, padding: "20px" }}>
+          {/* Search and Filter Toggle - GLASSMORPHISM */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: "24px",
+              gap: "16px",
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                ...glassSurface,
+                padding: "12px 16px",
+                borderRadius: "14px",
+              }}
+            >
+              <Search size={18} color={colors.textMuted} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search artworks, artists, tags..."
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: colors.text,
+                  fontSize: "15px",
+                }}
+              />
+            </div>
+            <button
+              onClick={() => setFilterOpen(!filterOpen)}
+              style={{
+                color: colors.textSecondary,
+                fontSize: "0.9rem",
+                ...glassSurface,
+                borderRadius: "14px",
+                padding: "12px 20px",
+                cursor: "pointer",
+                fontWeight: 500,
+                transition: "all 0.2s",
+              }}
+              {...buttonHoverHandlers}
+            >
+              {filterOpen ? "Hide Filters" : "Show Filters"}
+            </button>
+          </div>
+
+          {/* Artworks Grid */}
+          {artworksLoading ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "60px",
+                color: colors.textMuted,
+              }}
+            >
+              <Loader2
+                size={24}
+                className="animate-spin"
+                style={{ marginRight: 10 }}
+              />
+              Loading artworks...
+            </div>
+          ) : artworksError ? (
+            <div style={{ padding: "40px", textAlign: "center", color: colors.error }}>
+              {artworksError}
+              <button
+                onClick={loadArtworks}
+                style={{
+                  display: "block",
+                  margin: "16px auto 0",
+                  padding: "8px 16px",
+                  background: colors.surface,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: "8px",
+                  color: colors.text,
+                  cursor: "pointer",
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : artworks.length === 0 ? (
+            <div style={{ padding: "60px", textAlign: "center", color: colors.textMuted }}>
+              <p style={{ fontSize: "1.2rem", marginBottom: 16 }}>No artworks found</p>
+              <p>Be the first to submit your art to the gallery!</p>
+              <button
+                onClick={() => navigate("/gallery/upload")}
+                style={{
+                  marginTop: 16,
+                  padding: "10px 20px",
+                  background: colors.accent,
+                  border: "none",
+                  borderRadius: "999px",
+                  color: "#000",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Submit Art
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
+                gap: "24px",
+              }}
+            >
+              {artworks.map((art) => (
+                <div
+                  key={art.id}
+                  onClick={() => navigate(`/gallery/artwork/${art.id}`)}
+                  style={{
+                    ...glassCard,
+                    borderRadius: "20px",
+                    overflow: "hidden",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    cursor: "pointer",
+                  }}
+                  {...cardHoverHandlers}
+                >
+                  <div
+                    style={{
+                      aspectRatio: "16/9",
+                      position: "relative",
+                      background: "#222",
+                    }}
+                  >
+                    <GalleryImage
+                      src={art.thumbnail_url || art.image_url}
+                      alt={art.title}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(art.id);
+                      }}
+                      style={{
+                        position: "absolute",
+                        top: 12,
+                        right: 12,
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        border: "1px solid rgba(255,255,255,0.18)",
+                        background: "rgba(0,0,0,0.45)",
+                        cursor: "pointer",
+                        zIndex: 3,
+                      }}
+                      aria-label={
+                        favoriteIds.has(art.id)
+                          ? "Remove from favorites"
+                          : "Add to favorites"
+                      }
+                    >
+                      <Heart
+                        size={18}
+                        color={favoriteIds.has(art.id) ? "#FFD700" : "#ffffff"}
+                        fill={favoriteIds.has(art.id) ? "#FFD700" : "none"}
+                      />
+                    </button>
+                    {art.is_for_sale && !art.is_sold && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 12,
+                          left: 12,
+                          background: "#FFD700",
+                          color: "#000",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        FOR SALE
+                      </div>
+                    )}
+                    {art.is_sold && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 12,
+                          left: 12,
+                          background: "#ef4444",
+                          color: "#fff",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          fontSize: "0.75rem",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        SOLD
+                      </div>
+                    )}
+                    <div
+                      className="art-overlay"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.4)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 10,
+                        opacity: 0,
+                        transition: "opacity 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = "1";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = "0";
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const idx = artworks.findIndex((a) => a.id === art.id);
+                          if (idx !== -1) setLightboxIndex(idx);
+                        }}
+                        style={{
+                          background: "rgba(255,255,255,0.2)",
+                          backdropFilter: "blur(8px)",
+                          color: "#fff",
+                          padding: "10px",
+                          borderRadius: "50%",
+                          fontWeight: "bold",
+                          border: "1px solid rgba(255,255,255,0.3)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        title="Quick View"
+                      >
+                        <Maximize2 size={18} />
+                      </button>
+                      <button
+                        style={{
+                          background: "#FFD700",
+                          color: "#000",
+                          padding: "8px 16px",
+                          borderRadius: "20px",
+                          fontWeight: "bold",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ padding: "16px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <h4
+                        style={{
+                          fontSize: "1rem",
+                          fontWeight: "bold",
+                          color: colors.text,
+                          margin: 0,
+                        }}
+                      >
+                        {art.title}
+                      </h4>
+                      {art.is_for_sale && art.price && (
+                        <span
+                          style={{
+                            fontSize: "0.9rem",
+                            fontWeight: "bold",
+                            color: accentText,
+                            textShadow: isDark
+                              ? "0 0 10px rgba(255, 215, 0, 0.5)"
+                              : "none",
+                          }}
+                        >
+                          {formatPrice(art.price, art.currency)}
+                        </span>
+                      )}
+                    </div>
+                    {/* Artist Profile Badge (inlined) */}
+                    {art.artist_id && artistProfiles[art.artist_id] ? (
+                      <div
+                        style={{ marginBottom: "10px" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <InlineProfileBadge
+                          userId={art.artist_id}
+                          username={artistProfiles[art.artist_id].username}
+                          displayName={artistProfiles[art.artist_id].display_name}
+                          avatarUrl={
+                            artistProfiles[art.artist_id].avatar_url || undefined
+                          }
+                          isVerified={artistProfiles[art.artist_id].is_verified}
+                        />
+                      </div>
+                    ) : art.artist_name ? (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "0.85rem",
+                          color: colors.textSecondary,
+                          marginBottom: "10px",
+                        }}
+                      >
+                        by {art.artist_name}
+                      </span>
+                    ) : null}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      {art.medium && (
+                        <span style={glassTag}>
+                          {art.medium.replace("_", " ")}
+                        </span>
+                      )}
+                      {art.style && (
+                        <span style={glassTag}>
+                          {art.style}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "14px",
+                        color: colors.textMuted,
+                        fontSize: "0.8rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Eye size={14} /> {art.view_count}
+                      </span>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <Heart size={14} /> {art.favorite_count}
+                      </span>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <MessageCircle size={14} /> {art.comment_count}
+                      </span>
+                      {/* Message Artist Button (simple replacement) */}
+                      {art.artist_id && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(
+                              `/messages?to=${encodeURIComponent(art.artist_id!)}&context=${encodeURIComponent(`Hi! I love your artwork "${art.title}"!`)}`,
+                            );
+                          }}
+                          style={{
+                            marginLeft: "auto",
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "4px 6px",
+                            borderRadius: "6px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: colors.textMuted,
+                            transition: "all 0.15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background =
+                              "rgba(255, 255, 255, 0.08)";
+                            e.currentTarget.style.color = colors.text;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = colors.textMuted;
+                          }}
+                          title={`Message ${art.artist_name || "Artist"}`}
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Lightbox Modal (simple fullscreen overlay) */}
+      {lightboxIndex !== null && artworks.length > 0 && (
+        <SimpleLightbox
+          artworks={artworks}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onFavorite={toggleFavorite}
+          favoriteIds={favoriteIds}
+        />
+      )}
+    </div>
+  );
+}
