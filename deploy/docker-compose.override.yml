@@ -45,6 +45,7 @@ services:
       - paperclip
       - sv-social
       - casdoor
+      - gnucash
     restart: always
 
   mongodb:
@@ -58,7 +59,7 @@ services:
   vectordb:
     container_name: nanobot-vectordb
     environment:
-      - POSTGRES_DBS=paperclip
+      - POSTGRES_DBS=paperclip,casdoor
     volumes:
       - type: bind
         source: ../deploy/init-extra-dbs.sh
@@ -333,6 +334,18 @@ services:
       - postiz-redis-data:/data
     restart: always
 
+  # ── GnuCash (Accounting via noVNC) ──────────────────────────────
+  gnucash:
+    container_name: nanobot-gnucash
+    build:
+      context: ../deploy/gnucash
+      dockerfile: Dockerfile
+    ports:
+      - "6080:6080"
+    volumes:
+      - gnucash-data:/home/gnucash
+    restart: always
+
 volumes:
   casdoor-postgres-data:
   social-postgres-data:
@@ -340,3 +353,4 @@ volumes:
   postiz-redis-data:
   postiz-config:
   postiz-uploads:
+  gnucash-data:
