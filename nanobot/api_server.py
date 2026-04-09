@@ -20,6 +20,28 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 
+# ── Gallery API (lazy import to avoid circular deps) ──
+from nanobot.gallery_api import (
+    gallery_list_artworks as _gallery_list_artworks,
+    gallery_list_mediums as _gallery_list_mediums,
+    gallery_get_artwork as _gallery_get_artwork,
+    gallery_add_favorite as _gallery_add_favorite,
+    gallery_remove_favorite as _gallery_remove_favorite,
+    gallery_user_favorites as _gallery_user_favorites,
+    gallery_user_favorites_legacy as _gallery_user_favorites_legacy,
+    gallery_tags as _gallery_tags,
+    gallery_uploads as _gallery_uploads,
+    gallery_create_artwork as _gallery_create_artwork,
+    street_profiles_batch_lookup as _street_profiles_batch_lookup,
+    gallery_saved_collections as _gallery_saved_collections,
+    gallery_save_collection as _gallery_save_collection,
+    gallery_unsave_collection as _gallery_unsave_collection,
+    gallery_list_comments as _gallery_list_comments,
+    gallery_post_comment as _gallery_post_comment,
+    gallery_edit_comment as _gallery_edit_comment,
+    gallery_delete_comment as _gallery_delete_comment,
+)
+
 SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
 GALLERY_DIR = Path.home() / ".nanobot" / "workspace" / "gallery"
 GALLERY_DB_FILE = Path.home() / ".nanobot" / "workspace" / "gallery" / "artworks.json"
@@ -2702,6 +2724,25 @@ app = Starlette(
         Route("/groups/{group_id:int}/messages", group_messages, methods=["GET"]),
         Route("/groups/{group_id:int}/messages", group_send_message, methods=["POST"]),
         Route("/groups/{group_id:int}/members", group_members, methods=["GET"]),
+        # ── Gallery API ──
+        Route("/gallery/collections/saved", _gallery_saved_collections, methods=["GET"]),
+        Route("/gallery/collections/save", _gallery_save_collection, methods=["POST"]),
+        Route("/gallery/collections/save", _gallery_unsave_collection, methods=["DELETE"]),
+        Route("/gallery/comments", _gallery_list_comments, methods=["GET"]),
+        Route("/gallery/comments", _gallery_post_comment, methods=["POST"]),
+        Route("/gallery/comments", _gallery_edit_comment, methods=["PUT"]),
+        Route("/gallery/comments", _gallery_delete_comment, methods=["DELETE"]),
+        Route("/gallery/artworks/mediums", _gallery_list_mediums, methods=["GET"]),
+        Route("/gallery/artworks/{artwork_id:path}/favorites", _gallery_add_favorite, methods=["POST"]),
+        Route("/gallery/artworks/{artwork_id:path}/favorites", _gallery_remove_favorite, methods=["DELETE"]),
+        Route("/gallery/artworks/{artwork_id:path}", _gallery_get_artwork, methods=["GET"]),
+        Route("/gallery/artworks", _gallery_create_artwork, methods=["POST"]),
+        Route("/gallery/artworks", _gallery_list_artworks, methods=["GET"]),
+        Route("/gallery/user/{user_id:path}/artwork-favorites", _gallery_user_favorites, methods=["GET"]),
+        Route("/gallery/users/{user_id:path}/favorites", _gallery_user_favorites_legacy, methods=["GET"]),
+        Route("/gallery/tags", _gallery_tags, methods=["GET"]),
+        Route("/gallery/uploads", _gallery_uploads, methods=["GET"]),
+        Route("/street-profiles/batch-lookup", _street_profiles_batch_lookup, methods=["POST"]),
         # ── Deep Agent Harness endpoints ──
         Route("/v1/memory", memory_api, methods=["GET", "POST"]),
         Route("/v1/memory/context/{agent_name}", memory_context_api, methods=["GET"]),
