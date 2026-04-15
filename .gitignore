@@ -4,7 +4,10 @@
 *.pyc
 dist/
 build/
-docs/
+docs/*
+!docs/academy/
+docs/academy/*
+!docs/academy/street-voices-academy-lms-upgrade-notes.md
 *.egg-info/
 *.egg
 *.pyc

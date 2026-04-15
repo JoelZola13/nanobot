@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +47,8 @@ from nanobot.gallery_api import (
 SCREENSHOTS_DIR = Path.home() / ".nanobot" / "workspace" / "screenshots"
 GALLERY_DIR = Path.home() / ".nanobot" / "workspace" / "gallery"
 GALLERY_DB_FILE = Path.home() / ".nanobot" / "workspace" / "gallery" / "artworks.json"
+ACADEMY_DATA_DIR = Path.home() / ".nanobot" / "workspace" / "academy"
+ACADEMY_RUNTIME_FILE = ACADEMY_DATA_DIR / "runtime.json"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
@@ -65,6 +69,3022 @@ _orchestrator: Any = None  # Orchestrator | None — lazy import to avoid circul
 _harness: Any = None  # DeepAgentHarness | None — deepagents-powered engine
 _gateway: Any = None  # GatewayServer | None — WS mission control
 _redis_bus: Any = None  # RedisBus | None — cross-service event bus
+
+
+def _academy_default_state() -> dict[str, list[dict[str, Any]]]:
+    return {
+        "enrollments": [],
+        "learning_paths": [],
+        "live_sessions": [],
+        "session_registrations": [],
+        "session_polls": [],
+        "poll_responses": [],
+        "session_questions": [],
+        "session_feedback": [],
+        "cohorts": [],
+        "cohort_enrollments": [],
+        "cohort_deadlines": [],
+        "cohort_announcements": [],
+        "reviews": [],
+        "certificates": [],
+        "course_materials": [],
+        "course_schedule_items": [],
+        "assignments": [],
+        "submissions": [],
+        "rubrics": [],
+        "rubric_grades": [],
+        "video_progress": [],
+        "video_bookmarks": [],
+        "video_notes": [],
+        "forum_discussions": [],
+    }
+
+
+def _load_academy_state() -> dict[str, list[dict[str, Any]]]:
+    defaults = _academy_default_state()
+    ACADEMY_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not ACADEMY_RUNTIME_FILE.exists():
+        return defaults
+
+    try:
+        stored = json.loads(ACADEMY_RUNTIME_FILE.read_text())
+    except Exception:
+        return defaults
+
+    merged: dict[str, list[dict[str, Any]]] = {}
+    for key, fallback in defaults.items():
+        value = stored.get(key, fallback)
+        merged[key] = list(value) if isinstance(value, list) else list(fallback)
+    return merged
+
+
+def _save_academy_state(state: dict[str, list[dict[str, Any]]]) -> None:
+    ACADEMY_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    ACADEMY_RUNTIME_FILE.write_text(json.dumps(state, indent=2))
+
+
+def _academy_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _academy_parse_iso(value: str | None) -> datetime:
+    if not value:
+        return datetime.now(timezone.utc)
+
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return datetime.now(timezone.utc)
+
+
+def _academy_make_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:10]}"
+
+
+_ACADEMY_RESERVED_PATH_SLUGS = {
+    "job-ready",
+    "digital-basics",
+    "housing-stability",
+}
+
+
+def _academy_slugify(value: str | None) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
+    return base or f"path-{uuid.uuid4().hex[:6]}"
+
+
+def _academy_unique_path_slug(state: dict[str, list[dict[str, Any]]], title: str, explicit_slug: str | None = None) -> str:
+    taken = {
+        str(item.get("slug") or "").strip().lower()
+        for item in state["learning_paths"]
+        if item.get("slug")
+    } | _ACADEMY_RESERVED_PATH_SLUGS
+
+    base = _academy_slugify(explicit_slug or title)
+    slug = base
+    index = 2
+    while slug in taken:
+        slug = f"{base}-{index}"
+        index += 1
+    return slug
+
+
+def _academy_find(items: list[dict[str, Any]], item_id: str) -> dict[str, Any] | None:
+    return next((item for item in items if item.get("id") == item_id), None)
+
+
+def _academy_ensure_course_enrollment(
+    state: dict[str, list[dict[str, Any]]],
+    *,
+    user_id: str,
+    course_id: str,
+    progress_percent: int = 0,
+    status: str = "active",
+    enrolled_at: str | None = None,
+) -> dict[str, Any]:
+    enrollment = next(
+        (
+            item
+            for item in state["enrollments"]
+            if item.get("user_id") == user_id and item.get("course_id") == course_id
+        ),
+        None,
+    )
+    now_iso = _academy_now_iso()
+    requested_status = status or "active"
+    requested_progress = int(progress_percent or 0)
+
+    if enrollment is not None:
+        if enrollment.get("status") == "dropped" and requested_status != "dropped":
+            enrollment["status"] = requested_status
+            enrollment["enrolled_at"] = enrolled_at or enrollment.get("enrolled_at") or now_iso
+            enrollment["completed_at"] = None
+        if requested_progress > int(enrollment.get("progress_percent") or 0):
+            enrollment["progress_percent"] = requested_progress
+        enrollment["updated_at"] = now_iso
+        if int(enrollment.get("progress_percent") or 0) >= 100:
+            enrollment["status"] = "completed"
+            enrollment["completed_at"] = enrollment.get("completed_at") or now_iso
+        return enrollment
+
+    enrollment = {
+        "id": _academy_make_id("enrollment"),
+        "user_id": user_id,
+        "course_id": course_id,
+        "status": requested_status,
+        "progress_percent": requested_progress,
+        "last_accessed_at": None,
+        "enrolled_at": enrolled_at or now_iso,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "completed_at": now_iso if requested_progress >= 100 else None,
+    }
+    if enrollment["completed_at"]:
+        enrollment["status"] = "completed"
+    state["enrollments"].append(enrollment)
+    return enrollment
+
+
+def _academy_sync_course_enrollments_from_cohorts(
+    state: dict[str, list[dict[str, Any]]],
+    *,
+    user_id: str | None = None,
+) -> bool:
+    changed = False
+    cohorts_by_id = {item.get("id"): item for item in state["cohorts"]}
+
+    for cohort_enrollment in state["cohort_enrollments"]:
+        cohort_user_id = cohort_enrollment.get("user_id")
+        if user_id and cohort_user_id != user_id:
+            continue
+
+        cohort = cohorts_by_id.get(cohort_enrollment.get("cohort_id"))
+        course_id = cohort.get("course_id") if cohort else None
+        if not cohort_user_id or not course_id:
+            continue
+
+        existing = next(
+            (
+                item
+                for item in state["enrollments"]
+                if item.get("user_id") == cohort_user_id and item.get("course_id") == course_id
+            ),
+            None,
+        )
+        if existing is not None:
+            continue
+
+        _academy_ensure_course_enrollment(
+            state,
+            user_id=cohort_user_id,
+            course_id=course_id,
+            progress_percent=int(cohort_enrollment.get("progress_percent") or 0),
+            status=str(cohort_enrollment.get("status") or "active"),
+            enrolled_at=cohort_enrollment.get("enrolled_at"),
+        )
+        changed = True
+
+    return changed
+
+
+def _academy_session_list_response(sessions: list[dict[str, Any]]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    return {
+        "sessions": sessions,
+        "total": len(sessions),
+        "upcoming_count": len(
+            [s for s in sessions if s.get("status") == "scheduled" and _academy_parse_iso(s.get("scheduled_end")) >= now]
+        ),
+        "live_count": len([s for s in sessions if s.get("status") == "live"]),
+    }
+
+
+def _academy_session_with_registration(
+    state: dict[str, list[dict[str, Any]]],
+    session: dict[str, Any],
+    user_id: str | None,
+) -> dict[str, Any]:
+    registration = None
+    if user_id:
+        registration = next(
+            (
+                item
+                for item in state["session_registrations"]
+                if item.get("session_id") == session.get("id") and item.get("user_id") == user_id
+            ),
+            None,
+        )
+    return {
+        "session": session,
+        "registration": registration,
+        "is_registered": registration is not None,
+        "can_join": session.get("status") == "live" and registration is not None,
+    }
+
+
+
+def _academy_seed_forum(state: dict[str, list[dict[str, Any]]], forum_id: int, course_id: str) -> None:
+    if any(item.get("forum_id") == forum_id for item in state["forum_discussions"]):
+        return
+
+    state["forum_discussions"].append(
+        {
+            "id": forum_id * 1000 + 1,
+            "forum_id": forum_id,
+            "course_id": course_id,
+            "name": "Welcome discussion",
+            "subject": "Introduce yourself",
+            "message": "Share your goals for this Academy course and what you want to build.",
+            "userfullname": "Street Voices Academy",
+            "userid": 0,
+            "author_role": "instructor",
+            "created": int(datetime.now(timezone.utc).timestamp()),
+            "modified": int(datetime.now(timezone.utc).timestamp()),
+            "numreplies": 0,
+            "pinned": True,
+            "timemodified": int(datetime.now(timezone.utc).timestamp()),
+            "replies": [],
+            "reactions": {"up": [], "down": []},
+        }
+    )
+
+
+def _academy_normalize_forum_discussion(discussion: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(discussion)
+    normalized.setdefault("author_role", "instructor" if str(normalized.get("userid")) == "0" else "student")
+
+    normalized_replies: list[dict[str, Any]] = []
+    for reply in normalized.get("replies", []) or []:
+        reply_payload = dict(reply)
+        reply_payload.setdefault("author_role", "student")
+        reply_payload.setdefault("created", normalized.get("created", int(time.time())))
+        normalized_replies.append(reply_payload)
+
+    reactions = normalized.get("reactions") or {}
+    normalized["replies"] = normalized_replies
+    normalized["reactions"] = {
+        "up": list(reactions.get("up", [])),
+        "down": list(reactions.get("down", [])),
+    }
+    normalized["numreplies"] = len(normalized_replies)
+    return normalized
+
+
+def _academy_stable_id(prefix: str, *parts: str) -> str:
+    seed = "::".join([prefix, *parts])
+    return f"{prefix}-{uuid.uuid5(uuid.NAMESPACE_URL, seed).hex[:10]}"
+
+
+async def _academy_fetch_course_meta(course_id: str) -> dict[str, Any] | None:
+    import httpx
+
+    base = f"{_SUPABASE_URL}/rest/v1/academy_courses"
+    headers = _supabase_headers()
+    qs = f"select=id,title,instructor_name&id=eq.{course_id}&limit=1"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{base}?{qs}", headers=headers)
+            data = resp.json()
+            if isinstance(data, list) and data:
+                return data[0]
+    except Exception:
+        return None
+
+    return None
+
+
+def _academy_assignment_stats(
+    state: dict[str, list[dict[str, Any]]],
+    assignment_id: str,
+) -> tuple[int, int, float]:
+    submissions = [row for row in state["submissions"] if row.get("assignment_id") == assignment_id]
+    graded = [
+        row
+        for row in submissions
+        if row.get("status") in {"graded", "returned"} and row.get("adjusted_score", row.get("score")) is not None
+    ]
+    average = (
+        round(
+            sum(float(row.get("adjusted_score", row.get("score")) or 0) for row in graded) / len(graded),
+            2,
+        )
+        if graded
+        else 0
+    )
+    return len(submissions), len(graded), average
+
+
+def _academy_assignment_payload(
+    state: dict[str, list[dict[str, Any]]],
+    assignment: dict[str, Any],
+) -> dict[str, Any]:
+    submission_count, graded_count, average_score = _academy_assignment_stats(state, str(assignment.get("id")))
+    return {
+        **assignment,
+        "submission_count": submission_count,
+        "graded_count": graded_count,
+        "average_score": average_score,
+    }
+
+
+def _academy_normalize_file_attachment(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    url = str(raw.get("url") or "").strip()
+    if url == "":
+        return None
+
+    return {
+        "url": url,
+        "filename": raw.get("filename") or raw.get("fileName") or "street-voices-academy-file",
+        "size_bytes": int(raw.get("size_bytes") or raw.get("sizeBytes") or 0),
+        "mime_type": raw.get("mime_type") or raw.get("mimeType") or "application/octet-stream",
+        "uploaded_at": raw.get("uploaded_at") or raw.get("uploadedAt") or _academy_now_iso(),
+    }
+
+
+def _academy_find_assignment(
+    state: dict[str, list[dict[str, Any]]],
+    assignment_id: str,
+) -> dict[str, Any] | None:
+    return next((row for row in state["assignments"] if row.get("id") == assignment_id), None)
+
+
+def _academy_get_latest_submission(
+    state: dict[str, list[dict[str, Any]]],
+    assignment_id: str,
+    user_id: str,
+) -> dict[str, Any] | None:
+    submissions = [
+        row
+        for row in state["submissions"]
+        if row.get("assignment_id") == assignment_id and row.get("user_id") == user_id
+    ]
+    if not submissions:
+        return None
+    submissions.sort(
+        key=lambda row: (
+            int(row.get("attempt_number") or 0),
+            row.get("updated_at") or row.get("created_at") or "",
+        ),
+        reverse=True,
+    )
+    return submissions[0]
+
+
+def _academy_submission_sort_key(submission: dict[str, Any]) -> tuple[int, str]:
+    return (
+        int(submission.get("attempt_number") or 0),
+        str(
+            submission.get("updated_at")
+            or submission.get("submitted_at")
+            or submission.get("created_at")
+            or ""
+        ),
+    )
+
+
+def _academy_display_name_for_submission(submission: dict[str, Any]) -> str:
+    explicit_name = str(submission.get("user_name") or "").strip()
+    if explicit_name:
+        return explicit_name
+
+    explicit_email = str(submission.get("user_email") or "").strip()
+    if explicit_email:
+        return explicit_email.split("@")[0] or explicit_email
+
+    raw_user_id = str(submission.get("user_id") or "").strip()
+    if raw_user_id == "":
+        return "Academy learner"
+    if raw_user_id.startswith("academy-local-user"):
+        return "Academy learner"
+    if "@" in raw_user_id:
+        return raw_user_id.split("@")[0] or raw_user_id
+    if len(raw_user_id) > 20 and "-" not in raw_user_id and "_" not in raw_user_id:
+        return f"Learner {raw_user_id[:8]}"
+
+    cleaned = raw_user_id.replace("-", " ").replace("_", " ").strip()
+    if cleaned and any(character.isalpha() for character in cleaned):
+        return " ".join(part.capitalize() for part in cleaned.split())[:48]
+
+    return f"Learner {raw_user_id[:8]}"
+
+
+def _academy_create_submission(
+    state: dict[str, list[dict[str, Any]]],
+    assignment: dict[str, Any],
+    user_id: str,
+    *,
+    status: str = "draft",
+    text_content: str | None = None,
+    file_urls: list[dict[str, Any]] | None = None,
+    quiz_answers: list[str] | None = None,
+) -> dict[str, Any]:
+    attempts = [
+        row
+        for row in state["submissions"]
+        if row.get("assignment_id") == assignment.get("id") and row.get("user_id") == user_id
+    ]
+    now_iso = _academy_now_iso()
+    submission = {
+        "id": _academy_make_id("submission"),
+        "assignment_id": assignment.get("id"),
+        "course_id": assignment.get("course_id"),
+        "user_id": user_id,
+        "attempt_number": len(attempts) + 1,
+        "status": status,
+        "submission_type": assignment.get("assignment_type") or "text",
+        "text_content": text_content or "",
+        "quiz_answers": quiz_answers or [],
+        "document_id": None,
+        "file_urls": file_urls or [],
+        "word_count": len((text_content or "").split()),
+        "submitted_at": now_iso if status in {"submitted", "grading", "graded", "returned", "regrade_requested"} else None,
+        "is_late": False,
+        "days_late": 0,
+        "late_penalty_applied": 0,
+        "graded_at": None,
+        "graded_by": None,
+        "score": None,
+        "adjusted_score": None,
+        "letter_grade": None,
+        "feedback": None,
+        "feedback_attachments": [],
+        "regrade_reason": None,
+        "grading_locked_by": None,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    state["submissions"].append(submission)
+    return submission
+
+
+def _academy_quiz_answers_to_text(quiz_answers: list[Any] | None) -> str:
+    answers = [str(item).strip() for item in (quiz_answers or []) if str(item).strip()]
+    if not answers:
+        return ""
+    return "\n\n".join(f"Question {index + 1}: {answer}" for index, answer in enumerate(answers))
+
+
+def _academy_create_course_assignment(
+    state: dict[str, list[dict[str, Any]]],
+    *,
+    course_id: str,
+    course_title: str,
+    instructor_id: str,
+    title: str,
+    description: str | None,
+    instructions: str | None,
+    assignment_type: str,
+    due_date: str | None,
+    available_from: str | None,
+    max_points: int | float | None,
+    passing_score: int | float | None,
+    max_attempts: int | None,
+    allow_late_submissions: bool | None,
+    late_penalty_percent: int | float | None,
+    max_late_days: int | None,
+    allowed_file_types: list[str] | None,
+    max_file_size_mb: int | float | None,
+    max_files: int | None,
+    peer_review_enabled: bool | None,
+    peer_reviews_required: int | None,
+    is_published: bool | None,
+    quiz_questions: list[str] | None,
+    resource_file_name: str | None,
+    resource_attachment: dict[str, Any] | None,
+) -> dict[str, Any]:
+    safe_type = assignment_type if assignment_type in {"file_upload", "text", "document", "mixed", "quiz"} else "text"
+    safe_questions = [str(item).strip() for item in (quiz_questions or []) if str(item).strip()]
+    now_iso = _academy_now_iso()
+    assignment = {
+        "id": _academy_make_id("assign"),
+        "course_id": course_id,
+        "course_title": course_title,
+        "module_id": None,
+        "lesson_id": None,
+        "title": title,
+        "description": description or f"{title} for {course_title}",
+        "instructions": instructions or description or f"<p>Complete {title} in your student dashboard.</p>",
+        "assignment_type": safe_type,
+        "max_points": float(max_points or 100),
+        "passing_score": float(passing_score or 70),
+        "due_date": due_date,
+        "available_from": available_from or now_iso,
+        "available_until": None,
+        "allow_late_submissions": True if allow_late_submissions is None else bool(allow_late_submissions),
+        "late_penalty_percent": float(late_penalty_percent or 0),
+        "max_late_days": int(max_late_days or 7),
+        "max_attempts": int(max_attempts or 1),
+        "peer_review_enabled": bool(peer_review_enabled),
+        "peer_reviews_required": int(peer_reviews_required or 0),
+        "rubric_id": None,
+        "allowed_file_types": allowed_file_types or ["pdf", "docx", "jpg", "jpeg", "png"],
+        "max_file_size_mb": float(max_file_size_mb or 15),
+        "max_files": int(max_files or 3),
+        "calendar_event_id": None,
+        "is_published": True if is_published is None else bool(is_published),
+        "created_by": instructor_id,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "quiz_questions": safe_questions,
+        "resource_file_name": resource_file_name,
+        "resource_attachment": _academy_normalize_file_attachment(resource_attachment),
+    }
+    state["assignments"].append(assignment)
+    return assignment
+
+
+def _academy_seed_assignments_for_course(
+    state: dict[str, list[dict[str, Any]]],
+    course_id: str,
+    *,
+    course_title: str | None = None,
+    instructor_id: str | None = None,
+) -> list[dict[str, Any]]:
+    existing = [row for row in state["assignments"] if row.get("course_id") == course_id]
+    if existing:
+        return existing
+
+    now = datetime.now(timezone.utc)
+    available_from = (now - timedelta(days=2)).isoformat().replace("+00:00", "Z")
+    due_primary = (now + timedelta(days=5)).isoformat().replace("+00:00", "Z")
+    due_secondary = (now + timedelta(days=10)).isoformat().replace("+00:00", "Z")
+    course_name = course_title or "Street Voices Academy Course"
+    rubric_id = _academy_stable_id("rubric", course_id)
+
+    rubric = next((row for row in state["rubrics"] if row.get("id") == rubric_id), None)
+    if rubric is None:
+        state["rubrics"].append(
+            {
+                "id": rubric_id,
+                "title": f"{course_name} Rubric",
+                "description": "A simple rubric for written reflections and final responses.",
+                "course_id": course_id,
+                "total_points": 100,
+                "is_template": False,
+                "is_active": True,
+                "created_by": instructor_id or "academy-instructor",
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+                "criteria": [
+                    {
+                        "id": _academy_stable_id("criterion", course_id, "clarity"),
+                        "rubric_id": rubric_id,
+                        "criterion_name": "Clarity",
+                        "description": "Ideas are communicated clearly and confidently.",
+                        "max_points": 40,
+                        "order_index": 1,
+                        "levels": [],
+                    },
+                    {
+                        "id": _academy_stable_id("criterion", course_id, "reflection"),
+                        "rubric_id": rubric_id,
+                        "criterion_name": "Reflection",
+                        "description": "The submission shows thought, detail, and personal reflection.",
+                        "max_points": 60,
+                        "order_index": 2,
+                        "levels": [],
+                    },
+                ],
+            }
+        )
+
+    assignments = [
+        {
+            "id": _academy_stable_id("assign", course_id, "reflection"),
+            "course_id": course_id,
+            "course_title": course_name,
+            "module_id": None,
+            "lesson_id": None,
+            "title": "Weekly Reflection",
+            "description": f"Share what you learned in {course_name} and how you will apply it.",
+            "instructions": "<p>Write a short reflection about the biggest idea you learned this week and how you plan to use it.</p>",
+            "assignment_type": "text",
+            "max_points": 100,
+            "passing_score": 70,
+            "due_date": due_primary,
+            "available_from": available_from,
+            "available_until": None,
+            "allow_late_submissions": True,
+            "late_penalty_percent": 10,
+            "max_late_days": 7,
+            "max_attempts": 2,
+            "peer_review_enabled": False,
+            "peer_reviews_required": 0,
+            "rubric_id": rubric_id,
+            "allowed_file_types": ["pdf", "docx", "png"],
+            "max_file_size_mb": 10,
+            "max_files": 3,
+            "calendar_event_id": None,
+            "is_published": True,
+            "created_by": instructor_id or "academy-instructor",
+            "created_at": _academy_now_iso(),
+            "updated_at": _academy_now_iso(),
+        },
+        {
+            "id": _academy_stable_id("assign", course_id, "action-plan"),
+            "course_id": course_id,
+            "course_title": course_name,
+            "module_id": None,
+            "lesson_id": None,
+            "title": "Action Plan Submission",
+            "description": "Create a small action plan that shows how you will use this course in real life.",
+            "instructions": "<p>Submit a short action plan with three concrete next steps you will take after this lesson.</p>",
+            "assignment_type": "file_upload",
+            "max_points": 50,
+            "passing_score": 30,
+            "due_date": due_secondary,
+            "available_from": available_from,
+            "available_until": None,
+            "allow_late_submissions": True,
+            "late_penalty_percent": 5,
+            "max_late_days": 5,
+            "max_attempts": 1,
+            "peer_review_enabled": False,
+            "peer_reviews_required": 0,
+            "rubric_id": None,
+            "allowed_file_types": ["pdf", "docx", "jpg", "jpeg", "png"],
+            "max_file_size_mb": 15,
+            "max_files": 3,
+            "calendar_event_id": None,
+            "is_published": True,
+            "created_by": instructor_id or "academy-instructor",
+            "created_at": _academy_now_iso(),
+            "updated_at": _academy_now_iso(),
+        },
+    ]
+    state["assignments"].extend(assignments)
+    return assignments
+
+
+async def _handle_assignments(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    if _academy_sync_course_enrollments_from_cohorts(state):
+        _save_academy_state(state)
+    method = request.method
+    query = request.query_params
+
+    if parts[0] == "courses" and len(parts) >= 3 and parts[2] == "assignments" and method == "GET":
+        course_id = parts[1]
+        course_meta = await _academy_fetch_course_meta(course_id)
+        assignments = _academy_seed_assignments_for_course(
+            state,
+            course_id,
+            course_title=course_meta.get("title") if course_meta else None,
+            instructor_id=course_meta.get("instructor_id") if course_meta else None,
+        )
+        _save_academy_state(state)
+        include_unpublished = query.get("include_unpublished") == "true"
+        if not include_unpublished:
+            assignments = [row for row in assignments if row.get("is_published", True)]
+        return JSONResponse([_academy_assignment_payload(state, row) for row in assignments])
+
+    if parts[0] == "courses" and len(parts) >= 3 and parts[2] == "assignments" and method == "POST":
+        course_id = parts[1]
+        course_meta = await _academy_fetch_course_meta(course_id)
+        body = await request.json()
+        title = str(body.get("title") or "").strip()
+        if title == "":
+            return JSONResponse({"detail": "title is required"}, status_code=400)
+        assignment = _academy_create_course_assignment(
+            state,
+            course_id=course_id,
+            course_title=course_meta.get("title") if course_meta else "Street Voices Academy Course",
+            instructor_id=request.query_params.get("created_by") or body.get("created_by") or body.get("createdBy") or (course_meta.get("instructor_id") if course_meta else None) or "academy-instructor",
+            title=title,
+            description=body.get("description"),
+            instructions=body.get("instructions"),
+            assignment_type=str(body.get("assignment_type") or body.get("assignmentType") or "text"),
+            due_date=body.get("due_date") or body.get("dueDate"),
+            available_from=body.get("available_from") or body.get("availableFrom"),
+            max_points=body.get("max_points") or body.get("maxPoints"),
+            passing_score=body.get("passing_score") or body.get("passingScore"),
+            max_attempts=body.get("max_attempts") or body.get("maxAttempts"),
+            allow_late_submissions=body.get("allow_late_submissions") if "allow_late_submissions" in body else body.get("allowLateSubmissions"),
+            late_penalty_percent=body.get("late_penalty_percent") or body.get("latePenaltyPercent"),
+            max_late_days=body.get("max_late_days") or body.get("maxLateDays"),
+            allowed_file_types=body.get("allowed_file_types") or body.get("allowedFileTypes"),
+            max_file_size_mb=body.get("max_file_size_mb") or body.get("maxFileSizeMb"),
+            max_files=body.get("max_files") or body.get("maxFiles"),
+            peer_review_enabled=body.get("peer_review_enabled") if "peer_review_enabled" in body else body.get("peerReviewEnabled"),
+            peer_reviews_required=body.get("peer_reviews_required") or body.get("peerReviewsRequired"),
+            is_published=body.get("is_published") if "is_published" in body else body.get("isPublished"),
+            quiz_questions=body.get("quiz_questions") or body.get("quizQuestions"),
+            resource_file_name=body.get("resource_file_name") or body.get("resourceFileName"),
+            resource_attachment=body.get("resource_attachment") or body.get("resourceAttachment"),
+        )
+        _save_academy_state(state)
+        return JSONResponse(_academy_assignment_payload(state, assignment), status_code=201)
+
+    if parts[0] == "courses" and len(parts) >= 3 and parts[2] == "submissions" and method == "GET":
+        course_id = parts[1]
+        assignment_type_filter = str(query.get("assignment_type") or "all").strip().lower()
+        active_user_ids = {
+            str(item.get("user_id"))
+            for item in state["enrollments"]
+            if item.get("course_id") == course_id and item.get("status") != "dropped"
+        }
+        if not active_user_ids:
+            return JSONResponse([])
+
+        latest_rows: dict[tuple[str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
+        for submission in state["submissions"]:
+            if submission.get("status") == "draft":
+                continue
+
+            assignment = _academy_find_assignment(state, str(submission.get("assignment_id") or ""))
+            if not assignment or assignment.get("course_id") != course_id:
+                continue
+
+            if active_user_ids and str(submission.get("user_id")) not in active_user_ids:
+                continue
+
+            normalized_assignment_type = "quiz" if assignment.get("assignment_type") == "quiz" else "assignment"
+            if assignment_type_filter in {"quiz", "assignment"} and normalized_assignment_type != assignment_type_filter:
+                continue
+
+            row_key = (str(assignment.get("id") or ""), str(submission.get("user_id") or ""))
+            current = latest_rows.get(row_key)
+            if current is None or _academy_submission_sort_key(submission) > _academy_submission_sort_key(current[0]):
+                latest_rows[row_key] = (submission, assignment)
+
+        rows = []
+        for submission, assignment in latest_rows.values():
+            score_value = submission.get("adjusted_score")
+            if score_value is None:
+                score_value = submission.get("score")
+
+            rows.append(
+                {
+                    "submission_id": submission.get("id"),
+                    "assignment_id": assignment.get("id"),
+                    "assignment_title": assignment.get("title"),
+                    "assignment_type": "quiz" if assignment.get("assignment_type") == "quiz" else "assignment",
+                    "course_id": assignment.get("course_id"),
+                    "course_title": assignment.get("course_title") or "Street Voices Academy Course",
+                    "user_id": submission.get("user_id"),
+                    "user_name": _academy_display_name_for_submission(submission),
+                    "user_email": submission.get("user_email"),
+                    "attempt_number": submission.get("attempt_number") or 1,
+                    "status": submission.get("status"),
+                    "submitted_at": submission.get("submitted_at") or submission.get("updated_at") or submission.get("created_at"),
+                    "graded_at": submission.get("graded_at"),
+                    "score": score_value,
+                    "letter_grade": submission.get("letter_grade"),
+                    "max_points": assignment.get("max_points") or 100,
+                }
+            )
+
+        rows.sort(
+            key=lambda row: (
+                str(row.get("submitted_at") or ""),
+                str(row.get("assignment_title") or ""),
+                str(row.get("user_name") or ""),
+            ),
+            reverse=True,
+        )
+        return JSONResponse(rows)
+
+    if parts[0] == "users" and len(parts) >= 3 and method == "GET":
+        user_id = parts[1]
+        action = parts[2]
+        course_id = query.get("course_id")
+        if action in {"available-assignments", "assignment-stats"} and not course_id:
+            return JSONResponse({"detail": "course_id is required"}, status_code=400)
+
+        if action == "available-assignments":
+            course_meta = await _academy_fetch_course_meta(course_id or "")
+            assignments = _academy_seed_assignments_for_course(
+                state,
+                course_id or "",
+                course_title=course_meta.get("title") if course_meta else None,
+                instructor_id=course_meta.get("instructor_id") if course_meta else None,
+            )
+            _save_academy_state(state)
+            return JSONResponse([_academy_assignment_payload(state, row) for row in assignments if row.get("is_published", True)])
+
+        if action == "assignment-stats":
+            course_meta = await _academy_fetch_course_meta(course_id or "")
+            assignments = _academy_seed_assignments_for_course(
+                state,
+                course_id or "",
+                course_title=course_meta.get("title") if course_meta else None,
+                instructor_id=course_meta.get("instructor_id") if course_meta else None,
+            )
+            assignment_ids = {row.get("id") for row in assignments}
+            submissions = [
+                row
+                for row in state["submissions"]
+                if row.get("user_id") == user_id and row.get("assignment_id") in assignment_ids
+            ]
+            submitted_rows = [row for row in submissions if row.get("status") != "draft"]
+            graded_rows = [row for row in submissions if row.get("status") in {"graded", "returned"}]
+            average_score = (
+                round(
+                    sum(float(row.get("adjusted_score", row.get("score")) or 0) for row in graded_rows) / len(graded_rows),
+                    2,
+                )
+                if graded_rows
+                else 0
+            )
+            return JSONResponse(
+                {
+                    "total_assignments": len(assignments),
+                    "submitted": len(submitted_rows),
+                    "graded": len(graded_rows),
+                    "average_score": average_score,
+                    "on_time": len([row for row in submitted_rows if not row.get("is_late")]),
+                    "late": len([row for row in submitted_rows if row.get("is_late")]),
+                }
+            )
+
+    if parts[0] == "assignments":
+        assignment = _academy_find_assignment(state, parts[1] if len(parts) >= 2 else "")
+        if not assignment:
+            return JSONResponse({"detail": "Assignment not found"}, status_code=404)
+
+        if len(parts) == 2 and method == "GET":
+            return JSONResponse(_academy_assignment_payload(state, assignment))
+
+        if len(parts) == 2 and method == "DELETE":
+            assignment_id = assignment.get("id")
+            removed_submission_ids = {
+                row.get("id")
+                for row in state["submissions"]
+                if row.get("assignment_id") == assignment_id
+            }
+            state["assignments"] = [row for row in state["assignments"] if row.get("id") != assignment_id]
+            state["submissions"] = [row for row in state["submissions"] if row.get("assignment_id") != assignment_id]
+            state["rubric_grades"] = [
+                row for row in state["rubric_grades"] if row.get("submission_id") not in removed_submission_ids
+            ]
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+
+        if len(parts) >= 3 and parts[2] == "stats" and method == "GET":
+            return JSONResponse(_academy_assignment_payload(state, assignment))
+
+        if len(parts) >= 3 and parts[2] == "availability" and method == "GET":
+            return JSONResponse(
+                {
+                    "is_available": True,
+                    "reason": None,
+                    "available_from": assignment.get("available_from"),
+                    "available_until": assignment.get("available_until"),
+                    "due_date": assignment.get("due_date"),
+                    "attempts_remaining": assignment.get("max_attempts"),
+                    "max_attempts": assignment.get("max_attempts"),
+                    "current_attempt": 0,
+                }
+            )
+
+        if len(parts) >= 3 and parts[2] == "submissions" and method == "POST":
+            user_id = query.get("user_id")
+            if not user_id:
+                return JSONResponse({"detail": "user_id is required"}, status_code=400)
+            submission = _academy_create_submission(state, assignment, user_id, status="draft")
+            _save_academy_state(state)
+            return JSONResponse(submission, status_code=201)
+
+        if len(parts) >= 3 and parts[2] == "my-submission" and method == "GET":
+            user_id = query.get("user_id")
+            if not user_id:
+                return JSONResponse({"detail": "user_id is required"}, status_code=400)
+            submission = _academy_get_latest_submission(state, assignment["id"], user_id)
+            if submission is None:
+                return JSONResponse({"detail": "Submission not found"}, status_code=404)
+            return JSONResponse(submission)
+
+    if parts[0] == "submissions":
+        submission = _academy_find(state["submissions"], parts[1] if len(parts) >= 2 else "")
+        if not submission:
+            return JSONResponse({"detail": "Submission not found"}, status_code=404)
+
+        if len(parts) == 2 and method == "GET":
+            return JSONResponse(submission)
+
+        if len(parts) == 2 and method in {"PATCH", "PUT"}:
+            body = await request.json()
+            text_content = body.get("text_content")
+            if text_content is not None:
+                submission["text_content"] = text_content
+                submission["word_count"] = len(str(text_content).split())
+            if "quiz_answers" in body:
+                submission["quiz_answers"] = body.get("quiz_answers") or []
+                if not submission.get("text_content"):
+                    summary_text = _academy_quiz_answers_to_text(submission.get("quiz_answers"))
+                    submission["text_content"] = summary_text
+                    submission["word_count"] = len(summary_text.split())
+            if "document_id" in body:
+                submission["document_id"] = body.get("document_id")
+            if "file_urls" in body:
+                submission["file_urls"] = body.get("file_urls") or []
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+        if len(parts) >= 3 and parts[2] == "submit" and method == "POST":
+            submission["status"] = "submitted"
+            submission["submitted_at"] = submission.get("submitted_at") or _academy_now_iso()
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+        if len(parts) >= 3 and parts[2] == "request-regrade" and method == "POST":
+            body = await request.json()
+            submission["status"] = "regrade_requested"
+            submission["regrade_reason"] = body.get("reason")
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+        if len(parts) >= 3 and parts[2] == "start-grading" and method == "POST":
+            submission["status"] = "grading"
+            submission["grading_locked_by"] = query.get("grader_id")
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+        if len(parts) >= 3 and parts[2] == "grade" and method == "POST":
+            body = await request.json()
+            score = float(body.get("score") or 0)
+            assignment = _academy_find_assignment(state, submission.get("assignment_id", ""))
+            max_points = float(assignment.get("max_points") or 100) if assignment else 100
+            percentage = score / max_points * 100 if max_points else 0
+            letter_grade = (
+                "A" if percentage >= 90 else
+                "B" if percentage >= 80 else
+                "C" if percentage >= 70 else
+                "D" if percentage >= 60 else
+                "F"
+            )
+            submission.update(
+                {
+                    "status": "graded",
+                    "grading_locked_by": query.get("grader_id"),
+                    "graded_by": query.get("grader_id"),
+                    "graded_at": _academy_now_iso(),
+                    "score": score,
+                    "adjusted_score": score,
+                    "letter_grade": letter_grade,
+                    "feedback": body.get("feedback"),
+                    "feedback_attachments": body.get("feedback_attachments") or [],
+                    "updated_at": _academy_now_iso(),
+                }
+            )
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+        if len(parts) >= 3 and parts[2] == "rubric-grade" and method == "POST":
+            body = await request.json()
+            criterion_grades = body.get("criterion_grades") or []
+            earned_points = round(sum(float(item.get("points_earned") or 0) for item in criterion_grades), 2)
+            rubric_id = body.get("rubric_id")
+            summary = {
+                "id": _academy_make_id("rubric-grade"),
+                "submission_id": submission.get("id"),
+                "rubric_id": rubric_id,
+                "criterion_grades": criterion_grades,
+                "overall_feedback": body.get("overall_feedback"),
+                "earned_points": earned_points,
+                "updated_at": _academy_now_iso(),
+            }
+            state["rubric_grades"] = [
+                row
+                for row in state["rubric_grades"]
+                if not (row.get("submission_id") == submission.get("id") and row.get("rubric_id") == rubric_id)
+            ]
+            state["rubric_grades"].append(summary)
+            submission["status"] = "graded"
+            submission["graded_by"] = query.get("grader_id")
+            submission["graded_at"] = _academy_now_iso()
+            submission["score"] = earned_points
+            submission["adjusted_score"] = earned_points
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            rubric = next((row for row in state["rubrics"] if row.get("id") == rubric_id), None)
+            total_points = float(rubric.get("total_points") or 100) if rubric else 100
+            return JSONResponse(
+                {
+                    "rubric_id": rubric_id,
+                    "rubric_title": rubric.get("title") if rubric else "Course Rubric",
+                    "total_points": total_points,
+                    "earned_points": earned_points,
+                    "percentage": round(earned_points / total_points * 100, 2) if total_points else 0,
+                    "criterion_grades": [
+                        {
+                            "criterion_id": item.get("criterion_id"),
+                            "criterion_name": item.get("criterion_name"),
+                            "max_points": item.get("max_points"),
+                            "level_id": item.get("level_id"),
+                            "level_name": item.get("level_name"),
+                            "points_earned": item.get("points_earned"),
+                            "feedback": item.get("feedback"),
+                        }
+                        for item in criterion_grades
+                    ],
+                }
+            )
+
+        if len(parts) >= 3 and parts[2] == "rubric-grades" and method == "GET":
+            rubric_id = query.get("rubric_id")
+            summary = next(
+                (
+                    row
+                    for row in state["rubric_grades"]
+                    if row.get("submission_id") == submission.get("id") and row.get("rubric_id") == rubric_id
+                ),
+                None,
+            )
+            if summary is None:
+                return JSONResponse({"detail": "Rubric grades not found"}, status_code=404)
+            rubric = next((row for row in state["rubrics"] if row.get("id") == rubric_id), None)
+            total_points = float(rubric.get("total_points") or 100) if rubric else 100
+            return JSONResponse(
+                {
+                    "rubric_id": rubric_id,
+                    "rubric_title": rubric.get("title") if rubric else "Course Rubric",
+                    "total_points": total_points,
+                    "earned_points": summary.get("earned_points"),
+                    "percentage": round(float(summary.get("earned_points") or 0) / total_points * 100, 2) if total_points else 0,
+                    "criterion_grades": summary.get("criterion_grades") or [],
+                }
+            )
+
+        if len(parts) >= 3 and parts[2] == "return" and method == "POST":
+            submission["status"] = "returned"
+            submission["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(submission)
+
+    if parts[0] == "rubrics" and len(parts) >= 2 and method == "GET":
+        rubric = next((row for row in state["rubrics"] if row.get("id") == parts[1]), None)
+        if rubric is None:
+            return JSONResponse({"detail": "Rubric not found"}, status_code=404)
+        return JSONResponse(rubric)
+
+    if parts[0] == "grading" and len(parts) >= 2 and parts[1] == "queue" and method == "GET":
+        course_id = query.get("course_id")
+        queue_rows = []
+        for submission in state["submissions"]:
+            if submission.get("status") not in {"submitted", "grading", "regrade_requested"}:
+                continue
+            assignment = _academy_find_assignment(state, submission.get("assignment_id", ""))
+            if not assignment:
+                continue
+            if course_id and assignment.get("course_id") != course_id:
+                continue
+            queue_rows.append(
+                {
+                    "submission_id": submission.get("id"),
+                    "assignment_id": assignment.get("id"),
+                    "assignment_title": assignment.get("title"),
+                    "course_id": assignment.get("course_id"),
+                    "course_title": assignment.get("course_title") or "Street Voices Academy Course",
+                    "user_id": submission.get("user_id"),
+                    "user_name": submission.get("user_name") or "Academy learner",
+                    "user_email": submission.get("user_email"),
+                    "attempt_number": submission.get("attempt_number") or 1,
+                    "submitted_at": submission.get("submitted_at") or submission.get("updated_at") or submission.get("created_at"),
+                    "is_late": bool(submission.get("is_late")),
+                    "days_late": int(submission.get("days_late") or 0),
+                    "status": submission.get("status"),
+                    "due_date": assignment.get("due_date"),
+                    "max_points": assignment.get("max_points") or 100,
+                    "rubric_id": assignment.get("rubric_id"),
+                    "grading_locked_by": submission.get("grading_locked_by"),
+                }
+            )
+        queue_rows.sort(key=lambda row: row.get("submitted_at") or "", reverse=False)
+        return JSONResponse(queue_rows)
+
+    return JSONResponse({"detail": "Unsupported assignment route"}, status_code=404)
+
+
+async def _handle_live_sessions(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+    query = request.query_params
+
+    if len(parts) == 1 or not parts[1]:
+        if method == "GET":
+            sessions = list(state["live_sessions"])
+            if not sessions and not query.get("course_id") and not query.get("instructor_id"):
+                sample_session = {
+                    "id": _academy_make_id("session"),
+                    "course_id": "academy-foundations",
+                    "module_id": None,
+                    "lesson_id": None,
+                    "title": "Street Voices Academy Orientation",
+                    "description": "Kick off the Academy experience, meet the learning flow, and preview live learning.",
+                    "session_type": "webinar",
+                    "instructor_id": "academy-instructor",
+                    "co_host_ids": [],
+                    "scheduled_start": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+                    "scheduled_end": (datetime.now(timezone.utc) + timedelta(days=1, hours=1)).isoformat().replace("+00:00", "Z"),
+                    "actual_start": None,
+                    "actual_end": None,
+                    "status": "scheduled",
+                    "max_attendees": 50,
+                    "platform": "internal",
+                    "meeting_id": None,
+                    "meeting_url": None,
+                    "session_notes": None,
+                    "recording_url": None,
+                    "recording_available": False,
+                    "is_mandatory": False,
+                    "points_for_attending": 5,
+                    "created_at": _academy_now_iso(),
+                    "updated_at": _academy_now_iso(),
+                }
+                state["live_sessions"].append(sample_session)
+                _save_academy_state(state)
+                sessions = [sample_session]
+            course_id = query.get("course_id")
+            instructor_id = query.get("instructor_id")
+            status = query.get("status")
+            if course_id:
+                sessions = [s for s in sessions if s.get("course_id") == course_id]
+            if instructor_id:
+                sessions = [s for s in sessions if s.get("instructor_id") == instructor_id]
+            if status:
+                sessions = [s for s in sessions if s.get("status") == status]
+            else:
+                sessions = [s for s in sessions if s.get("status") not in {"cancelled"}]
+            sessions.sort(key=lambda item: item.get("scheduled_start", ""))
+            return JSONResponse(_academy_session_list_response(sessions))
+
+        if method == "POST":
+            body = await request.json()
+            scheduled_start = body.get("scheduled_start") or _academy_now_iso()
+            scheduled_end = body.get("scheduled_end") or (
+                _academy_parse_iso(scheduled_start) + timedelta(hours=1)
+            ).isoformat().replace("+00:00", "Z")
+            session = {
+                "id": _academy_make_id("session"),
+                "course_id": body.get("course_id"),
+                "module_id": body.get("module_id"),
+                "lesson_id": body.get("lesson_id"),
+                "title": body.get("title") or "Untitled Session",
+                "description": body.get("description"),
+                "session_type": body.get("session_type") or "class",
+                "instructor_id": query.get("instructor_id") or body.get("instructor_id") or "academy-instructor",
+                "co_host_ids": body.get("co_host_ids") or [],
+                "scheduled_start": scheduled_start,
+                "scheduled_end": scheduled_end,
+                "actual_start": None,
+                "actual_end": None,
+                "status": body.get("status") or "scheduled",
+                "max_attendees": body.get("max_attendees"),
+                "platform": body.get("platform") or "internal",
+                "meeting_id": body.get("meeting_id"),
+                "meeting_url": body.get("meeting_url"),
+                "session_notes": body.get("session_notes"),
+                "recording_url": None,
+                "recording_available": False,
+                "is_mandatory": bool(body.get("is_mandatory", False)),
+                "points_for_attending": int(body.get("points_for_attending") or 0),
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+            }
+            state["live_sessions"].append(session)
+            _save_academy_state(state)
+            return JSONResponse(session, status_code=201)
+
+    if len(parts) >= 3 and parts[1] == "course" and method == "GET":
+        course_id = parts[2]
+        sessions = [s for s in state["live_sessions"] if s.get("course_id") == course_id]
+        if not sessions:
+            sample_session = {
+                "id": _academy_make_id("session"),
+                "course_id": course_id,
+                "module_id": None,
+                "lesson_id": None,
+                "title": "Academy Live Lab",
+                "description": "A guided Academy session for discussion, check-ins, and course support.",
+                "session_type": "class",
+                "instructor_id": "academy-instructor",
+                "co_host_ids": [],
+                "scheduled_start": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat().replace("+00:00", "Z"),
+                "scheduled_end": (datetime.now(timezone.utc) + timedelta(days=2, hours=1)).isoformat().replace("+00:00", "Z"),
+                "actual_start": None,
+                "actual_end": None,
+                "status": "scheduled",
+                "max_attendees": 25,
+                "platform": "internal",
+                "meeting_id": None,
+                "meeting_url": None,
+                "session_notes": None,
+                "recording_url": None,
+                "recording_available": False,
+                "is_mandatory": False,
+                "points_for_attending": 10,
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+            }
+            state["live_sessions"].append(sample_session)
+            _save_academy_state(state)
+            sessions = [sample_session]
+        status = query.get("status")
+        if status:
+            sessions = [s for s in sessions if s.get("status") == status]
+        else:
+            sessions = [s for s in sessions if s.get("status") not in {"cancelled"}]
+        if query.get("upcoming_only") == "true":
+            now = datetime.now(timezone.utc)
+            sessions = [s for s in sessions if _academy_parse_iso(s.get("scheduled_end")) >= now]
+        sessions.sort(key=lambda item: item.get("scheduled_start", ""))
+        return JSONResponse(_academy_session_list_response(sessions))
+
+    if len(parts) >= 4 and parts[1] == "user" and method == "GET":
+        user_id = parts[2]
+        scope = parts[3]
+        rows = []
+        now = datetime.now(timezone.utc)
+        for registration in state["session_registrations"]:
+            if registration.get("user_id") != user_id:
+                continue
+            session = _academy_find(state["live_sessions"], registration.get("session_id", ""))
+            if not session:
+                continue
+            if scope == "upcoming" and _academy_parse_iso(session.get("scheduled_end")) < now:
+                continue
+            rows.append({"registration": registration, "session": session})
+        rows.sort(key=lambda item: item["session"].get("scheduled_start", ""))
+        return JSONResponse({"sessions": rows, "total": len(rows)})
+
+    if len(parts) >= 4 and parts[1] == "polls":
+        poll = _academy_find(state["session_polls"], parts[2])
+        if not poll:
+            return JSONResponse({"detail": "Poll not found"}, status_code=404)
+        if parts[3] == "start" and method == "POST":
+            poll["status"] = "active"
+            poll["started_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(poll)
+        if parts[3] == "end" and method == "POST":
+            poll["status"] = "closed"
+            poll["ended_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(poll)
+        if parts[3] == "respond" and method == "POST":
+            user_id = query.get("user_id")
+            body = await request.json()
+            response = next(
+                (
+                    item
+                    for item in state["poll_responses"]
+                    if item.get("poll_id") == poll["id"] and item.get("user_id") == user_id
+                ),
+                None,
+            )
+            if response is None:
+                response = {
+                    "id": _academy_make_id("poll-response"),
+                    "poll_id": poll["id"],
+                    "user_id": user_id,
+                    "response": body.get("response"),
+                    "created_at": _academy_now_iso(),
+                }
+                state["poll_responses"].append(response)
+            else:
+                response["response"] = body.get("response")
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+        if parts[3] == "results" and method == "GET":
+            responses = [item for item in state["poll_responses"] if item.get("poll_id") == poll["id"]]
+            results: dict[str, int] = {}
+            for response in responses:
+                value = response.get("response")
+                if isinstance(value, list):
+                    for item in value:
+                        results[str(item)] = results.get(str(item), 0) + 1
+                else:
+                    results[str(value)] = results.get(str(value), 0) + 1
+            return JSONResponse(
+                {
+                    "poll": poll,
+                    "total_responses": len(responses),
+                    "results": results,
+                }
+            )
+
+    if len(parts) >= 4 and parts[1] == "questions":
+        question = _academy_find(state["session_questions"], parts[2])
+        if not question:
+            return JSONResponse({"detail": "Question not found"}, status_code=404)
+        if parts[3] == "upvote" and method == "POST":
+            question["upvotes"] = int(question.get("upvotes") or 0) + 1
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+        if parts[3] == "answer" and method == "POST":
+            body = await request.json()
+            question["answer"] = body.get("answer")
+            question["answered_by"] = query.get("answered_by")
+            question["status"] = "answered"
+            _save_academy_state(state)
+            return JSONResponse(question)
+
+    session_id = parts[1] if len(parts) >= 2 else None
+    session = _academy_find(state["live_sessions"], session_id or "")
+    if not session:
+        return JSONResponse({"detail": "Session not found"}, status_code=404)
+
+    if len(parts) == 2 and method == "GET":
+        return JSONResponse(_academy_session_with_registration(state, session, query.get("user_id")))
+
+    if len(parts) == 2 and method in ("PATCH", "PUT"):
+        body = await request.json()
+        for key in [
+            "title",
+            "description",
+            "scheduled_start",
+            "scheduled_end",
+            "max_attendees",
+            "meeting_id",
+            "meeting_url",
+            "session_notes",
+            "status",
+            "recording_url",
+        ]:
+            if key in body:
+                session[key] = body.get(key)
+        session["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(session)
+
+    if len(parts) >= 3:
+        action = parts[2]
+        if action == "start" and method == "POST":
+            session["status"] = "live"
+            session["actual_start"] = session.get("actual_start") or _academy_now_iso()
+            session["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(session)
+        if action == "end" and method == "POST":
+            session["status"] = "ended"
+            session["actual_end"] = _academy_now_iso()
+            session["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse(session)
+        if action == "cancel" and method == "POST":
+            session["status"] = "cancelled"
+            session["updated_at"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+        if action == "register":
+            user_id = query.get("user_id")
+            registration = next(
+                (
+                    item
+                    for item in state["session_registrations"]
+                    if item.get("session_id") == session["id"] and item.get("user_id") == user_id
+                ),
+                None,
+            )
+            if method == "DELETE":
+                state["session_registrations"] = [
+                    item
+                    for item in state["session_registrations"]
+                    if not (item.get("session_id") == session["id"] and item.get("user_id") == user_id)
+                ]
+                _save_academy_state(state)
+                return JSONResponse({"ok": True})
+            if registration is None:
+                registration = {
+                    "id": _academy_make_id("registration"),
+                    "session_id": session["id"],
+                    "user_id": user_id,
+                    "status": "registered",
+                    "joined_at": None,
+                    "left_at": None,
+                    "attendance_duration": 0,
+                    "attendance_percent": 0,
+                    "attended_full": False,
+                    "points_earned": 0,
+                }
+                state["session_registrations"].append(registration)
+            _save_academy_state(state)
+            return JSONResponse(registration)
+        if action == "registrations" and method == "GET":
+            rows = [item for item in state["session_registrations"] if item.get("session_id") == session["id"]]
+            return JSONResponse(rows)
+        if action == "join" and method == "POST":
+            user_id = query.get("user_id")
+            registration = next(
+                (
+                    item
+                    for item in state["session_registrations"]
+                    if item.get("session_id") == session["id"] and item.get("user_id") == user_id
+                ),
+                None,
+            )
+            if registration is None:
+                registration = {
+                    "id": _academy_make_id("registration"),
+                    "session_id": session["id"],
+                    "user_id": user_id,
+                    "status": "registered",
+                    "joined_at": None,
+                    "left_at": None,
+                    "attendance_duration": 0,
+                    "attendance_percent": 0,
+                    "attended_full": False,
+                    "points_earned": 0,
+                }
+                state["session_registrations"].append(registration)
+            registration["joined_at"] = _academy_now_iso()
+            registration["status"] = "attended"
+            _save_academy_state(state)
+            return JSONResponse({"status": "joined", "meeting_url": session.get("meeting_url"), "registration": registration})
+        if action == "leave" and method == "POST":
+            user_id = query.get("user_id")
+            registration = next(
+                (
+                    item
+                    for item in state["session_registrations"]
+                    if item.get("session_id") == session["id"] and item.get("user_id") == user_id
+                ),
+                None,
+            )
+            if registration is None:
+                return JSONResponse({"detail": "Registration not found"}, status_code=404)
+            left_at = _academy_now_iso()
+            registration["left_at"] = left_at
+            duration_minutes = max(
+                0,
+                int(
+                    (
+                        _academy_parse_iso(left_at) - _academy_parse_iso(registration.get("joined_at"))
+                    ).total_seconds()
+                    // 60
+                ),
+            )
+            scheduled_minutes = max(
+                1,
+                int(
+                    (
+                        _academy_parse_iso(session.get("scheduled_end")) - _academy_parse_iso(session.get("scheduled_start"))
+                    ).total_seconds()
+                    // 60
+                ),
+            )
+            registration["attendance_duration"] = duration_minutes
+            registration["attendance_percent"] = min(100, round(duration_minutes / scheduled_minutes * 100))
+            registration["attended_full"] = registration["attendance_percent"] >= 80
+            registration["points_earned"] = session.get("points_for_attending", 0) if registration["attended_full"] else 0
+            _save_academy_state(state)
+            return JSONResponse({"status": "left", "attendance_duration": duration_minutes})
+        if action == "polls" and method == "POST":
+            body = await request.json()
+            poll = {
+                "id": _academy_make_id("poll"),
+                "session_id": session["id"],
+                "question": body.get("question"),
+                "poll_type": body.get("poll_type") or "single",
+                "options": body.get("options") or [],
+                "is_anonymous": bool(body.get("is_anonymous", True)),
+                "show_results_live": bool(body.get("show_results_live", True)),
+                "status": "draft",
+                "started_at": None,
+                "ended_at": None,
+            }
+            state["session_polls"].append(poll)
+            _save_academy_state(state)
+            return JSONResponse(poll, status_code=201)
+        if action == "questions":
+            if method == "GET":
+                rows = [item for item in state["session_questions"] if item.get("session_id") == session["id"]]
+                status = query.get("status")
+                if status:
+                    rows = [item for item in rows if item.get("status") == status]
+                rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+                return JSONResponse(rows)
+            if method == "POST":
+                body = await request.json()
+                question = {
+                    "id": _academy_make_id("question"),
+                    "session_id": session["id"],
+                    "user_id": query.get("user_id"),
+                    "question": body.get("question"),
+                    "is_anonymous": bool(body.get("is_anonymous", False)),
+                    "status": "pending",
+                    "upvotes": 0,
+                    "answer": None,
+                    "answered_by": None,
+                    "created_at": _academy_now_iso(),
+                }
+                state["session_questions"].append(question)
+                _save_academy_state(state)
+                return JSONResponse(question, status_code=201)
+        if action == "feedback":
+            if len(parts) >= 4 and parts[3] == "summary" and method == "GET":
+                rows = [item for item in state["session_feedback"] if item.get("session_id") == session["id"]]
+                total = len(rows)
+                def _avg(key: str) -> float | None:
+                    values = [float(item[key]) for item in rows if item.get(key) is not None]
+                    return round(sum(values) / len(values), 2) if values else None
+                recommend_count = len([item for item in rows if item.get("would_recommend")])
+                return JSONResponse(
+                    {
+                        "total_responses": total,
+                        "average_overall": _avg("overall_rating"),
+                        "average_content": _avg("content_rating"),
+                        "average_presenter": _avg("presenter_rating"),
+                        "average_tech": _avg("tech_rating"),
+                        "recommend_percent": round(recommend_count / total * 100, 2) if total else 0,
+                    }
+                )
+            if method == "POST":
+                body = await request.json()
+                existing = next(
+                    (
+                        item
+                        for item in state["session_feedback"]
+                        if item.get("session_id") == session["id"] and item.get("user_id") == query.get("user_id")
+                    ),
+                    None,
+                )
+                feedback = {
+                    "id": existing.get("id") if existing else _academy_make_id("feedback"),
+                    "session_id": session["id"],
+                    "user_id": query.get("user_id"),
+                    **body,
+                    "updated_at": _academy_now_iso(),
+                }
+                state["session_feedback"] = [
+                    item
+                    for item in state["session_feedback"]
+                    if not (item.get("session_id") == session["id"] and item.get("user_id") == query.get("user_id"))
+                ]
+                state["session_feedback"].append(feedback)
+                _save_academy_state(state)
+                return JSONResponse({"ok": True})
+
+    return JSONResponse({"detail": "Unsupported live session route"}, status_code=404)
+
+
+async def _handle_cohorts(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+    query = request.query_params
+
+    if len(parts) == 1 or not parts[1]:
+        if method == "GET":
+            rows = list(state["cohorts"])
+            if not rows and not query.get("instructor_id"):
+                sample_cohort = {
+                    "id": _academy_make_id("cohort"),
+                    "course_id": "academy-foundations",
+                    "name": "Academy Launch Cohort",
+                    "description": "A sample Academy cohort for the foundational LMS release.",
+                    "start_date": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+                    "end_date": (datetime.now(timezone.utc) + timedelta(days=29)).isoformat().replace("+00:00", "Z"),
+                    "max_capacity": 25,
+                    "current_enrollment": 0,
+                    "status": "upcoming",
+                    "is_self_paced": False,
+                    "enrollment_deadline": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat().replace("+00:00", "Z"),
+                    "instructor_id": "academy-instructor",
+                    "created_at": _academy_now_iso(),
+                    "updated_at": _academy_now_iso(),
+                }
+                state["cohorts"].append(sample_cohort)
+                _save_academy_state(state)
+                rows = [sample_cohort]
+            instructor_id = query.get("instructor_id")
+            if instructor_id:
+                rows = [item for item in rows if item.get("instructor_id") == instructor_id]
+            return JSONResponse(rows)
+        if method == "POST":
+            body = await request.json()
+            cohort = {
+                "id": _academy_make_id("cohort"),
+                "course_id": body.get("course_id"),
+                "name": body.get("name") or "Academy Cohort",
+                "description": body.get("description"),
+                "start_date": body.get("start_date") or _academy_now_iso(),
+                "end_date": body.get("end_date") or (_academy_parse_iso(_academy_now_iso()) + timedelta(days=30)).isoformat().replace("+00:00", "Z"),
+                "max_capacity": body.get("max_capacity"),
+                "current_enrollment": 0,
+                "status": body.get("status") or "upcoming",
+                "is_self_paced": bool(body.get("is_self_paced", False)),
+                "enrollment_deadline": body.get("enrollment_deadline"),
+                "instructor_id": query.get("instructor_id") or body.get("instructor_id") or "academy-instructor",
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+            }
+            state["cohorts"].append(cohort)
+            _save_academy_state(state)
+            return JSONResponse(cohort, status_code=201)
+
+    if len(parts) >= 3 and parts[1] == "course" and method == "GET":
+        course_id = parts[2]
+        rows = [item for item in state["cohorts"] if item.get("course_id") == course_id]
+        if not rows:
+            sample_cohort = {
+                "id": _academy_make_id("cohort"),
+                "course_id": course_id,
+                "name": "Spring Academy Cohort",
+                "description": "A paced Academy cohort with accountability, deadlines, and live touchpoints.",
+                "start_date": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+                "end_date": (datetime.now(timezone.utc) + timedelta(days=31)).isoformat().replace("+00:00", "Z"),
+                "max_capacity": 30,
+                "current_enrollment": 0,
+                "status": "upcoming",
+                "is_self_paced": False,
+                "enrollment_deadline": (datetime.now(timezone.utc) + timedelta(days=5)).isoformat().replace("+00:00", "Z"),
+                "instructor_id": "academy-instructor",
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+            }
+            state["cohorts"].append(sample_cohort)
+            state["cohort_deadlines"].append(
+                {
+                    "id": _academy_make_id("deadline"),
+                    "cohort_id": sample_cohort["id"],
+                    "module_id": None,
+                    "lesson_id": None,
+                    "assignment_id": None,
+                    "deadline": (datetime.now(timezone.utc) + timedelta(days=10)).isoformat().replace("+00:00", "Z"),
+                    "description": "First milestone check-in",
+                    "created_at": _academy_now_iso(),
+                }
+            )
+            _save_academy_state(state)
+            rows = [sample_cohort]
+        if query.get("include_past") != "true":
+            now = datetime.now(timezone.utc)
+            rows = [item for item in rows if _academy_parse_iso(item.get("end_date")) >= now]
+        rows.sort(key=lambda item: item.get("start_date", ""))
+        return JSONResponse(rows)
+
+    if len(parts) >= 3 and parts[1] == "user" and method == "GET":
+        user_id = parts[2]
+        if len(parts) >= 4 and parts[3] == "deadlines":
+            cohort_ids = {
+                item.get("cohort_id")
+                for item in state["cohort_enrollments"]
+                if item.get("user_id") == user_id
+            }
+            rows = [item for item in state["cohort_deadlines"] if item.get("cohort_id") in cohort_ids]
+            return JSONResponse(rows)
+        cohort_ids = {
+            item.get("cohort_id")
+            for item in state["cohort_enrollments"]
+            if item.get("user_id") == user_id
+        }
+        rows = [item for item in state["cohorts"] if item.get("id") in cohort_ids]
+        return JSONResponse(rows)
+
+    cohort_id = parts[1] if len(parts) >= 2 else None
+    cohort = _academy_find(state["cohorts"], cohort_id or "")
+    if not cohort:
+        return JSONResponse({"detail": "Cohort not found"}, status_code=404)
+
+    if len(parts) == 2 and method == "GET":
+        return JSONResponse(cohort)
+    if len(parts) == 2 and method in ("PUT", "PATCH"):
+        body = await request.json()
+        for key in [
+            "name",
+            "description",
+            "start_date",
+            "end_date",
+            "max_capacity",
+            "status",
+            "is_self_paced",
+            "enrollment_deadline",
+        ]:
+            if key in body:
+                cohort[key] = body.get(key)
+        cohort["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(cohort)
+    if len(parts) == 2 and method == "DELETE":
+        state["cohorts"] = [item for item in state["cohorts"] if item.get("id") != cohort["id"]]
+        _save_academy_state(state)
+        return JSONResponse({"ok": True})
+
+    action = parts[2] if len(parts) >= 3 else None
+    if action == "enroll":
+        user_id = query.get("user_id")
+        if method == "DELETE":
+            state["cohort_enrollments"] = [
+                item
+                for item in state["cohort_enrollments"]
+                if not (item.get("cohort_id") == cohort["id"] and item.get("user_id") == user_id)
+            ]
+            cohort["current_enrollment"] = max(0, int(cohort.get("current_enrollment") or 0) - 1)
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+        enrollment = next(
+            (
+                item
+                for item in state["cohort_enrollments"]
+                if item.get("cohort_id") == cohort["id"] and item.get("user_id") == user_id
+            ),
+            None,
+        )
+        if enrollment is None:
+            enrollment = {
+                "id": _academy_make_id("cohort-enrollment"),
+                "cohort_id": cohort["id"],
+                "user_id": user_id,
+                "status": "active",
+                "progress_percent": 0,
+                "enrolled_at": _academy_now_iso(),
+                "completed_at": None,
+            }
+            state["cohort_enrollments"].append(enrollment)
+            cohort["current_enrollment"] = int(cohort.get("current_enrollment") or 0) + 1
+        course_id = str(cohort.get("course_id") or "")
+        if course_id:
+            _academy_ensure_course_enrollment(
+                state,
+                user_id=user_id,
+                course_id=course_id,
+                progress_percent=int(enrollment.get("progress_percent") or 0),
+                status=str(enrollment.get("status") or "active"),
+                enrolled_at=enrollment.get("enrolled_at"),
+            )
+        _save_academy_state(state)
+        return JSONResponse({"success": True, "message": "Enrolled", "enrollment": enrollment})
+    if action == "enrollments" and method == "GET":
+        rows = [item for item in state["cohort_enrollments"] if item.get("cohort_id") == cohort["id"]]
+        return JSONResponse(rows)
+    if action == "deadlines":
+        if method == "GET":
+            rows = [item for item in state["cohort_deadlines"] if item.get("cohort_id") == cohort["id"]]
+            return JSONResponse(rows)
+        if method == "POST":
+            body = await request.json()
+            deadline = {
+                "id": _academy_make_id("deadline"),
+                "cohort_id": cohort["id"],
+                "module_id": body.get("module_id"),
+                "lesson_id": body.get("lesson_id"),
+                "assignment_id": body.get("assignment_id"),
+                "deadline": body.get("deadline"),
+                "description": body.get("description"),
+                "created_at": _academy_now_iso(),
+            }
+            state["cohort_deadlines"].append(deadline)
+            _save_academy_state(state)
+            return JSONResponse(deadline, status_code=201)
+    if action == "announcements":
+        if method == "GET":
+            rows = [item for item in state["cohort_announcements"] if item.get("cohort_id") == cohort["id"]]
+            return JSONResponse(rows[: int(query.get("limit") or 20)])
+        if method == "POST":
+            body = await request.json()
+            announcement = {
+                "id": _academy_make_id("announcement"),
+                "cohort_id": cohort["id"],
+                "author_id": query.get("author_id"),
+                "title": body.get("title"),
+                "content": body.get("content"),
+                "is_pinned": bool(body.get("is_pinned", False)),
+                "created_at": _academy_now_iso(),
+            }
+            state["cohort_announcements"].append(announcement)
+            _save_academy_state(state)
+            return JSONResponse(announcement, status_code=201)
+    if action == "analytics" and method == "GET":
+        enrollments = [item for item in state["cohort_enrollments"] if item.get("cohort_id") == cohort["id"]]
+        total = len(enrollments)
+        completed = len([item for item in enrollments if item.get("status") == "completed"])
+        active = len([item for item in enrollments if item.get("status") == "active"])
+        avg_progress = round(sum(item.get("progress_percent") or 0 for item in enrollments) / total, 2) if total else 0
+        return JSONResponse(
+            {
+                "total_enrolled": total,
+                "active_count": active,
+                "completed_count": completed,
+                "average_progress": avg_progress,
+                "completion_rate": round(completed / total * 100, 2) if total else 0,
+                "enrollment_by_date": [],
+            }
+        )
+
+    return JSONResponse({"detail": "Unsupported cohort route"}, status_code=404)
+
+
+async def _handle_learning_paths(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+    query = request.query_params
+
+    if len(parts) == 1 and method == "GET":
+        rows = list(state["learning_paths"])
+        created_by = query.get("created_by")
+        if created_by:
+            rows = [item for item in rows if item.get("created_by") == created_by]
+
+        rows.sort(key=lambda item: item.get("updated_at") or item.get("created_at") or "", reverse=True)
+        limit = query.get("limit")
+        if limit:
+            try:
+                rows = rows[: max(0, int(limit))]
+            except ValueError:
+                pass
+        return JSONResponse(rows)
+
+    if len(parts) == 1 and method == "POST":
+        body = await request.json()
+        title = str(body.get("title") or "").strip()
+        course_ids = [
+            str(course_id).strip()
+            for course_id in body.get("course_ids", [])
+            if str(course_id).strip()
+        ]
+        if not title:
+            return JSONResponse({"detail": "title is required"}, status_code=400)
+        if not course_ids:
+            return JSONResponse({"detail": "course_ids is required"}, status_code=400)
+
+        now_iso = _academy_now_iso()
+        learning_path = {
+            "id": _academy_make_id("path"),
+            "slug": _academy_unique_path_slug(state, title, str(body.get("slug") or "").strip() or None),
+            "title": title,
+            "description": str(body.get("description") or "").strip() or f"{title} is a guided Academy learning path.",
+            "courses": len(course_ids),
+            "hours": int(body.get("hours") or max(len(course_ids) * 8, 8)),
+            "level": str(body.get("level") or "Beginner").strip() or "Beginner",
+            "delivery_mode": str(body.get("delivery_mode") or "Online and In person").strip() or "Online and In person",
+            "color": str(body.get("color") or "#F97316").strip() or "#F97316",
+            "requirements": [str(item).strip() for item in body.get("requirements", []) if str(item).strip()],
+            "what_youll_learn": [str(item).strip() for item in body.get("what_youll_learn", []) if str(item).strip()],
+            "milestones": [str(item).strip() for item in body.get("milestones", []) if str(item).strip()],
+            "outcomes": [str(item).strip() for item in body.get("outcomes", []) if str(item).strip()],
+            "preferred_categories": [
+                str(item).strip()
+                for item in body.get("preferred_categories", [])
+                if str(item).strip()
+            ],
+            "course_ids": course_ids,
+            "created_by": body.get("created_by") or query.get("created_by"),
+            "source": body.get("source") or "generated",
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        state["learning_paths"].append(learning_path)
+        _save_academy_state(state)
+        return JSONResponse(learning_path, status_code=201)
+
+    identifier = parts[1] if len(parts) >= 2 else ""
+    learning_path = _academy_find(state["learning_paths"], identifier) or next(
+        (item for item in state["learning_paths"] if item.get("slug") == identifier),
+        None,
+    )
+    if not learning_path:
+        return JSONResponse({"detail": "Learning path not found"}, status_code=404)
+
+    if method == "GET":
+        return JSONResponse(learning_path)
+
+    if method in {"PATCH", "PUT"}:
+        body = await request.json()
+        for key in ("title", "description", "level", "color", "source"):
+            if key in body:
+                learning_path[key] = body.get(key)
+        if "delivery_mode" in body:
+            learning_path["delivery_mode"] = body.get("delivery_mode")
+        if "hours" in body:
+            learning_path["hours"] = int(body.get("hours") or 0)
+        if "course_ids" in body:
+            course_ids = [
+                str(course_id).strip()
+                for course_id in body.get("course_ids", [])
+                if str(course_id).strip()
+            ]
+            learning_path["course_ids"] = course_ids
+            learning_path["courses"] = len(course_ids)
+        for key in ("requirements", "what_youll_learn", "milestones", "outcomes", "preferred_categories"):
+            if key in body:
+                learning_path[key] = [str(item).strip() for item in body.get(key, []) if str(item).strip()]
+        learning_path["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(learning_path)
+
+    if method == "DELETE":
+        state["learning_paths"] = [item for item in state["learning_paths"] if item.get("id") != learning_path["id"]]
+        _save_academy_state(state)
+        return JSONResponse({"ok": True})
+
+    return JSONResponse({"detail": "Unsupported learning path route"}, status_code=404)
+
+
+async def _handle_reviews(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+
+    if len(parts) >= 4 and parts[1] == "course" and parts[3] == "stats" and method == "GET":
+        course_id = parts[2]
+        rows = [item for item in state["reviews"] if item.get("course_id") == course_id]
+        count = len(rows)
+        distribution = {key: 0 for key in range(1, 6)}
+        for row in rows:
+            distribution[int(row.get("rating") or 0)] = distribution.get(int(row.get("rating") or 0), 0) + 1
+        average = round(sum((row.get("rating") or 0) for row in rows) / count, 2) if count else 0
+        return JSONResponse({"average": average, "count": count, "distribution": distribution})
+
+    if len(parts) >= 3 and parts[1] == "course" and method == "GET":
+        course_id = parts[2]
+        rows = [item for item in state["reviews"] if item.get("course_id") == course_id]
+        rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+        return JSONResponse(rows)
+
+    if len(parts) >= 5 and parts[1] == "user" and parts[3] == "course" and method == "GET":
+        user_id = parts[2]
+        course_id = parts[4]
+        review = next(
+            (
+                item
+                for item in state["reviews"]
+                if item.get("user_id") == user_id and item.get("course_id") == course_id
+            ),
+            None,
+        )
+        return JSONResponse(review)
+
+    if len(parts) == 1 and method == "POST":
+        body = await request.json()
+        review = {
+            "id": _academy_make_id("review"),
+            "user_id": body.get("user_id"),
+            "course_id": body.get("course_id"),
+            "rating": body.get("rating"),
+            "review_text": body.get("review_text"),
+            "created_at": _academy_now_iso(),
+            "updated_at": _academy_now_iso(),
+        }
+        state["reviews"] = [
+            item
+            for item in state["reviews"]
+            if not (item.get("user_id") == review["user_id"] and item.get("course_id") == review["course_id"])
+        ]
+        state["reviews"].append(review)
+        _save_academy_state(state)
+        return JSONResponse(review, status_code=201)
+
+    review = _academy_find(state["reviews"], parts[1] if len(parts) >= 2 else "")
+    if not review:
+        return JSONResponse({"detail": "Review not found"}, status_code=404)
+    if method in ("PATCH", "PUT"):
+        body = await request.json()
+        if "rating" in body:
+            review["rating"] = body.get("rating")
+        if "review_text" in body:
+            review["review_text"] = body.get("review_text")
+        review["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(review)
+    if method == "DELETE":
+        state["reviews"] = [item for item in state["reviews"] if item.get("id") != review["id"]]
+        _save_academy_state(state)
+        return JSONResponse({"ok": True})
+    return JSONResponse({"detail": "Unsupported reviews route"}, status_code=404)
+
+
+async def _handle_certificates(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    query = request.query_params
+    method = request.method
+    if len(parts) >= 2 and parts[1] == "check-completion" and request.method == "GET":
+        user_id = query.get("user_id")
+        course_id = query.get("course_id")
+        is_completed = any(
+            item.get("user_id") == user_id and item.get("course_id") == course_id
+            for item in state["session_registrations"]
+        ) or any(
+            item.get("user_id") == user_id and item.get("course_id") == course_id
+            for item in state["certificates"]
+        ) or any(
+            item.get("user_id") == user_id and item.get("course_id") == course_id
+            for item in await _list_academy_enrollments(user_id=user_id, course_id=course_id)
+        )
+        return JSONResponse({"is_completed": is_completed})
+
+    if len(parts) >= 2 and parts[1] == "auto-issue" and request.method == "POST":
+        user_id = query.get("user_id")
+        course_id = query.get("course_id")
+        cert = next(
+            (
+                item
+                for item in state["certificates"]
+                if item.get("user_id") == user_id and item.get("course_id") == course_id
+            ),
+            None,
+        )
+        if cert is None:
+            course_meta = await _academy_fetch_course_meta(str(course_id or ""))
+            cert = {
+                "id": _academy_make_id("certificate"),
+                "user_id": user_id,
+                "recipient_name": None,
+                "course_id": course_id,
+                "learning_path_id": None,
+                "target_type": "course",
+                "target_id": course_id,
+                "target_title": course_meta.get("title") if course_meta else None,
+                "certificate_title": "Certificate of Achievement",
+                "issuer_name": "Street Voices Academy",
+                "signature_name": "Street Voices Academy",
+                "issued_by": "academy-auto-issue",
+                "award_date": _academy_now_iso(),
+                "certificate_url": None,
+                "badge_url": None,
+                "verification_code": uuid.uuid4().hex[:12].upper(),
+                "issued_at": _academy_now_iso(),
+                "expires_at": None,
+            }
+            state["certificates"].append(cert)
+            _save_academy_state(state)
+        return JSONResponse(cert)
+
+    if len(parts) == 1 and method == "POST":
+        body = await request.json()
+        user_id = str(body.get("user_id") or "").strip()
+        target_type = str(body.get("target_type") or "course").strip().lower()
+        target_id = str(body.get("target_id") or body.get("course_id") or body.get("learning_path_id") or "").strip()
+        if target_type not in {"course", "learning_path"}:
+            target_type = "course"
+        if not user_id or not target_id:
+            return JSONResponse({"detail": "user_id and target_id are required"}, status_code=400)
+
+        if target_type == "course":
+            course_meta = await _academy_fetch_course_meta(target_id)
+            fallback_title = course_meta.get("title") if course_meta else None
+        else:
+            fallback_title = next(
+                (
+                    item.get("title")
+                    for item in state["learning_paths"]
+                    if item.get("id") == target_id or item.get("slug") == target_id
+                ),
+                None,
+            )
+
+        existing = next(
+            (
+                item
+                for item in state["certificates"]
+                if item.get("user_id") == user_id
+                and str(item.get("target_type") or ("learning_path" if item.get("learning_path_id") else "course")) == target_type
+                and str(item.get("target_id") or item.get("learning_path_id") or item.get("course_id") or "") == target_id
+            ),
+            None,
+        )
+
+        cert = {
+            "id": existing.get("id") if existing else _academy_make_id("certificate"),
+            "user_id": user_id,
+            "recipient_name": body.get("recipient_name"),
+            "course_id": (body.get("course_id") or target_id) if target_type == "course" else None,
+            "learning_path_id": (body.get("learning_path_id") or target_id) if target_type == "learning_path" else None,
+            "target_type": target_type,
+            "target_id": target_id,
+            "target_title": body.get("target_title") or fallback_title,
+            "certificate_title": body.get("certificate_title") or "Certificate of Achievement",
+            "issuer_name": body.get("issuer_name") or "Street Voices Academy",
+            "signature_name": body.get("signature_name") or "Street Voices Academy",
+            "issued_by": body.get("issued_by"),
+            "award_date": body.get("award_date") or _academy_now_iso(),
+            "certificate_url": body.get("certificate_url"),
+            "badge_url": body.get("badge_url"),
+            "verification_code": existing.get("verification_code") if existing else uuid.uuid4().hex[:12].upper(),
+            "issued_at": existing.get("issued_at") if existing else _academy_now_iso(),
+            "updated_at": _academy_now_iso(),
+            "expires_at": body.get("expires_at"),
+        }
+
+        state["certificates"] = [
+            item
+            for item in state["certificates"]
+            if item.get("id") != cert["id"]
+        ]
+        state["certificates"].append(cert)
+        _save_academy_state(state)
+        return JSONResponse(cert, status_code=201 if existing is None else 200)
+
+    if len(parts) >= 2 and request.method == "GET":
+        user_id = parts[1]
+        rows = [item for item in state["certificates"] if item.get("user_id") == user_id]
+        rows.sort(key=lambda item: item.get("updated_at") or item.get("issued_at") or "", reverse=True)
+        return JSONResponse(rows)
+
+    return JSONResponse({"detail": "Unsupported certificate route"}, status_code=404)
+
+
+async def _handle_enrollments(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    state_changed = _academy_sync_course_enrollments_from_cohorts(
+        state,
+        user_id=request.query_params.get("user_id"),
+    )
+    if state_changed:
+        _save_academy_state(state)
+    method = request.method
+    query = request.query_params
+
+    def _match(item: dict[str, Any]) -> bool:
+        user_id = query.get("user_id")
+        course_id = query.get("course_id")
+        status = query.get("status")
+        if user_id and item.get("user_id") != user_id:
+            return False
+        if course_id and item.get("course_id") != course_id:
+            return False
+        if status and item.get("status") != status:
+            return False
+        return True
+
+    if len(parts) == 1 and method == "GET":
+        rows = [item for item in state["enrollments"] if _match(item)]
+        rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+        return JSONResponse(rows)
+
+    if len(parts) == 1 and method == "POST":
+        body = await request.json()
+        user_id = body.get("user_id") or query.get("user_id")
+        course_id = body.get("course_id") or query.get("course_id")
+        if not user_id or not course_id:
+            return JSONResponse({"detail": "user_id and course_id are required"}, status_code=400)
+
+        enrollment = next(
+            (
+                item
+                for item in state["enrollments"]
+                if item.get("user_id") == user_id and item.get("course_id") == course_id
+            ),
+            None,
+        )
+        if enrollment is None:
+            enrollment = {
+                "id": _academy_make_id("enrollment"),
+                "user_id": user_id,
+                "course_id": course_id,
+                "status": body.get("status") or "active",
+                "progress_percent": int(body.get("progress_percent") or 0),
+                "last_accessed_at": body.get("last_accessed_at"),
+                "enrolled_at": _academy_now_iso(),
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+                "completed_at": None,
+            }
+            state["enrollments"].append(enrollment)
+        else:
+            enrollment["status"] = body.get("status") or "active"
+            enrollment["progress_percent"] = int(body.get("progress_percent") or enrollment.get("progress_percent") or 0)
+            enrollment["last_accessed_at"] = body.get("last_accessed_at") or enrollment.get("last_accessed_at")
+            enrollment["updated_at"] = _academy_now_iso()
+            if enrollment.get("status") != "completed":
+                enrollment["completed_at"] = None
+
+        if int(enrollment.get("progress_percent") or 0) >= 100:
+            enrollment["status"] = "completed"
+            enrollment["completed_at"] = enrollment.get("completed_at") or _academy_now_iso()
+
+        _save_academy_state(state)
+        return JSONResponse(enrollment, status_code=201)
+
+    if len(parts) >= 2 and method == "GET":
+        enrollment_id = parts[1]
+        enrollment = _academy_find(state["enrollments"], enrollment_id)
+        if enrollment:
+            return JSONResponse(enrollment)
+
+        rows = [item for item in state["enrollments"] if item.get("user_id") == enrollment_id]
+        if rows:
+            rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+            return JSONResponse(rows)
+        return JSONResponse({"detail": "Enrollment not found"}, status_code=404)
+
+    if len(parts) >= 2 and method in ("PATCH", "PUT"):
+        enrollment = _academy_find(state["enrollments"], parts[1])
+        if not enrollment:
+            return JSONResponse({"detail": "Enrollment not found"}, status_code=404)
+
+        body = await request.json()
+        for key in ["status", "last_accessed_at"]:
+            if key in body:
+                enrollment[key] = body.get(key)
+        if "progress_percent" in body:
+            enrollment["progress_percent"] = int(body.get("progress_percent") or 0)
+            if enrollment["progress_percent"] >= 100:
+                enrollment["status"] = "completed"
+                enrollment["completed_at"] = enrollment.get("completed_at") or _academy_now_iso()
+
+        enrollment["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(enrollment)
+
+    if len(parts) >= 2 and method == "DELETE":
+        existing = _academy_find(state["enrollments"], parts[1])
+        if not existing:
+            return JSONResponse({"detail": "Enrollment not found"}, status_code=404)
+
+        now_iso = _academy_now_iso()
+        affected_enrollments = [
+            item
+            for item in state["enrollments"]
+            if item.get("user_id") == existing.get("user_id") and item.get("course_id") == existing.get("course_id")
+        ]
+        for enrollment in affected_enrollments:
+            enrollment["status"] = "dropped"
+            enrollment["updated_at"] = now_iso
+            enrollment["completed_at"] = None
+
+        removed_counts: dict[str, int] = {}
+        matching_cohort_ids = {
+            item.get("id")
+            for item in state["cohorts"]
+            if item.get("course_id") == existing.get("course_id")
+        }
+        remaining_cohort_enrollments = []
+        for cohort_enrollment in state["cohort_enrollments"]:
+            if cohort_enrollment.get("user_id") == existing.get("user_id") and cohort_enrollment.get("cohort_id") in matching_cohort_ids:
+                cohort_id = str(cohort_enrollment.get("cohort_id"))
+                removed_counts[cohort_id] = removed_counts.get(cohort_id, 0) + 1
+                continue
+            remaining_cohort_enrollments.append(cohort_enrollment)
+        state["cohort_enrollments"] = remaining_cohort_enrollments
+
+        for cohort in state["cohorts"]:
+            cohort_id = str(cohort.get("id"))
+            if cohort_id in removed_counts:
+                cohort["current_enrollment"] = max(
+                    0,
+                    int(cohort.get("current_enrollment") or 0) - removed_counts[cohort_id],
+                )
+                cohort["updated_at"] = now_iso
+
+        _save_academy_state(state)
+        return JSONResponse({
+            "ok": True,
+            "dropped_enrollment_count": len(affected_enrollments),
+            "removed_cohort_enrollment_count": sum(removed_counts.values()),
+        })
+
+    return JSONResponse({"detail": "Unsupported enrollment route"}, status_code=404)
+
+
+async def _handle_materials(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+
+    if len(parts) >= 2 and parts[1] == "types" and method == "GET":
+        return JSONResponse({"types": ["syllabus", "handout", "reading", "worksheet", "reference", "supplementary"]})
+
+    def _entity_key_and_id() -> tuple[str | None, str | None]:
+        if len(parts) < 3:
+            return None, None
+        if parts[1] == "courses":
+            return "course_id", parts[2]
+        if parts[1] == "modules":
+            return "module_id", parts[2]
+        if parts[1] == "lessons":
+            return "lesson_id", parts[2]
+        return None, None
+
+    entity_key, entity_id = _entity_key_and_id()
+    if entity_key and entity_id and method == "GET":
+        rows = [item for item in state["course_materials"] if item.get(entity_key) == entity_id]
+        rows.sort(key=lambda item: item.get("sortOrder", 0))
+        return JSONResponse(rows)
+    if entity_key and entity_id and method == "POST":
+        body = await request.json()
+        material = {
+            "id": _academy_make_id("material"),
+            "linkId": _academy_make_id("material-link"),
+            "documentId": body.get("documentId"),
+            "title": body.get("title") or "Course document",
+            "documentType": body.get("documentType") or "document",
+            "status": "ready",
+            "materialType": body.get("materialType") or "supplementary",
+            "sortOrder": int(body.get("sortOrder") or 0),
+            "wordCount": int(body.get("wordCount") or 0),
+            "readingTimeMinutes": int(body.get("readingTimeMinutes") or 0),
+            "authorId": request.query_params.get("createdBy"),
+            "notes": body.get("notes"),
+            "fileName": body.get("fileName"),
+            "fileUrl": body.get("fileUrl"),
+            "mimeType": body.get("mimeType"),
+            "sizeBytes": body.get("sizeBytes"),
+            "uploadedAt": body.get("uploadedAt"),
+            "scheduleItemId": body.get("scheduleItemId"),
+            "createdAt": _academy_now_iso(),
+            "updatedAt": _academy_now_iso(),
+            "course_id": entity_id if entity_key == "course_id" else None,
+            "module_id": entity_id if entity_key == "module_id" else None,
+            "lesson_id": entity_id if entity_key == "lesson_id" else None,
+        }
+        state["course_materials"].append(material)
+        _save_academy_state(state)
+        return JSONResponse({"success": True, "linkId": material["linkId"]}, status_code=201)
+
+    if len(parts) >= 3 and parts[1] == "links":
+        material = next((item for item in state["course_materials"] if item.get("linkId") == parts[2]), None)
+        if not material:
+            return JSONResponse({"detail": "Material link not found"}, status_code=404)
+        if method == "DELETE":
+            state["course_materials"] = [item for item in state["course_materials"] if item.get("linkId") != material["linkId"]]
+            _save_academy_state(state)
+            return JSONResponse({"success": True})
+        if len(parts) >= 4 and parts[3] == "type" and method == "PATCH":
+            body = await request.json()
+            material["materialType"] = body.get("materialType") or material.get("materialType")
+            material["updatedAt"] = _academy_now_iso()
+            _save_academy_state(state)
+            return JSONResponse({"success": True})
+
+    if len(parts) >= 4 and parts[1] == "lessons" and parts[3] == "reorder" and method in ("PUT", "PATCH"):
+        body = await request.json()
+        order = {link_id: idx for idx, link_id in enumerate(body.get("linkIds") or [])}
+        for material in state["course_materials"]:
+            if material.get("lesson_id") == parts[2] and material.get("linkId") in order:
+                material["sortOrder"] = order[material["linkId"]]
+        _save_academy_state(state)
+        return JSONResponse({"success": True})
+
+    return JSONResponse([], status_code=200)
+
+
+def _academy_schedule_category_label(category: str) -> str:
+    return {
+        "assignment": "Assignment",
+        "reading": "Reading",
+        "material": "Material",
+    }.get(category, "Course Item")
+
+
+def _academy_create_schedule_assignment(
+    state: dict[str, list[dict[str, Any]]],
+    *,
+    course_id: str,
+    course_title: str,
+    instructor_id: str,
+    title: str,
+    notes: str | None,
+    due_date: str,
+) -> dict[str, Any]:
+    assignment = {
+        "id": _academy_make_id("assign"),
+        "course_id": course_id,
+        "course_title": course_title,
+        "module_id": None,
+        "lesson_id": None,
+        "title": title,
+        "description": notes or f"Assignment for {course_title}",
+        "instructions": f"<p>{notes or 'Complete this assignment and submit your work in the student dashboard.'}</p>",
+        "assignment_type": "text",
+        "max_points": 100,
+        "passing_score": 70,
+        "due_date": due_date,
+        "available_from": _academy_now_iso(),
+        "available_until": None,
+        "allow_late_submissions": True,
+        "late_penalty_percent": 5,
+        "max_late_days": 7,
+        "max_attempts": 1,
+        "peer_review_enabled": False,
+        "peer_reviews_required": 0,
+        "rubric_id": None,
+        "allowed_file_types": ["pdf", "docx", "jpg", "jpeg", "png"],
+        "max_file_size_mb": 15,
+        "max_files": 3,
+        "calendar_event_id": None,
+        "is_published": True,
+        "created_by": instructor_id,
+        "created_at": _academy_now_iso(),
+        "updated_at": _academy_now_iso(),
+    }
+    state["assignments"].append(assignment)
+    return assignment
+
+
+def _academy_create_schedule_material(
+    state: dict[str, list[dict[str, Any]]],
+    *,
+    course_id: str,
+    title: str,
+    notes: str | None,
+    created_by: str,
+    material_type: str,
+    schedule_item_id: str,
+    file_name: str | None,
+    document_type: str | None,
+    file_url: str | None,
+    mime_type: str | None,
+    size_bytes: int | None,
+    uploaded_at: str | None,
+) -> dict[str, Any]:
+    material = {
+        "id": _academy_make_id("material"),
+        "linkId": _academy_make_id("material-link"),
+        "documentId": f"upload:{_academy_make_id('document')}",
+        "title": title or file_name or "Course material",
+        "documentType": document_type or "uploaded-file",
+        "status": "ready",
+        "materialType": material_type,
+        "sortOrder": len([item for item in state["course_materials"] if item.get("course_id") == course_id]),
+        "wordCount": 0,
+        "readingTimeMinutes": 0,
+        "authorId": created_by,
+        "notes": notes,
+        "fileName": file_name,
+        "fileUrl": file_url,
+        "mimeType": mime_type,
+        "sizeBytes": size_bytes,
+        "uploadedAt": uploaded_at,
+        "scheduleItemId": schedule_item_id,
+        "createdAt": _academy_now_iso(),
+        "updatedAt": _academy_now_iso(),
+        "course_id": course_id,
+        "module_id": None,
+        "lesson_id": None,
+    }
+    state["course_materials"].append(material)
+    return material
+
+
+def _academy_remove_schedule_item_links(
+    state: dict[str, list[dict[str, Any]]],
+    schedule_item: dict[str, Any],
+) -> None:
+    linked_assignment_id = schedule_item.get("linked_assignment_id")
+    linked_material_link_id = schedule_item.get("linked_material_link_id")
+
+    if linked_assignment_id:
+        state["assignments"] = [item for item in state["assignments"] if item.get("id") != linked_assignment_id]
+        state["submissions"] = [item for item in state["submissions"] if item.get("assignment_id") != linked_assignment_id]
+
+    if linked_material_link_id:
+        state["course_materials"] = [item for item in state["course_materials"] if item.get("linkId") != linked_material_link_id]
+
+
+async def _handle_schedule_items(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+
+    if parts[0] == "courses" and len(parts) >= 3 and parts[2] == "schedule-items":
+        course_id = parts[1]
+        if method == "GET":
+            rows = [item for item in state["course_schedule_items"] if item.get("course_id") == course_id]
+            rows.sort(key=lambda item: item.get("scheduled_at") or "")
+            return JSONResponse(rows)
+
+        if method == "POST":
+            body = await request.json()
+            course_meta = await _academy_fetch_course_meta(course_id)
+            category = str(body.get("category") or "assignment").lower()
+            if category not in {"assignment", "reading", "material"}:
+                category = "material"
+
+            schedule_item = {
+                "id": _academy_make_id("schedule-item"),
+                "course_id": course_id,
+                "title": body.get("title") or _academy_schedule_category_label(category),
+                "notes": body.get("notes") or body.get("description"),
+                "scheduled_at": body.get("scheduled_at") or body.get("scheduledAt") or _academy_now_iso(),
+                "category": category,
+                "created_by": request.query_params.get("created_by") or body.get("created_by") or body.get("createdBy") or "academy-instructor",
+                "linked_assignment_id": None,
+                "linked_material_link_id": None,
+                "file_name": body.get("file_name") or body.get("fileName"),
+                "file_url": body.get("file_url") or body.get("fileUrl"),
+                "mime_type": body.get("mime_type") or body.get("mimeType"),
+                "size_bytes": body.get("size_bytes") or body.get("sizeBytes"),
+                "uploaded_at": body.get("uploaded_at") or body.get("uploadedAt"),
+                "created_at": _academy_now_iso(),
+                "updated_at": _academy_now_iso(),
+            }
+
+            course_title = course_meta.get("title") if course_meta else "Street Voices Academy Course"
+            instructor_id = (course_meta.get("instructor_id") if course_meta else None) or schedule_item["created_by"]
+
+            if category == "assignment":
+                assignment = _academy_create_schedule_assignment(
+                    state,
+                    course_id=course_id,
+                    course_title=course_title,
+                    instructor_id=instructor_id,
+                    title=schedule_item["title"],
+                    notes=schedule_item["notes"],
+                    due_date=schedule_item["scheduled_at"],
+                )
+                schedule_item["linked_assignment_id"] = assignment.get("id")
+            else:
+                material = _academy_create_schedule_material(
+                    state,
+                    course_id=course_id,
+                    title=schedule_item["title"],
+                    notes=schedule_item["notes"],
+                    created_by=schedule_item["created_by"],
+                    material_type="reading" if category == "reading" else "supplementary",
+                    schedule_item_id=schedule_item["id"],
+                    file_name=schedule_item.get("file_name"),
+                    document_type=body.get("document_type") or body.get("documentType"),
+                    file_url=schedule_item.get("file_url"),
+                    mime_type=schedule_item.get("mime_type"),
+                    size_bytes=int(schedule_item.get("size_bytes") or 0) or None,
+                    uploaded_at=schedule_item.get("uploaded_at"),
+                )
+                schedule_item["linked_material_link_id"] = material.get("linkId")
+
+            state["course_schedule_items"].append(schedule_item)
+            _save_academy_state(state)
+            return JSONResponse(schedule_item, status_code=201)
+
+    if parts[0] == "schedule-items" and len(parts) >= 2:
+        schedule_item = _academy_find(state["course_schedule_items"], parts[1])
+        if not schedule_item:
+            return JSONResponse({"detail": "Schedule item not found"}, status_code=404)
+
+        if method == "DELETE":
+            _academy_remove_schedule_item_links(state, schedule_item)
+            state["course_schedule_items"] = [item for item in state["course_schedule_items"] if item.get("id") != schedule_item.get("id")]
+            _save_academy_state(state)
+            return JSONResponse({"success": True})
+
+    return JSONResponse({"detail": "Unsupported schedule route"}, status_code=404)
+
+
+async def _handle_video(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+    query = request.query_params
+
+    if len(parts) >= 3 and parts[1] == "progress":
+        lesson_id = parts[2]
+        user_id = query.get("user_id")
+        progress = next(
+            (
+                item
+                for item in state["video_progress"]
+                if item.get("lesson_id") == lesson_id and item.get("user_id") == user_id
+            ),
+            None,
+        )
+        if method == "GET":
+            if progress is None:
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            return JSONResponse(progress)
+        if method == "POST":
+            body = await request.json()
+            duration = float(body.get("duration") or 0)
+            current_time = float(body.get("current_time") or 0)
+            progress_percent = round(current_time / duration * 100, 2) if duration else 0
+            if progress is None:
+                progress = {
+                    "id": _academy_make_id("video-progress"),
+                    "user_id": user_id,
+                    "lesson_id": lesson_id,
+                    "video_url": query.get("video_url"),
+                    "current_time": current_time,
+                    "duration": duration,
+                    "progress_percent": progress_percent,
+                    "watch_count": 1,
+                    "total_watch_time": current_time,
+                    "completed": progress_percent >= 90,
+                    "completed_at": _academy_now_iso() if progress_percent >= 90 else None,
+                    "watched_segments": [],
+                    "playback_speed": body.get("playback_speed") or 1,
+                    "quality": body.get("quality") or "auto",
+                    "last_watched_at": _academy_now_iso(),
+                }
+                state["video_progress"].append(progress)
+            else:
+                progress.update(
+                    {
+                        "current_time": current_time,
+                        "duration": duration,
+                        "progress_percent": progress_percent,
+                        "total_watch_time": float(progress.get("total_watch_time") or 0) + current_time,
+                        "completed": progress_percent >= 90,
+                        "completed_at": _academy_now_iso() if progress_percent >= 90 else progress.get("completed_at"),
+                        "playback_speed": body.get("playback_speed") or progress.get("playback_speed") or 1,
+                        "quality": body.get("quality") or progress.get("quality") or "auto",
+                        "last_watched_at": _academy_now_iso(),
+                    }
+                )
+            _save_academy_state(state)
+            return JSONResponse(progress)
+
+    if len(parts) >= 3 and parts[1] == "stats" and method == "GET":
+        lesson_id = parts[2]
+        rows = [item for item in state["video_progress"] if item.get("lesson_id") == lesson_id]
+        total = len(rows)
+        completed = len([item for item in rows if item.get("completed")])
+        avg_progress = round(sum(float(item.get("progress_percent") or 0) for item in rows) / total, 2) if total else 0
+        return JSONResponse(
+            {
+                "total_views": total,
+                "unique_viewers": total,
+                "avg_progress": avg_progress,
+                "completion_rate": round(completed / total * 100, 2) if total else 0,
+                "completed_count": completed,
+            }
+        )
+
+    if len(parts) >= 3 and parts[1] in {"bookmarks", "notes"}:
+        key = "video_bookmarks" if parts[1] == "bookmarks" else "video_notes"
+        lesson_id = parts[2]
+        user_id = query.get("user_id")
+        if method == "GET":
+            rows = [item for item in state[key] if item.get("lesson_id") == lesson_id and item.get("user_id") == user_id]
+            return JSONResponse(rows)
+        if method == "POST":
+            body = await request.json()
+            item = {
+                "id": _academy_make_id(parts[1][:-1]),
+                "user_id": user_id,
+                "lesson_id": lesson_id,
+                "timestamp": body.get("timestamp"),
+                "title": body.get("title"),
+                "note": body.get("note"),
+                "content": body.get("content"),
+                "created_at": _academy_now_iso(),
+            }
+            state[key].append(item)
+            _save_academy_state(state)
+            return JSONResponse(item, status_code=201)
+
+    if len(parts) >= 3 and parts[1] in {"bookmarks", "notes"} and method in ("DELETE", "PUT"):
+        key = "video_bookmarks" if parts[1] == "bookmarks" else "video_notes"
+        item = _academy_find(state[key], parts[2])
+        if not item:
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        if method == "DELETE":
+            state[key] = [row for row in state[key] if row.get("id") != item["id"]]
+            _save_academy_state(state)
+            return JSONResponse({"ok": True})
+        body = await request.json()
+        item["content"] = body.get("content")
+        _save_academy_state(state)
+        return JSONResponse(item)
+
+    return JSONResponse({"detail": "Unsupported video route"}, status_code=404)
+
+
+async def _handle_moodle(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+
+    if len(parts) == 3 and parts[1] == "forums" and method == "GET":
+        course_id = parts[2]
+        forum_id = abs(hash(course_id)) % 100000
+        _academy_seed_forum(state, forum_id, course_id)
+        _save_academy_state(state)
+        return JSONResponse(
+            {
+                "forums": [
+                    {
+                        "id": forum_id,
+                        "course": course_id,
+                        "name": "Course Discussions",
+                        "intro": "Questions, reflections, and peer discussion for this Academy course.",
+                        "type": "general",
+                        "numdiscussions": len([item for item in state["forum_discussions"] if item.get("forum_id") == forum_id]),
+                    }
+                ]
+            }
+        )
+
+
+
+    if len(parts) >= 6 and parts[1] == "forums" and parts[3] == "discussions":
+        forum_id = int(parts[2])
+        discussion_id = int(parts[4])
+        discussion = next(
+            (
+                item
+                for item in state["forum_discussions"]
+                if item.get("forum_id") == forum_id and int(item.get("id", 0)) == discussion_id
+            ),
+            None,
+        )
+
+        if discussion is None:
+            return JSONResponse({"error": "Discussion not found"}, status_code=404)
+
+        if parts[5] == "replies" and method == "POST":
+            body = await request.json()
+            created_at = int(time.time())
+            author_role = body.get("author_role") or "student"
+            fallback_author = "Course Instructor" if author_role == "instructor" else "Academy learner"
+            reply = {
+                "id": int(time.time() * 1000),
+                "message": body.get("message") or "",
+                "userfullname": body.get("author_name") or fallback_author,
+                "userid": body.get("author_id") or 1,
+                "author_role": author_role,
+                "created": created_at,
+            }
+            discussion.setdefault("replies", []).append(reply)
+            discussion["modified"] = created_at
+            discussion["timemodified"] = created_at
+            discussion["numreplies"] = len(discussion.get("replies", []))
+            _save_academy_state(state)
+            return JSONResponse(_academy_normalize_forum_discussion(discussion), status_code=201)
+
+        if parts[5] == "reactions" and method == "POST":
+            body = await request.json()
+            reaction = body.get("reaction")
+            if reaction not in {"up", "down"}:
+                return JSONResponse({"error": "Invalid reaction"}, status_code=400)
+
+            author_id = str(body.get("author_id") or 1)
+            created_at = int(time.time())
+            reactions = discussion.setdefault("reactions", {"up": [], "down": []})
+            was_selected = any(str(entry) == author_id for entry in reactions.get(reaction, []))
+
+            for key in ("up", "down"):
+                reactions[key] = [entry for entry in reactions.get(key, []) if str(entry) != author_id]
+
+            if not was_selected:
+                reactions[reaction].append(author_id)
+
+            discussion["modified"] = created_at
+            discussion["timemodified"] = created_at
+            _save_academy_state(state)
+            return JSONResponse(_academy_normalize_forum_discussion(discussion), status_code=201)
+
+    if len(parts) >= 5 and parts[1] == "forums" and parts[3] == "discussions" and method == "DELETE":
+        forum_id = int(parts[2])
+        discussion_id = int(parts[4])
+        discussion = next(
+            (
+                item
+                for item in state["forum_discussions"]
+                if item.get("forum_id") == forum_id and int(item.get("id", 0)) == discussion_id
+            ),
+            None,
+        )
+        if discussion is None:
+            return JSONResponse({"error": "Discussion not found"}, status_code=404)
+
+        state["forum_discussions"] = [
+            item
+            for item in state["forum_discussions"]
+            if not (item.get("forum_id") == forum_id and int(item.get("id", 0)) == discussion_id)
+        ]
+        _save_academy_state(state)
+        return JSONResponse({"deleted": True})
+
+    if len(parts) >= 4 and parts[1] == "forums" and parts[3] == "discussions":
+        forum_id = int(parts[2])
+        if method == "GET":
+            rows = [_academy_normalize_forum_discussion(item) for item in state["forum_discussions"] if item.get("forum_id") == forum_id]
+            rows.sort(key=lambda item: item.get("created", 0), reverse=True)
+            return JSONResponse({"discussions": rows})
+        if method == "POST":
+            body = await request.json()
+            created_at = int(time.time())
+            author_role = body.get("author_role") or "student"
+            fallback_author = "Course Instructor" if author_role == "instructor" else "Academy learner"
+            discussion = _academy_normalize_forum_discussion(
+                {
+                    "id": int(time.time() * 1000),
+                    "forum_id": forum_id,
+                    "course_id": body.get("course_id"),
+                    "name": body.get("subject") or "New discussion",
+                    "subject": body.get("subject") or "New discussion",
+                    "message": body.get("message") or "",
+                    "userfullname": body.get("author_name") or fallback_author,
+                    "userid": body.get("author_id") or 1,
+                    "author_role": author_role,
+                    "created": created_at,
+                    "modified": created_at,
+                    "numreplies": 0,
+                    "pinned": False,
+                    "timemodified": created_at,
+                    "replies": [],
+                    "reactions": {"up": [], "down": []},
+                }
+            )
+            state["forum_discussions"].append(discussion)
+            _save_academy_state(state)
+            return JSONResponse(discussion, status_code=201)
+
+    if len(parts) >= 3 and parts[1] == "calendar" and method == "GET":
+        user_id = parts[2]
+        events = []
+        for session in state["live_sessions"]:
+            is_participant = any(
+                item.get("session_id") == session.get("id") and item.get("user_id") == user_id
+                for item in state["session_registrations"]
+            )
+            if is_participant or session.get("instructor_id") == user_id:
+                events.append(
+                    {
+                        "id": abs(hash(session["id"])) % 100000,
+                        "name": session.get("title"),
+                        "description": session.get("description") or "",
+                        "coursefullname": "Street Voices Academy",
+                        "timestart": int(_academy_parse_iso(session.get("scheduled_start")).timestamp()),
+                        "timeduration": int(
+                            (
+                                _academy_parse_iso(session.get("scheduled_end")) - _academy_parse_iso(session.get("scheduled_start"))
+                            ).total_seconds()
+                        ),
+                        "eventtype": "course",
+                        "url": f"/academy/live-sessions/{session['id']}",
+                    }
+                )
+        for deadline in state["cohort_deadlines"]:
+            events.append(
+                {
+                    "id": abs(hash(deadline["id"])) % 100000,
+                    "name": deadline.get("description") or "Cohort deadline",
+                    "description": deadline.get("description") or "",
+                    "coursefullname": "Street Voices Academy",
+                    "timestart": int(_academy_parse_iso(deadline.get("deadline")).timestamp()),
+                    "timeduration": 0,
+                    "eventtype": "due",
+                    "url": f"/academy/courses/{deadline.get('cohort_id')}",
+                }
+            )
+        events.sort(key=lambda item: item["timestart"])
+        return JSONResponse({"events": events})
+
+    if len(parts) >= 4 and parts[1] == "grades" and method == "GET":
+        user_id = parts[2]
+        course_id = parts[3]
+        course_meta = await _academy_fetch_course_meta(course_id)
+        _academy_seed_assignments_for_course(
+            state,
+            course_id,
+            course_title=course_meta.get("title") if course_meta else None,
+            instructor_id=course_meta.get("instructor_id") if course_meta else None,
+        )
+        _save_academy_state(state)
+
+        grade_items = []
+        for submission in state["submissions"]:
+            if submission.get("user_id") != user_id or submission.get("course_id") != course_id:
+                continue
+
+            assignment = _academy_find_assignment(state, submission.get("assignment_id", ""))
+            if not assignment:
+                continue
+
+            score = submission.get("adjusted_score", submission.get("score"))
+            max_points = float(assignment.get("max_points") or 100)
+            percentage = round((float(score) / max_points) * 100, 2) if score is not None and max_points else None
+
+            grade_items.append(
+                {
+                    "id": abs(hash(submission["id"])) % 100000,
+                    "itemname": assignment.get("title") or "Assignment",
+                    "itemtype": "mod",
+                    "itemmodule": "assign",
+                    "cmid": assignment.get("id"),
+                    "graderaw": score,
+                    "gradeformatted": f"{score}/{int(max_points)}" if score is not None else None,
+                    "grademin": 0,
+                    "grademax": max_points,
+                    "percentageformatted": f"{percentage}%" if percentage is not None else None,
+                    "feedback": submission.get("feedback"),
+                }
+            )
+
+        return JSONResponse({"grade_items": grade_items})
+
+    if len(parts) >= 3 and parts[1] == "badges" and method == "GET":
+        user_id = parts[2]
+        badges = [
+            {
+                "id": abs(hash(cert["id"])) % 100000,
+                "name": "Course Completion Badge",
+                "description": "Awarded for completing a Street Voices Academy course.",
+                "badgeurl": cert.get("badge_url"),
+                "issuername": "Street Voices Academy",
+                "courseid": cert.get("course_id"),
+                "dateissued": int(_academy_parse_iso(cert.get("issued_at")).timestamp()),
+            }
+            for cert in state["certificates"]
+            if cert.get("user_id") == user_id
+        ]
+        return JSONResponse({"badges": badges})
+
+    if len(parts) >= 3 and parts[1] == "assignments" and method == "GET":
+        course_id = parts[2]
+        course_meta = await _academy_fetch_course_meta(course_id)
+        assignments = _academy_seed_assignments_for_course(
+            state,
+            course_id,
+            course_title=course_meta.get("title") if course_meta else None,
+            instructor_id=course_meta.get("instructor_id") if course_meta else None,
+        )
+        _save_academy_state(state)
+        moodle_assignments = [
+            {
+                "id": row.get("id"),
+                "cmid": int(uuid.uuid5(uuid.NAMESPACE_URL, str(row.get("id"))).int % 100000),
+                "course": row.get("course_id"),
+                "name": row.get("title"),
+                "intro": row.get("instructions") or row.get("description") or "",
+                "duedate": int(_academy_parse_iso(row.get("due_date")).timestamp()) if row.get("due_date") else 0,
+                "allowsubmissionsfromdate": int(_academy_parse_iso(row.get("available_from")).timestamp()) if row.get("available_from") else 0,
+                "cutoffdate": int(_academy_parse_iso(row.get("available_until")).timestamp()) if row.get("available_until") else 0,
+                "grade": row.get("max_points") or 100,
+                "nosubmissions": 0,
+                "submissiondrafts": 1,
+            }
+            for row in assignments
+        ]
+        return JSONResponse({"assignments": moodle_assignments})
+
+    if len(parts) >= 4 and parts[1] == "assignments" and parts[3] == "submit" and method == "POST":
+        assignment_id = parts[2]
+        assignment = _academy_find_assignment(state, assignment_id)
+        if assignment is None:
+            return JSONResponse({"detail": "Assignment not found"}, status_code=404)
+        body = await request.json()
+        user_id = request.query_params.get("user_id") or body.get("user_id")
+        if not user_id:
+            return JSONResponse({"detail": "user_id is required"}, status_code=400)
+
+        submission = _academy_get_latest_submission(state, assignment_id, user_id)
+        if submission is None:
+            quiz_answers = body.get("quiz_answers") or []
+            submission = _academy_create_submission(
+                state,
+                assignment,
+                user_id,
+                status="submitted",
+                text_content=body.get("text") or body.get("text_content") or _academy_quiz_answers_to_text(quiz_answers),
+                quiz_answers=quiz_answers,
+            )
+        else:
+            quiz_answers = body.get("quiz_answers") or submission.get("quiz_answers") or []
+            submission["quiz_answers"] = quiz_answers
+            submission["text_content"] = body.get("text") or body.get("text_content") or submission.get("text_content") or _academy_quiz_answers_to_text(quiz_answers)
+            submission["word_count"] = len(str(submission.get("text_content") or "").split())
+            submission["status"] = "submitted"
+            submission["submitted_at"] = _academy_now_iso()
+            submission["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse({"ok": True, "submission_id": submission.get("id")})
+
+    return JSONResponse({"detail": "Unsupported moodle route"}, status_code=404)
+
+
+async def _list_academy_enrollments(user_id: str | None = None, course_id: str | None = None) -> list[dict[str, Any]]:
+    state = _load_academy_state()
+    if _academy_sync_course_enrollments_from_cohorts(state, user_id=user_id):
+        _save_academy_state(state)
+    local_rows = [
+        item
+        for item in state["enrollments"]
+        if (not user_id or item.get("user_id") == user_id)
+        and (not course_id or item.get("course_id") == course_id)
+    ]
+    if local_rows:
+        return local_rows
+
+    import httpx
+
+    base = f"{_SUPABASE_URL}/rest/v1/academy_enrollments"
+    qs = "select=*"
+    if user_id:
+        qs += f"&user_id=eq.{user_id}"
+    if course_id:
+        qs += f"&course_id=eq.{course_id}"
+    headers = _supabase_headers()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{base}?{qs}", headers=headers)
+            data = resp.json()
+            return data if isinstance(data, list) else []
+    except Exception:
+        return []
 
 
 def _make_provider(config):
@@ -2054,6 +5074,43 @@ async def academy_proxy(request: Request) -> Response:
     if resource == "tutor":
         return await _handle_tutor(request, parts)
 
+    # ── Academy runtime-backed endpoints ──
+    if resource == "live-sessions":
+        return await _handle_live_sessions(request, parts)
+    if resource in {"assignments", "submissions", "rubrics", "grading"}:
+        return await _handle_assignments(request, parts)
+    if resource == "users" and len(parts) >= 3 and parts[2] in {"available-assignments", "assignment-stats"}:
+        return await _handle_assignments(request, parts)
+    if resource == "cohorts":
+        return await _handle_cohorts(request, parts)
+    if resource == "learning-paths":
+        return await _handle_learning_paths(request, parts)
+    if resource == "reviews":
+        return await _handle_reviews(request, parts)
+    if resource == "certificates":
+        return await _handle_certificates(request, parts)
+    if resource == "enrollments":
+        return await _handle_enrollments(request, parts)
+    if resource == "materials":
+        return await _handle_materials(request, parts)
+    if resource == "schedule-items":
+        return await _handle_schedule_items(request, parts)
+    if resource == "video":
+        return await _handle_video(request, parts)
+    if resource == "moodle":
+        return await _handle_moodle(request, parts)
+
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "cohorts":
+        return await _handle_cohorts(request, ["cohorts", "course", parts[1]])
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "live-sessions":
+        return await _handle_live_sessions(request, ["live-sessions", "course", parts[1]])
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "assignments":
+        return await _handle_assignments(request, parts)
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "submissions":
+        return await _handle_assignments(request, parts)
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "schedule-items":
+        return await _handle_schedule_items(request, parts)
+
     table_map = {
         "courses": "academy_courses",
         "modules": "academy_modules",
@@ -2090,7 +5147,12 @@ async def academy_proxy(request: Request) -> Response:
                     if nested_table:
                         table = nested_table
                         base = f"{_SUPABASE_URL}/rest/v1/{nested_table}"
-                        qs = f"select=*&course_id=eq.{parts[1]}"
+                        parent_fk = "course_id"
+                        if resource == "modules":
+                            parent_fk = "module_id"
+                        elif resource == "lessons":
+                            parent_fk = "lesson_id"
+                        qs = f"select=*&{parent_fk}=eq.{parts[1]}"
                         if len(parts) >= 4 and parts[3]:
                             qs += f"&id=eq.{parts[3]}"
                         # Handle deeply nested (courses/{id}/modules/{mid}/lessons)
@@ -2099,7 +5161,10 @@ async def academy_proxy(request: Request) -> Response:
                             deep_table = table_map.get(deep_resource)
                             if deep_table:
                                 base = f"{_SUPABASE_URL}/rest/v1/{deep_table}"
-                                qs = f"select=*&module_id=eq.{parts[3]}"
+                                deep_parent_fk = "module_id"
+                                if nested_resource == "lessons":
+                                    deep_parent_fk = "lesson_id"
+                                qs = f"select=*&{deep_parent_fk}=eq.{parts[3]}"
 
                 # Apply filters from query params
                 state = params.pop("state", None)
@@ -2118,6 +5183,12 @@ async def academy_proxy(request: Request) -> Response:
                 user_id = params.pop("user_id", None)
                 if user_id:
                     qs += f"&user_id=eq.{user_id}"
+                course_id = params.pop("course_id", None)
+                if course_id:
+                    qs += f"&course_id=eq.{course_id}"
+                instructor_id = params.pop("instructor_id", None)
+                if instructor_id:
+                    qs += f"&instructor_id=eq.{instructor_id}"
 
                 limit = params.pop("limit", "20")
                 skip = params.pop("skip", "0")
@@ -2126,8 +5197,10 @@ async def academy_proxy(request: Request) -> Response:
                 resp = await client.get(f"{base}?{qs}", headers=headers)
                 data = resp.json()
 
-                # If querying by specific ID, return single object
-                if len(parts) >= 2 and parts[1] and isinstance(data, list):
+                # Return a single record only for ID-shaped paths such as
+                # /resource/:id, /resource/:id/nested/:nestedId, etc.
+                is_single_record_request = len(parts) in {2, 4, 6} and bool(parts[-1])
+                if is_single_record_request and isinstance(data, list):
                     if not data:
                         return JSONResponse({"detail": "Not found"}, status_code=404)
                     return JSONResponse(data[0])
@@ -2144,13 +5217,21 @@ async def academy_proxy(request: Request) -> Response:
                     nested_table = table_map.get(nested_resource)
                     if nested_table:
                         base = f"{_SUPABASE_URL}/rest/v1/{nested_table}"
-                        body_json["course_id"] = parts[1]
+                        parent_fk = "course_id"
+                        if resource == "modules":
+                            parent_fk = "module_id"
+                        elif resource == "lessons":
+                            parent_fk = "lesson_id"
+                        body_json[parent_fk] = parts[1]
                         if len(parts) >= 5:
                             deep_resource = parts[4]
                             deep_table = table_map.get(deep_resource)
                             if deep_table:
                                 base = f"{_SUPABASE_URL}/rest/v1/{deep_table}"
-                                body_json["module_id"] = parts[3]
+                                deep_parent_fk = "module_id"
+                                if nested_resource == "lessons":
+                                    deep_parent_fk = "lesson_id"
+                                body_json[deep_parent_fk] = parts[3]
 
                 resp = await client.post(base, headers=headers, json=body_json)
                 data = resp.json()
