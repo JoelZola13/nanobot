@@ -15,6 +15,7 @@ from typing import Any
 RUNTIME_FILE = Path.home() / ".nanobot" / "workspace" / "academy" / "runtime.json"
 ACADEMY_KEYS = (
     "enrollments",
+    "attendance_records",
     "learning_paths",
     "live_sessions",
     "session_registrations",

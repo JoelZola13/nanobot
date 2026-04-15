@@ -76,6 +76,7 @@ _redis_bus: Any = None  # RedisBus | None — cross-service event bus
 def _academy_default_state() -> dict[str, list[dict[str, Any]]]:
     return {
         "enrollments": [],
+        "attendance_records": [],
         "learning_paths": [],
         "live_sessions": [],
         "session_registrations": [],
@@ -494,6 +495,69 @@ def _academy_display_name_for_submission(submission: dict[str, Any]) -> str:
     return f"Learner {raw_user_id[:8]}"
 
 
+def _academy_humanize_user_id(raw_user_id: str) -> str:
+    raw_user_id = str(raw_user_id or "").strip()
+    if raw_user_id == "":
+        return "Academy learner"
+    if raw_user_id.startswith("academy-local-user"):
+        return "Academy learner"
+    if "@" in raw_user_id:
+        return raw_user_id.split("@")[0] or raw_user_id
+    if len(raw_user_id) > 20 and "-" not in raw_user_id and "_" not in raw_user_id:
+        return f"Learner {raw_user_id[:8]}"
+
+    cleaned = raw_user_id.replace("-", " ").replace("_", " ").strip()
+    if cleaned and any(character.isalpha() for character in cleaned):
+        return " ".join(part.capitalize() for part in cleaned.split())[:48]
+
+    return f"Learner {raw_user_id[:8]}"
+
+
+def _academy_display_name_for_user(
+    state: dict[str, list[dict[str, Any]]],
+    user_id: str,
+    *,
+    course_id: str | None = None,
+) -> str:
+    raw_user_id = str(user_id or "").strip()
+    if raw_user_id == "":
+        return "Academy learner"
+
+    course_submissions = [
+        row
+        for row in state["submissions"]
+        if row.get("user_id") == raw_user_id and (course_id is None or row.get("course_id") == course_id)
+    ]
+    course_submissions.sort(key=_academy_submission_sort_key, reverse=True)
+    if course_submissions:
+        return _academy_display_name_for_submission(course_submissions[0])
+
+    for certificate in state["certificates"]:
+        if certificate.get("user_id") != raw_user_id:
+            continue
+        recipient_name = str(certificate.get("recipient_name") or "").strip()
+        if recipient_name:
+            return recipient_name
+
+    for discussion in state["forum_discussions"]:
+        if course_id and discussion.get("course_id") != course_id:
+            continue
+
+        if str(discussion.get("userid") or "") == raw_user_id:
+            discussion_name = str(discussion.get("userfullname") or "").strip()
+            if discussion_name:
+                return discussion_name
+
+        for reply in discussion.get("replies") or []:
+            if str(reply.get("userid") or "") != raw_user_id:
+                continue
+            reply_name = str(reply.get("userfullname") or "").strip()
+            if reply_name:
+                return reply_name
+
+    return _academy_humanize_user_id(raw_user_id)
+
+
 def _academy_create_submission(
     state: dict[str, list[dict[str, Any]]],
     assignment: dict[str, Any],
@@ -839,6 +903,14 @@ async def _handle_assignments(request: Request, parts: list[str]) -> Response:
             if score_value is None:
                 score_value = submission.get("score")
 
+            display_name = _academy_display_name_for_submission(submission)
+            if display_name == "Academy learner" or display_name.startswith("Learner "):
+                display_name = _academy_display_name_for_user(
+                    state,
+                    str(submission.get("user_id") or ""),
+                    course_id=course_id,
+                )
+
             rows.append(
                 {
                     "submission_id": submission.get("id"),
@@ -848,7 +920,7 @@ async def _handle_assignments(request: Request, parts: list[str]) -> Response:
                     "course_id": assignment.get("course_id"),
                     "course_title": assignment.get("course_title") or "Street Voices Academy Course",
                     "user_id": submission.get("user_id"),
-                    "user_name": _academy_display_name_for_submission(submission),
+                    "user_name": display_name,
                     "user_email": submission.get("user_email"),
                     "attempt_number": submission.get("attempt_number") or 1,
                     "status": submission.get("status"),
@@ -2635,6 +2707,142 @@ async def _handle_schedule_items(request: Request, parts: list[str]) -> Response
             return JSONResponse({"success": True})
 
     return JSONResponse({"detail": "Unsupported schedule route"}, status_code=404)
+
+
+async def _handle_attendance(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+
+    if parts[0] == "courses" and len(parts) >= 3 and parts[2] == "attendance":
+        course_id = parts[1]
+        class_date = str(
+            request.query_params.get("class_date")
+            or request.query_params.get("date")
+            or _academy_now_iso()[:10]
+        )[:10]
+
+        if method == "GET":
+            records_by_user = {
+                str(record.get("user_id") or ""): record
+                for record in state["attendance_records"]
+                if record.get("course_id") == course_id and str(record.get("class_date") or "")[:10] == class_date
+            }
+
+            active_enrollments = [
+                enrollment
+                for enrollment in state["enrollments"]
+                if enrollment.get("course_id") == course_id and enrollment.get("status") != "dropped"
+            ]
+
+            rows = []
+            for enrollment in active_enrollments:
+                user_id = str(enrollment.get("user_id") or "")
+                attendance = records_by_user.get(user_id)
+                rows.append(
+                    {
+                        "record_id": attendance.get("id") if attendance else None,
+                        "course_id": course_id,
+                        "class_date": class_date,
+                        "user_id": user_id,
+                        "student_id": user_id,
+                        "user_name": _academy_display_name_for_user(state, user_id, course_id=course_id),
+                        "attendance_status": attendance.get("attendance_status") if attendance else None,
+                        "marked_by": attendance.get("marked_by") if attendance else None,
+                        "updated_at": attendance.get("updated_at") if attendance else None,
+                        "progress_percent": int(enrollment.get("progress_percent") or 0),
+                        "enrollment_status": enrollment.get("status") or "active",
+                    }
+                )
+
+            rows.sort(
+                key=lambda item: (
+                    str(item.get("user_name") or "").lower(),
+                    str(item.get("user_id") or "").lower(),
+                )
+            )
+            present_count = len([row for row in rows if row.get("attendance_status") == "present"])
+            absent_count = len([row for row in rows if row.get("attendance_status") == "absent"])
+            return JSONResponse(
+                {
+                    "course_id": course_id,
+                    "class_date": class_date,
+                    "students": rows,
+                    "total": len(rows),
+                    "present_count": present_count,
+                    "absent_count": absent_count,
+                }
+            )
+
+        if method in {"POST", "PUT", "PATCH"}:
+            body = await request.json()
+            user_id = str(body.get("user_id") or body.get("student_id") or "").strip()
+            attendance_status = str(body.get("attendance_status") or body.get("status") or "").strip().lower()
+            class_date = str(body.get("class_date") or class_date)[:10]
+            marked_by = (
+                body.get("marked_by")
+                or body.get("markedBy")
+                or request.query_params.get("marked_by")
+                or request.query_params.get("markedBy")
+                or "academy-instructor"
+            )
+
+            if user_id == "":
+                return JSONResponse({"detail": "user_id is required"}, status_code=400)
+            if attendance_status not in {"present", "absent"}:
+                return JSONResponse({"detail": "attendance_status must be present or absent"}, status_code=400)
+
+            active_enrollment = next(
+                (
+                    enrollment
+                    for enrollment in state["enrollments"]
+                    if enrollment.get("course_id") == course_id
+                    and enrollment.get("user_id") == user_id
+                    and enrollment.get("status") != "dropped"
+                ),
+                None,
+            )
+            if active_enrollment is None:
+                return JSONResponse({"detail": "Active enrollment not found for this learner"}, status_code=404)
+
+            record = next(
+                (
+                    item
+                    for item in state["attendance_records"]
+                    if item.get("course_id") == course_id
+                    and item.get("user_id") == user_id
+                    and str(item.get("class_date") or "")[:10] == class_date
+                ),
+                None,
+            )
+
+            now_iso = _academy_now_iso()
+            if record is None:
+                record = {
+                    "id": _academy_make_id("attendance"),
+                    "course_id": course_id,
+                    "user_id": user_id,
+                    "class_date": class_date,
+                    "attendance_status": attendance_status,
+                    "marked_by": marked_by,
+                    "created_at": now_iso,
+                    "updated_at": now_iso,
+                }
+                state["attendance_records"].append(record)
+            else:
+                record["attendance_status"] = attendance_status
+                record["marked_by"] = marked_by
+                record["updated_at"] = now_iso
+
+            _save_academy_state(state)
+            return JSONResponse(
+                {
+                    **record,
+                    "student_id": user_id,
+                    "user_name": _academy_display_name_for_user(state, user_id, course_id=course_id),
+                }
+            )
+
+    return JSONResponse({"detail": "Unsupported attendance route"}, status_code=404)
 
 
 async def _handle_video(request: Request, parts: list[str]) -> Response:
@@ -5100,6 +5308,8 @@ async def academy_proxy(request: Request) -> Response:
         return await _handle_materials(request, parts)
     if resource == "schedule-items":
         return await _handle_schedule_items(request, parts)
+    if resource == "attendance":
+        return await _handle_attendance(request, parts)
     if resource == "video":
         return await _handle_video(request, parts)
     if resource == "moodle":
@@ -5115,6 +5325,8 @@ async def academy_proxy(request: Request) -> Response:
         return await _handle_assignments(request, parts)
     if resource == "courses" and len(parts) >= 3 and parts[2] == "schedule-items":
         return await _handle_schedule_items(request, parts)
+    if resource == "courses" and len(parts) >= 3 and parts[2] == "attendance":
+        return await _handle_attendance(request, parts)
 
     table_map = {
         "courses": "academy_courses",
