@@ -52,6 +52,8 @@ ACADEMY_RUNTIME_FILE = ACADEMY_DATA_DIR / "runtime.json"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
+NEWS_DIR = Path.home() / ".nanobot" / "workspace" / "news"
+NEWS_DB_FILE = Path.home() / ".nanobot" / "workspace" / "news" / "articles.json"
 AVATARS_DIR = Path(__file__).parent.parent / "static" / "avatars"
 SHARED_ASSETS_DIR = Path(__file__).parent.parent / "LibreChat" / "client" / "public"
 GATEWAY_STATIC_DIR = Path(__file__).parent / "gateway" / "static"
@@ -3529,6 +3531,9 @@ async def lifespan(app):
         _platform_task = asyncio.create_task(_refresh_platform_status())
         logger.info("Platform awareness task started (60s refresh)")
 
+    # Register daily news cron job
+    await _register_daily_news_cron()
+
     logger.info("Nanobot API server ready")
     yield
     try:
@@ -5765,6 +5770,682 @@ async def gallery_delete_artwork(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+# ── News Articles API (JSON-backed CRUD) ─────────────────────────────────────
+
+def _load_news_db() -> list[dict]:
+    NEWS_DIR.mkdir(parents=True, exist_ok=True)
+    if NEWS_DB_FILE.exists():
+        try:
+            return json.loads(NEWS_DB_FILE.read_text())
+        except Exception:
+            return []
+    return []
+
+
+def _save_news_db(articles: list[dict]) -> None:
+    NEWS_DIR.mkdir(parents=True, exist_ok=True)
+    NEWS_DB_FILE.write_text(json.dumps(articles, indent=2))
+
+
+async def news_create_article(request: Request) -> JSONResponse:
+    """POST /news/articles — Create a draft article."""
+    body = await request.json()
+    now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    article = {
+        "id": uuid.uuid4().hex[:12],
+        "title": body.get("title", "Untitled"),
+        "slug": body.get("slug", ""),
+        "excerpt": body.get("excerpt", ""),
+        "content": body.get("content", ""),
+        "content_blocks": body.get("content_blocks", []),
+        "category": body.get("category", ""),
+        "tags": body.get("tags", []),
+        "image_url": body.get("image_url", ""),
+        "image_credit": body.get("image_credit", ""),
+        "image_caption": body.get("image_caption", ""),
+        "seo_meta": body.get("seo_meta", ""),
+        "seo_keywords": body.get("seo_keywords", ""),
+        "seo_hashtags": body.get("seo_hashtags", ""),
+        "status": body.get("status", "draft"),
+        "source_urls": body.get("source_urls", []),
+        "ai_generated": body.get("ai_generated", False),
+        "created_at": now,
+        "updated_at": now,
+        "published_at": None,
+    }
+    articles = _load_news_db()
+    articles.insert(0, article)
+    _save_news_db(articles)
+    logger.info(f"News: created article '{article['title']}' ({article['id']})")
+    return JSONResponse(article, status_code=201)
+
+
+async def news_list_articles(request: Request) -> JSONResponse:
+    """GET /news/articles — List articles with optional status/limit filter."""
+    articles = _load_news_db()
+    status = request.query_params.get("status", "")
+    limit = int(request.query_params.get("limit", "100"))
+    if status:
+        articles = [a for a in articles if a.get("status") == status]
+    return JSONResponse({"articles": articles[:limit], "total": len(articles)})
+
+
+async def news_get_article(request: Request) -> JSONResponse:
+    """GET /news/articles/{article_id} — Get single article."""
+    article_id = request.path_params["article_id"]
+    articles = _load_news_db()
+    article = next((a for a in articles if a["id"] == article_id), None)
+    if not article:
+        return JSONResponse({"error": "Article not found"}, status_code=404)
+    return JSONResponse(article)
+
+
+async def news_update_article(request: Request) -> JSONResponse:
+    """PATCH /news/articles/{article_id} — Update article fields."""
+    article_id = request.path_params["article_id"]
+    body = await request.json()
+    articles = _load_news_db()
+    article = next((a for a in articles if a["id"] == article_id), None)
+    if not article:
+        return JSONResponse({"error": "Article not found"}, status_code=404)
+    for key in ("title", "slug", "excerpt", "content", "content_blocks", "category",
+                "tags", "image_url", "image_credit", "image_caption",
+                "seo_meta", "seo_keywords", "seo_hashtags", "status", "source_urls"):
+        if key in body:
+            article[key] = body[key]
+    article["updated_at"] = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    if body.get("status") == "published" and not article.get("published_at"):
+        article["published_at"] = article["updated_at"]
+    _save_news_db(articles)
+    return JSONResponse(article)
+
+
+async def news_delete_article(request: Request) -> JSONResponse:
+    """DELETE /news/articles/{article_id} — Delete an article."""
+    article_id = request.path_params["article_id"]
+    articles = _load_news_db()
+    before = len(articles)
+    articles = [a for a in articles if a["id"] != article_id]
+    if len(articles) == before:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    _save_news_db(articles)
+    return JSONResponse({"ok": True})
+
+
+def _parse_article_from_agent_response(text: str, category: str) -> dict:
+    """Extract article fields from agent markdown response."""
+    import re
+
+    lines = text.strip().split("\n")
+    title = ""
+    excerpt = ""
+    body_lines: list[str] = []
+    image_url = ""
+    image_caption = ""
+    source_urls: list[str] = []
+    seo_meta = ""
+    seo_keywords = ""
+    seo_hashtags = ""
+    in_sources = False
+    in_body = False
+    in_seo = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Extract hero image with caption
+        img_match = re.match(r"!\[([^\]]*)\]\((https?://[^\s)]+)\)", stripped)
+        if img_match and not image_url:
+            image_caption = img_match.group(1).strip()
+            image_url = img_match.group(2)
+            continue
+
+        # Extract sources
+        if stripped.lower().startswith("**sources visited"):
+            in_sources = True
+            in_seo = False
+            continue
+        if in_sources:
+            url_match = re.match(r"[-*]\s*(https?://\S+)", stripped)
+            if url_match:
+                source_urls.append(url_match.group(1))
+                continue
+            if stripped == "---" or stripped.startswith("#"):
+                in_sources = False
+
+        # Extract SEO section
+        if stripped.lower().startswith("**seo"):
+            in_seo = True
+            in_body = False
+            continue
+        if in_seo:
+            meta_match = re.match(r"[-*]\s*Meta:\s*(.+)", stripped, re.IGNORECASE)
+            kw_match = re.match(r"[-*]\s*Keywords?:\s*(.+)", stripped, re.IGNORECASE)
+            ht_match = re.match(r"[-*]\s*Hashtags?:\s*(.+)", stripped, re.IGNORECASE)
+            if meta_match:
+                seo_meta = meta_match.group(1).strip()
+                continue
+            if kw_match:
+                seo_keywords = kw_match.group(1).strip()
+                continue
+            if ht_match:
+                seo_hashtags = ht_match.group(1).strip()
+                continue
+            if stripped.startswith("Saved to:") or stripped == "---" or stripped == "":
+                continue
+
+        # Extract title (first # heading after sources)
+        if stripped.startswith("# ") and not title:
+            title = stripped.lstrip("# ").strip()
+            in_body = True
+            continue
+
+        # Collect body (stop before SEO section)
+        if in_body and not in_seo:
+            if stripped.startswith("Saved to:") or stripped.startswith("Want me to publish"):
+                continue
+            if stripped == "---":
+                continue
+            body_lines.append(line)
+
+    body = "\n".join(body_lines).strip()
+    # Generate excerpt from first paragraph
+    if body and not excerpt:
+        first_para = body.split("\n\n")[0].replace("\n", " ").strip()
+        excerpt = first_para[:200] + ("..." if len(first_para) > 200 else "")
+
+    # Auto-generate SEO meta if AI didn't provide one
+    if not seo_meta and excerpt:
+        seo_meta = excerpt[:150]
+
+    # Convert markdown body to HTML for the block editor
+    html_body = _markdown_to_html(body) if body else ""
+
+    return {
+        "title": title or f"Untitled {category} Article",
+        "excerpt": excerpt,
+        "content": html_body,
+        "image_url": image_url,
+        "image_caption": image_caption,
+        "source_urls": source_urls,
+        "seo_meta": seo_meta,
+        "seo_keywords": seo_keywords,
+        "seo_hashtags": seo_hashtags,
+    }
+
+
+def _markdown_to_html(md: str) -> str:
+    """Convert simple markdown to HTML for the block editor."""
+    import re as _re
+
+    html_parts: list[str] = []
+    paragraphs = md.split("\n\n")
+
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+
+        # Headings
+        heading_match = _re.match(r"^(#{1,6})\s+(.+)$", para)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = _inline_md_to_html(heading_match.group(2).strip())
+            html_parts.append(f"<h{level}>{text}</h{level}>")
+            continue
+
+        # Unordered lists
+        if _re.match(r"^[-*]\s", para):
+            items = _re.findall(r"[-*]\s+(.+)", para)
+            li_html = "".join(f"<li>{_inline_md_to_html(item)}</li>" for item in items)
+            html_parts.append(f"<ul>{li_html}</ul>")
+            continue
+
+        # Ordered lists
+        if _re.match(r"^\d+\.\s", para):
+            items = _re.findall(r"\d+\.\s+(.+)", para)
+            li_html = "".join(f"<li>{_inline_md_to_html(item)}</li>" for item in items)
+            html_parts.append(f"<ol>{li_html}</ol>")
+            continue
+
+        # Blockquote
+        if para.startswith(">"):
+            quote_text = _re.sub(r"^>\s*", "", para, flags=_re.MULTILINE)
+            html_parts.append(f"<blockquote>{_inline_md_to_html(quote_text)}</blockquote>")
+            continue
+
+        # Regular paragraph (may span multiple lines)
+        text = para.replace("\n", " ")
+        html_parts.append(f"<p>{_inline_md_to_html(text)}</p>")
+
+    return "\n".join(html_parts)
+
+
+def _inline_md_to_html(text: str) -> str:
+    """Convert inline markdown (bold, italic, links) to HTML."""
+    import re as _re
+    # Links: [text](url)
+    text = _re.sub(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", r'<a href="\2">\1</a>', text)
+    # Bold: **text** or __text__
+    text = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = _re.sub(r"__(.+?)__", r"<strong>\1</strong>", text)
+    # Italic: *text* or _text_
+    text = _re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+    text = _re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"<em>\1</em>", text)
+    return text
+
+
+async def _fetch_pexels_image(query: str) -> tuple[str, str]:
+    """Fetch a stock photo from Pexels for the given query.
+    Returns (image_url, credit_text) or ("", "") on failure."""
+    import httpx
+    try:
+        config = load_config()
+        api_key = config.tools.stock_photos.api_key if hasattr(config.tools, "stock_photos") else ""
+        if not api_key:
+            # Fallback: read from config.json directly
+            import json as _json
+            cfg_path = Path.home() / ".nanobot" / "config.json"
+            if cfg_path.exists():
+                cfg = _json.loads(cfg_path.read_text())
+                api_key = cfg.get("tools", {}).get("stockPhotos", {}).get("apiKey", "")
+        if not api_key:
+            return "", ""
+
+        # Use first few meaningful words from query
+        search_terms = " ".join(query.split()[:5])
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://api.pexels.com/v1/search",
+                params={"query": search_terms, "per_page": 1, "orientation": "landscape"},
+                headers={"Authorization": api_key},
+            )
+            if resp.status_code != 200:
+                logger.warning(f"Pexels API returned {resp.status_code}")
+                return "", ""
+            data = resp.json()
+            photos = data.get("photos", [])
+            if not photos:
+                return "", ""
+            photo = photos[0]
+            image_url = photo.get("src", {}).get("landscape", "") or photo.get("src", {}).get("large", "")
+            photographer = photo.get("photographer", "Unknown")
+            photo_url = photo.get("url", "")
+            credit = f"Photo by {photographer} on Pexels"
+            return image_url, credit
+    except Exception as e:
+        logger.warning(f"Pexels image fetch failed: {e}")
+        return "", ""
+
+
+def _is_valid_image_url(url: str) -> bool:
+    """Check if a URL is from a known image CDN that allows hotlinking."""
+    if not url:
+        return False
+    lower = url.lower()
+    # Only trust known image CDNs that allow embedding
+    trusted_cdns = (
+        "images.pexels.com", "images.unsplash.com", "i.imgur.com",
+        "cloudinary.com", "res.cloudinary.com", "cdn.pixabay.com",
+    )
+    return any(cdn in lower for cdn in trusted_cdns)
+
+
+_DAILY_CATEGORY_CONFIG = {
+    "local": {
+        "label": "Local",
+        "focus": "Toronto / Greater Toronto Area (GTA), Ontario, Canada",
+        "examples": "city politics, community events, local economy, culture, arts and entertainment, education, health, transit, housing, food, sports, social justice, environment, technology startups, film and music scenes",
+    },
+    "national": {
+        "label": "National",
+        "focus": "Canada-wide",
+        "examples": "federal politics, economy, immigration, Indigenous rights, healthcare, education policy, culture, Canadian film and music, sports, environment, technology, social issues, cost of living, elections",
+    },
+    "international": {
+        "label": "International",
+        "focus": "Global",
+        "examples": "world politics, global economy, climate change, technology, culture, film, music, sports, human rights, health, conflict, diplomacy, science, innovation, social movements",
+    },
+}
+
+
+def _build_article_prompt(cfg: dict, cat: str, today: str) -> str:
+    return (
+        f"You are the Article Writer for Street Voices (streetvoices.ca), "
+        f"a media platform covering a wide range of topics including politics, economy, culture, "
+        f"entertainment, health, social justice, technology, sports, environment, and community stories.\n\n"
+        f"CATEGORY: {cfg['label']}\n"
+        f"GEOGRAPHIC FOCUS: {cfg['focus']}\n"
+        f"POSSIBLE TOPICS: {cfg['examples']}\n"
+        f"DATE: {today}\n\n"
+        f"IMPORTANT: Choose a topic that is DIFFERENT from housing or homelessness. "
+        f"Pick the most interesting and trending story right now from ANY of the possible topics listed above. "
+        f"Variety is key — cover politics, economy, culture, entertainment, health, tech, sports, or environment.\n\n"
+        f"WRITING STYLE:\n"
+        f"- Write like a journalist for a community-focused outlet — clear, engaging, and accessible.\n"
+        f"- Headlines should be direct and compelling.\n"
+        f"- Open with the most important or interesting angle to hook the reader.\n"
+        f"- Keep language conversational but informed — this is journalism, not academic writing.\n"
+        f"- Include real data, quotes from sources, and specific details that bring the story to life.\n"
+        f"- End with a forward-looking angle — what happens next, or what readers should know.\n"
+        f"- Do NOT use '## Community angle' or '## Looking forward' as literal section headers — "
+        f"weave these naturally into the article flow.\n"
+        f"- 500-800 words total.\n\n"
+        f"STEPS:\n"
+        f"1. Use web_search to find the most interesting, trending, newsworthy story from the past 48 hours. "
+        f"Search broadly — NOT just housing or homelessness.\n"
+        f"2. Use web_fetch on the best result to get details.\n"
+        f"3. Write the full article.\n"
+        f"4. Use image_search ONCE to find a hero image.\n"
+        f"5. Use file_write to save to output/articles/{today}-{cat}.md with YAML frontmatter.\n\n"
+        f"RESPOND WITH THIS EXACT FORMAT:\n"
+        f"**Sources visited:**\n- [list URLs]\n\n"
+        f"![One-sentence image caption describing what the image shows](image_url)\n"
+        f"*Source: credit*\n\n"
+        f"# Headline\n\nFull article body...\n\n"
+        f"---\n\n"
+        f"**SEO:**\n"
+        f"- Meta: [140-150 character description suitable for search engines]\n"
+        f"- Keywords: [5-8 relevant SEO keywords, comma separated]\n"
+        f"- Hashtags: [3-5 relevant hashtags for social media, e.g. #Toronto #Housing]\n\n"
+        f"Saved to: `output/articles/{today}-{cat}.md`"
+    )
+
+
+async def news_generate_daily(request: Request) -> StreamingResponse:
+    """POST /news/generate-daily — SSE stream with progress updates."""
+    if not _agent:
+        return JSONResponse({"error": "Agent not initialized"}, status_code=503)
+
+    async def _stream():
+        now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+        today = __import__("datetime").date.today().isoformat()
+        categories = list(_DAILY_CATEGORY_CONFIG.items())
+        total = len(categories)
+        results: list[dict] = []
+
+        if not _agent._mcp_connected:
+            _agent._mcp_connected = True
+
+        for idx, (cat, cfg) in enumerate(categories):
+            step = idx + 1
+            label = cfg["label"]
+
+            # --- Phase 1: Researching ---
+            yield f"data: {json.dumps({'step': step, 'total': total, 'category': label, 'phase': 'researching', 'message': f'Researching {label} news stories...'})}\n\n"
+
+            try:
+                prompt = _build_article_prompt(cfg, cat, today)
+                logger.info(f"News generate-daily: starting {cat} article...")
+
+                # --- Phase 2: Writing ---
+                yield f"data: {json.dumps({'step': step, 'total': total, 'category': label, 'phase': 'writing', 'message': f'Writing {label} article...'})}\n\n"
+
+                response = await asyncio.wait_for(
+                    _agent.process_direct(
+                        content=prompt,
+                        session_key=f"news:generate-daily:{cat}:{today}",
+                        channel="api",
+                        chat_id="news-dashboard",
+                    ),
+                    timeout=300,
+                )
+                response_text = response if isinstance(response, str) else (response.content if hasattr(response, "content") else str(response))
+
+                parsed = _parse_article_from_agent_response(response_text, cat)
+
+                # --- Phase 3: Finding image ---
+                yield f"data: {json.dumps({'step': step, 'total': total, 'category': label, 'phase': 'image', 'message': f'Finding cover image for {label} article...'})}\n\n"
+
+                image_url = parsed["image_url"]
+                image_credit = ""
+                if not _is_valid_image_url(image_url):
+                    search_q = parsed["title"] or f"{cfg['label']} {cfg['focus']}"
+                    image_url, image_credit = await _fetch_pexels_image(search_q)
+
+                # --- Phase 4: Saving ---
+                yield f"data: {json.dumps({'step': step, 'total': total, 'category': label, 'phase': 'saving', 'message': f'Saving {label} article...'})}\n\n"
+
+                slug = (
+                    parsed["title"].lower()
+                    .replace(" ", "-")
+                    .replace("'", "")[:60]
+                    + "-" + uuid.uuid4().hex[:6]
+                )
+                article = {
+                    "id": uuid.uuid4().hex[:12],
+                    "title": parsed["title"],
+                    "slug": slug,
+                    "excerpt": parsed["excerpt"],
+                    "content": parsed["content"],
+                    "content_blocks": [],
+                    "category": cat.capitalize(),
+                    "tags": [cat],
+                    "image_url": image_url,
+                    "image_credit": image_credit,
+                    "image_caption": parsed.get("image_caption", ""),
+                    "seo_meta": parsed.get("seo_meta", ""),
+                    "seo_keywords": parsed.get("seo_keywords", ""),
+                    "seo_hashtags": parsed.get("seo_hashtags", ""),
+                    "status": "draft",
+                    "source_urls": parsed["source_urls"],
+                    "ai_generated": True,
+                    "created_at": now,
+                    "updated_at": now,
+                    "published_at": None,
+                }
+                db = _load_news_db()
+                db.insert(0, article)
+                _save_news_db(db)
+                results.append(article)
+                logger.info(f"News generate-daily: {cat} article saved — '{article['title']}'")
+
+                # --- Phase 5: Done ---
+                done_title = parsed["title"][:60]
+                done_evt = {"step": step, "total": total, "category": label, "phase": "done", "message": f"{label} article complete: {done_title}", "title": parsed["title"]}
+                yield f"data: {json.dumps(done_evt)}\n\n"
+
+            except asyncio.TimeoutError:
+                err_evt = {"step": step, "total": total, "category": label, "phase": "error", "message": f"{label} article timed out (5 min limit)"}
+                yield f"data: {json.dumps(err_evt)}\n\n"
+                results.append({"category": label, "error": "Timed out"})
+            except Exception as e:
+                logger.exception(f"News generate-daily: failed for {cat}")
+                err_msg = str(e)[:60]
+                err_evt = {"step": step, "total": total, "category": label, "phase": "error", "message": f"{label} article failed: {err_msg}"}
+                yield f"data: {json.dumps(err_evt)}\n\n"
+                results.append({"category": label, "error": str(e)})
+
+        # Final event
+        yield f"data: {json.dumps({'step': total, 'total': total, 'phase': 'complete', 'message': 'All articles generated!', 'articles': results})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+async def news_generate_custom(request: Request) -> JSONResponse:
+    """POST /news/generate-custom — Generate a single custom article by type/topic."""
+    if not _agent:
+        return JSONResponse({"error": "Agent not initialized"}, status_code=503)
+
+    body = await request.json()
+    article_type = body.get("type", "General")
+    topic = body.get("topic", "")
+    description = body.get("description", "")
+
+    if not topic.strip():
+        return JSONResponse({"error": "Topic is required"}, status_code=400)
+
+    now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    today = __import__("datetime").date.today().isoformat()
+
+    # Skip MCP connection
+    if not _agent._mcp_connected:
+        _agent._mcp_connected = True
+
+    try:
+        desc_line = f"\nADDITIONAL CONTEXT: {description}" if description else ""
+        prompt = (
+            f"You are the Article Writer for Street Voices (streetvoices.ca), "
+            f"a social enterprise and media platform covering housing, social justice, "
+            f"community stories, and cultural issues in the Greater Toronto Area and beyond.\n\n"
+            f"ARTICLE TYPE: {article_type}\n"
+            f"TOPIC: {topic}\n"
+            f"DATE: {today}\n"
+            f"{desc_line}\n\n"
+            f"WRITING STYLE:\n"
+            f"- Write like a journalist for a community-focused outlet — clear, engaging, accessible.\n"
+            f"- Headlines should be direct and compelling.\n"
+            f"- Open with the most important or interesting angle.\n"
+            f"- Include real data, quotes, and specific details.\n"
+            f"- Use person-first language.\n"
+            f"- 500-800 words total.\n\n"
+            f"STEPS:\n"
+            f"1. Use web_search to find relevant recent information about this topic.\n"
+            f"2. Use web_fetch on the best result to get details.\n"
+            f"3. Write the full article.\n"
+            f"4. Use image_search ONCE to find a hero image.\n"
+            f"5. Use file_write to save to output/articles/{today}-custom.md with YAML frontmatter.\n\n"
+            f"RESPOND WITH THIS EXACT FORMAT:\n"
+            f"**Sources visited:**\n- [list URLs]\n\n"
+            f"![One-sentence image caption describing what the image shows](image_url)\n"
+            f"*Source: credit*\n\n"
+            f"# Headline\n\nFull article body...\n\n"
+            f"---\n\n"
+            f"**SEO:**\n"
+            f"- Meta: [140-150 character description suitable for search engines]\n"
+            f"- Keywords: [5-8 relevant SEO keywords, comma separated]\n"
+            f"- Hashtags: [3-5 relevant hashtags for social media, e.g. #Toronto #Culture]\n\n"
+            f"Saved to: `output/articles/{today}-custom.md`"
+        )
+
+        logger.info(f"News generate-custom: {article_type} — {topic[:50]}")
+        response = await asyncio.wait_for(
+            _agent.process_direct(
+                content=prompt,
+                session_key=f"news:generate-custom:{today}:{uuid.uuid4().hex[:6]}",
+                channel="api",
+                chat_id="news-dashboard",
+            ),
+            timeout=300,
+        )
+        response_text = response if isinstance(response, str) else (response.content if hasattr(response, "content") else str(response))
+
+        parsed = _parse_article_from_agent_response(response_text, article_type)
+
+        # Ensure a valid image — fallback to Pexels stock photo
+        image_url = parsed["image_url"]
+        image_credit = ""
+        if not _is_valid_image_url(image_url):
+            image_url, image_credit = await _fetch_pexels_image(parsed["title"] or topic)
+            if image_url:
+                logger.info(f"News custom: fetched Pexels image — {image_credit}")
+
+        slug = (
+            parsed["title"].lower()
+            .replace(" ", "-")
+            .replace("'", "")[:60]
+            + "-"
+            + uuid.uuid4().hex[:6]
+        )
+        article = {
+            "id": uuid.uuid4().hex[:12],
+            "title": parsed["title"],
+            "slug": slug,
+            "excerpt": parsed["excerpt"],
+            "content": parsed["content"],
+            "content_blocks": [],
+            "category": article_type,
+            "tags": [article_type.lower()],
+            "image_url": image_url,
+            "image_credit": image_credit,
+            "image_caption": parsed.get("image_caption", ""),
+            "seo_meta": parsed.get("seo_meta", ""),
+            "seo_keywords": parsed.get("seo_keywords", ""),
+            "seo_hashtags": parsed.get("seo_hashtags", ""),
+            "status": "draft",
+            "source_urls": parsed["source_urls"],
+            "ai_generated": True,
+            "created_at": now,
+            "updated_at": now,
+            "published_at": None,
+        }
+        articles = _load_news_db()
+        articles.insert(0, article)
+        _save_news_db(articles)
+        logger.info(f"News generate-custom: saved '{article['title']}'")
+        return JSONResponse(article, status_code=201)
+
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "Generation timed out (5 min limit)"}, status_code=504)
+    except Exception as e:
+        logger.exception("News generate-custom: failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def news_generate_image(request: Request) -> JSONResponse:
+    """GET /news/generate-image?query=... — Fetch a new stock photo from Pexels."""
+    import random as _random
+    import httpx
+
+    query = request.query_params.get("query", "news article")
+    try:
+        cfg_path = Path.home() / ".nanobot" / "config.json"
+        api_key = ""
+        if cfg_path.exists():
+            cfg = json.loads(cfg_path.read_text())
+            api_key = cfg.get("tools", {}).get("stockPhotos", {}).get("apiKey", "")
+        if not api_key:
+            return JSONResponse({"error": "Pexels API key not configured"}, status_code=500)
+
+        search_terms = " ".join(query.split()[:6])
+        # Fetch multiple results and pick a random one for variety
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://api.pexels.com/v1/search",
+                params={"query": search_terms, "per_page": 15, "orientation": "landscape"},
+                headers={"Authorization": api_key},
+            )
+            if resp.status_code != 200:
+                return JSONResponse({"error": f"Pexels API error: {resp.status_code}"}, status_code=502)
+            data = resp.json()
+            photos = data.get("photos", [])
+            if not photos:
+                return JSONResponse({"error": "No images found for this query"}, status_code=404)
+            photo = _random.choice(photos)
+            image_url = photo.get("src", {}).get("landscape", "") or photo.get("src", {}).get("large", "")
+            photographer = photo.get("photographer", "Unknown")
+            credit = f"Photo by {photographer} on Pexels"
+            return JSONResponse({"image_url": image_url, "credit": credit})
+    except Exception as e:
+        logger.exception("news_generate_image failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def _register_daily_news_cron() -> None:
+    """Register the daily news generation cron job if not already present."""
+    if not _cron:
+        return
+    from nanobot.cron.types import CronSchedule
+    store = _cron._load_store()
+    for job in store.jobs:
+        if job.name == "daily-news-pipeline":
+            logger.info("Cron: daily-news-pipeline already registered")
+            return
+    _cron.add_job(
+        name="daily-news-pipeline",
+        schedule=CronSchedule(kind="cron", expr="0 7 * * *", tz="America/Toronto"),
+        message=(
+            "Run the daily news pipeline. Research and write 3 articles: "
+            "1 local (Toronto/GTA), 1 national (Canada), 1 international (global). "
+            "Save each as a draft."
+        ),
+        channel="api",
+        to="news-dashboard",
+    )
+    logger.info("Cron: registered daily-news-pipeline (7 AM Toronto)")
+
+
 app = Starlette(
     routes=[
         Route("/v1/chat/completions", chat_completions, methods=["POST"]),
@@ -5791,6 +6472,15 @@ app = Starlette(
         Route("/v1/llm-proxy/models", llm_proxy_models, methods=["GET"]),
         # ── Academy proxy to SBP backend ──
         Route("/api/academy/{path:path}", academy_proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
+        # ── News Articles CRUD ──
+        Route("/news/articles", news_create_article, methods=["POST"]),
+        Route("/news/articles", news_list_articles, methods=["GET"]),
+        Route("/news/articles/{article_id}", news_get_article, methods=["GET"]),
+        Route("/news/articles/{article_id}", news_update_article, methods=["PATCH"]),
+        Route("/news/articles/{article_id}", news_delete_article, methods=["DELETE"]),
+        Route("/news/generate-daily", news_generate_daily, methods=["POST"]),
+        Route("/news/generate-custom", news_generate_custom, methods=["POST"]),
+        Route("/news/generate-image", news_generate_image, methods=["GET"]),
         # ── Gallery (local artwork uploads) ──
         Route("/gallery/upload", gallery_upload, methods=["POST"]),
         Route("/gallery/artworks/mediums", gallery_list_mediums, methods=["GET"]),
