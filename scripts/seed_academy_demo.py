@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import base64
+import os
 import subprocess
 import sys
 import uuid
@@ -42,8 +43,8 @@ ACADEMY_KEYS = (
 
 CONTAINER_NAME = "nanobot-nginx"
 BACKEND_BASE = "http://host.docker.internal:18790"
-CURRENT_USER_ID = "69dd0e215b40c39cc3a47691"
-CURRENT_USER_NAME = "Faith Macpherson"
+CURRENT_USER_ID = os.getenv("ACADEMY_USER_ID", "69dd0e215b40c39cc3a47691")
+CURRENT_USER_NAME = os.getenv("ACADEMY_USER_NAME", "Faith Macpherson")
 INSTRUCTOR_NAME = "Street Voices Academy"
 
 SYNTHETIC_LEARNERS = [
