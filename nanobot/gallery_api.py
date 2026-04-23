@@ -5,15 +5,25 @@ Database: PostgreSQL via asyncpg, using the social-postgres container.
 """
 from __future__ import annotations
 
+import os
 import uuid
 import json
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import asyncpg
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import FileResponse, JSONResponse
+
+# Persistent upload directory (volume-mounted in docker-compose via ~/.nanobot).
+GALLERY_UPLOAD_DIR = Path(
+    os.environ.get(
+        "GALLERY_UPLOAD_DIR",
+        str(Path.home() / ".nanobot" / "workspace" / "gallery" / "images"),
+    )
+)
 
 # ── Database pool ────────────────────────────────────────────────────────────
 
@@ -134,6 +144,102 @@ async def gallery_get_artwork(request: Request) -> JSONResponse:
     return JSONResponse(_serialise(row))
 
 
+async def gallery_update_artwork(request: Request) -> JSONResponse:
+    """PATCH /gallery/artworks/{artwork_id}?user_id=... — owner-only update.
+
+    Accepts JSON body with any of: price, is_for_sale, currency, is_sold.
+    """
+    artwork_id = request.path_params["artwork_id"]
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be an object"}, status_code=400)
+
+    updates: list[tuple[str, Any]] = []
+    if "price" in body:
+        price_raw = body["price"]
+        if price_raw in (None, ""):
+            updates.append(("price", None))
+        else:
+            try:
+                price_val = Decimal(str(price_raw))
+            except Exception:
+                return JSONResponse({"error": "invalid price"}, status_code=400)
+            if price_val < 0:
+                return JSONResponse({"error": "price must be >= 0"}, status_code=400)
+            updates.append(("price", price_val))
+    if "is_for_sale" in body:
+        updates.append(("is_for_sale", bool(body["is_for_sale"])))
+    if "is_sold" in body:
+        updates.append(("is_sold", bool(body["is_sold"])))
+    if "currency" in body and isinstance(body["currency"], str) and body["currency"].strip():
+        updates.append(("currency", body["currency"].strip().upper()[:3]))
+
+    if not updates:
+        return JSONResponse({"error": "no updatable fields provided"}, status_code=400)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        owner_row = await conn.fetchrow(
+            "SELECT artist_id FROM gallery_artworks WHERE id = $1", artwork_id
+        )
+        if owner_row is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        if owner_row["artist_id"] != user_id:
+            return JSONResponse({"error": "not owner"}, status_code=403)
+
+        set_clauses = ", ".join(f"{col} = ${i + 2}" for i, (col, _) in enumerate(updates))
+        args: list[Any] = [artwork_id] + [val for _, val in updates]
+        row = await conn.fetchrow(
+            f"UPDATE gallery_artworks SET {set_clauses}, updated_at = NOW() "
+            f"WHERE id = $1 RETURNING *",
+            *args,
+        )
+
+    return JSONResponse(_serialise(row))
+
+
+async def gallery_delete_artwork(request: Request) -> JSONResponse:
+    """DELETE /gallery/artworks/{artwork_id}?user_id=... — owner-only delete."""
+    artwork_id = request.path_params["artwork_id"]
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT artist_id, image_url FROM gallery_artworks WHERE id = $1",
+            artwork_id,
+        )
+        if row is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        if row["artist_id"] != user_id:
+            return JSONResponse({"error": "not owner"}, status_code=403)
+
+        await conn.execute("DELETE FROM gallery_favorites WHERE artwork_id = $1", artwork_id)
+        await conn.execute("DELETE FROM gallery_comments WHERE artwork_id = $1", artwork_id)
+        await conn.execute("DELETE FROM gallery_artworks WHERE id = $1", artwork_id)
+
+    image_url = row["image_url"] or ""
+    prefix = "/uploads/gallery/"
+    if image_url.startswith(prefix):
+        filename = image_url[len(prefix):]
+        if filename and "/" not in filename and ".." not in filename:
+            try:
+                (GALLERY_UPLOAD_DIR / filename).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    return JSONResponse({"ok": True})
+
+
 async def gallery_add_favorite(request: Request) -> JSONResponse:
     """POST /gallery/artworks/{artwork_id}/favorites — add favourite."""
     artwork_id = request.path_params["artwork_id"]
@@ -245,16 +351,15 @@ async def gallery_create_artwork(request: Request) -> JSONResponse:
         for key in form:
             val = form[key]
             if hasattr(val, "read"):
-                # File upload — for now store a placeholder; real file storage TBD
                 file_bytes = await val.read()
-                # In production, upload to S3/storage. For now, save locally.
-                filename = f"{uuid.uuid4()}.png"
+                orig = getattr(val, "filename", "") or ""
+                ext = Path(orig).suffix.lower() or ".png"
+                if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+                    ext = ".png"
+                filename = f"{uuid.uuid4().hex}{ext}"
+                GALLERY_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+                (GALLERY_UPLOAD_DIR / filename).write_bytes(file_bytes)
                 data["image_url"] = f"/uploads/gallery/{filename}"
-                import os
-                upload_dir = "/app/uploads/gallery" if os.path.exists("/app/uploads") else "/tmp/gallery_uploads"
-                os.makedirs(upload_dir, exist_ok=True)
-                with open(os.path.join(upload_dir, filename), "wb") as f:
-                    f.write(file_bytes)
             else:
                 data[key] = str(val)
     else:
@@ -324,6 +429,22 @@ async def gallery_create_artwork(request: Request) -> JSONResponse:
             )
 
     return JSONResponse({"ok": True, "id": artwork_id}, status_code=201)
+
+
+async def gallery_serve_upload(request: Request):
+    """GET /uploads/gallery/{filename} — serve an uploaded artwork image."""
+    filename = request.path_params.get("filename", "")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse({"error": "invalid filename"}, status_code=400)
+    path = GALLERY_UPLOAD_DIR / filename
+    try:
+        if not path.resolve().is_relative_to(GALLERY_UPLOAD_DIR.resolve()):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+    except (OSError, ValueError):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    if not path.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
 
 
 async def gallery_saved_collections(request: Request) -> JSONResponse:
@@ -457,6 +578,323 @@ async def gallery_delete_comment(request: Request) -> JSONResponse:
             row["artwork_id"],
         )
     return JSONResponse({"ok": True})
+
+
+AVATAR_UPLOAD_DIR = Path(
+    os.environ.get(
+        "STREET_PROFILE_AVATAR_DIR",
+        str(Path.home() / ".nanobot" / "workspace" / "avatars"),
+    )
+)
+
+PORTFOLIO_IMAGE_DIR = Path(
+    os.environ.get(
+        "STREET_PROFILE_PORTFOLIO_DIR",
+        str(Path.home() / ".nanobot" / "workspace" / "portfolio"),
+    )
+)
+
+BANNER_IMAGE_DIR = Path(
+    os.environ.get(
+        "STREET_PROFILE_BANNER_DIR",
+        str(Path.home() / ".nanobot" / "workspace" / "banners"),
+    )
+)
+
+
+async def street_profile_upload_banner(request: Request) -> JSONResponse:
+    """POST /street-profiles/banner?user_id=... — upload and persist a banner image."""
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+    ct = request.headers.get("content-type", "")
+    if "multipart/form-data" not in ct:
+        return JSONResponse({"error": "multipart/form-data required"}, status_code=400)
+    form = await request.form()
+    file = form.get("image") or form.get("banner") or form.get("file")
+    if not file or not hasattr(file, "read"):
+        return JSONResponse({"error": "image file required"}, status_code=400)
+    file_bytes = await file.read()
+    if len(file_bytes) > 20 * 1024 * 1024:
+        return JSONResponse({"error": "image too large (max 20MB)"}, status_code=413)
+    orig = getattr(file, "filename", "") or ""
+    ext = Path(orig).suffix.lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+        ext = ".png"
+    BANNER_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{user_id}-{uuid.uuid4().hex}{ext}"
+    (BANNER_IMAGE_DIR / filename).write_bytes(file_bytes)
+    banner_url = f"/uploads/banners/{filename}"
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE users SET banner_url = $1, updated_at = NOW() "
+            "WHERE id = $2 RETURNING id, banner_url",
+            banner_url,
+            user_id,
+        )
+    if row is None:
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    return JSONResponse({"ok": True, **dict(row)})
+
+
+async def street_profile_serve_banner(request: Request):
+    """GET /uploads/banners/{filename}"""
+    filename = request.path_params.get("filename", "")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse({"error": "invalid filename"}, status_code=400)
+    path = BANNER_IMAGE_DIR / filename
+    try:
+        if not path.resolve().is_relative_to(BANNER_IMAGE_DIR.resolve()):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+    except (OSError, ValueError):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    if not path.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
+
+
+async def street_profile_upload_portfolio_image(request: Request) -> JSONResponse:
+    """POST /street-profiles/portfolio-image?user_id=... — upload a portfolio image."""
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+    ct = request.headers.get("content-type", "")
+    if "multipart/form-data" not in ct:
+        return JSONResponse({"error": "multipart/form-data required"}, status_code=400)
+    form = await request.form()
+    file = form.get("image") or form.get("file")
+    if not file or not hasattr(file, "read"):
+        return JSONResponse({"error": "image file required"}, status_code=400)
+    file_bytes = await file.read()
+    if len(file_bytes) > 20 * 1024 * 1024:
+        return JSONResponse({"error": "image too large (max 20MB)"}, status_code=413)
+    orig = getattr(file, "filename", "") or ""
+    ext = Path(orig).suffix.lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+        ext = ".png"
+    PORTFOLIO_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{user_id}-{uuid.uuid4().hex}{ext}"
+    (PORTFOLIO_IMAGE_DIR / filename).write_bytes(file_bytes)
+    url = f"/uploads/portfolio/{filename}"
+    return JSONResponse({"ok": True, "url": url})
+
+
+async def street_profile_serve_portfolio_image(request: Request):
+    """GET /uploads/portfolio/{filename}"""
+    filename = request.path_params.get("filename", "")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse({"error": "invalid filename"}, status_code=400)
+    path = PORTFOLIO_IMAGE_DIR / filename
+    try:
+        if not path.resolve().is_relative_to(PORTFOLIO_IMAGE_DIR.resolve()):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+    except (OSError, ValueError):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    if not path.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
+
+
+async def street_profile_save_portfolio(request: Request) -> JSONResponse:
+    """PUT /street-profiles/portfolio?user_id=... — replace portfolio items list."""
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    items = body.get("items") if isinstance(body, dict) else body
+    if not isinstance(items, list):
+        return JSONResponse({"error": "items must be an array"}, status_code=400)
+    if len(items) > 200:
+        return JSONResponse({"error": "too many items (max 200)"}, status_code=400)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE users SET portfolio_items = $1::jsonb, updated_at = NOW() "
+            "WHERE id = $2 RETURNING id, portfolio_items",
+            json.dumps(items),
+            user_id,
+        )
+    if row is None:
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    saved = row["portfolio_items"]
+    if isinstance(saved, str):
+        try:
+            saved = json.loads(saved)
+        except (json.JSONDecodeError, TypeError):
+            saved = []
+    return JSONResponse({"ok": True, "items": saved})
+
+
+async def street_profile_upload_avatar(request: Request) -> JSONResponse:
+    """POST /street-profiles/avatar?user_id=... — upload and persist an avatar."""
+    user_id = request.query_params.get("user_id", "").strip()
+    if not user_id:
+        return JSONResponse({"error": "user_id required"}, status_code=400)
+
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" not in content_type:
+        return JSONResponse({"error": "multipart/form-data required"}, status_code=400)
+
+    form = await request.form()
+    file = form.get("image") or form.get("avatar") or form.get("file")
+    if not file or not hasattr(file, "read"):
+        return JSONResponse({"error": "image file required"}, status_code=400)
+
+    file_bytes = await file.read()
+    if len(file_bytes) > 10 * 1024 * 1024:
+        return JSONResponse({"error": "image too large (max 10MB)"}, status_code=413)
+
+    orig = getattr(file, "filename", "") or ""
+    ext = Path(orig).suffix.lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+        ext = ".png"
+
+    AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{user_id}-{uuid.uuid4().hex}{ext}"
+    (AVATAR_UPLOAD_DIR / filename).write_bytes(file_bytes)
+    avatar_url = f"/uploads/avatars/{filename}"
+
+    hint_display_name = (form.get("display_name") or "").strip() if hasattr(form, "get") else ""
+    hint_email = (form.get("email") or "").strip() if hasattr(form, "get") else ""
+    hint_username = (form.get("username") or "").strip() if hasattr(form, "get") else ""
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE users SET avatar_url = $1, updated_at = NOW() "
+            "WHERE id = $2 RETURNING id, username, display_name, avatar_url",
+            avatar_url,
+            user_id,
+        )
+        if row is None:
+            # Auto-create a minimal social row so freshly-registered users can
+            # upload an avatar before completing their Street Profile setup.
+            short = user_id[:8]
+            fallback_username = hint_username or f"user_{short}"
+            fallback_email = hint_email or f"{user_id}@local.streetvoices"
+            fallback_display_name = hint_display_name or "New User"
+            fallback_casdoor_id = f"local_{user_id}"
+            try:
+                row = await conn.fetchrow(
+                    """INSERT INTO users (
+                        id, casdoor_id, username, display_name, email,
+                        avatar_url, profile_complete, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, false, NOW())
+                    RETURNING id, username, display_name, avatar_url""",
+                    user_id,
+                    fallback_casdoor_id,
+                    fallback_username,
+                    fallback_display_name,
+                    fallback_email,
+                    avatar_url,
+                )
+            except asyncpg.UniqueViolationError:
+                # Username or email collision — retry with a disambiguator.
+                unique_suffix = uuid.uuid4().hex[:6]
+                row = await conn.fetchrow(
+                    """INSERT INTO users (
+                        id, casdoor_id, username, display_name, email,
+                        avatar_url, profile_complete, updated_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, false, NOW())
+                    RETURNING id, username, display_name, avatar_url""",
+                    user_id,
+                    fallback_casdoor_id,
+                    f"{fallback_username}_{unique_suffix}",
+                    fallback_display_name,
+                    f"{unique_suffix}-{fallback_email}",
+                    avatar_url,
+                )
+
+    return JSONResponse({"ok": True, **dict(row)})
+
+
+async def street_profile_serve_avatar(request: Request):
+    """GET /uploads/avatars/{filename}"""
+    filename = request.path_params.get("filename", "")
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        return JSONResponse({"error": "invalid filename"}, status_code=400)
+    path = AVATAR_UPLOAD_DIR / filename
+    try:
+        if not path.resolve().is_relative_to(AVATAR_UPLOAD_DIR.resolve()):
+            return JSONResponse({"error": "forbidden"}, status_code=403)
+    except (OSError, ValueError):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    if not path.is_file():
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path)
+
+
+async def street_profile_by_username(request: Request) -> JSONResponse:
+    """GET /street-profiles/{username} — fetch a profile for the Creative Profile page."""
+    username = request.path_params.get("username", "").strip()
+    if not username:
+        return JSONResponse({"error": "username required"}, status_code=400)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, username, display_name, email, avatar_url, banner_url, bio, "
+            "location, website, creative_types, social_links, portfolio_items, "
+            "is_public, created_at, updated_at "
+            "FROM users WHERE username = $1",
+            username,
+        )
+
+    if row is None:
+        return JSONResponse({"error": "profile not found"}, status_code=404)
+
+    data = _serialise(row)
+    uid = data.get("id") or ""
+    social_links = data.get("social_links") or {}
+    if isinstance(social_links, str):
+        try:
+            social_links = json.loads(social_links)
+        except (json.JSONDecodeError, TypeError):
+            social_links = {}
+
+    portfolio_items = data.get("portfolio_items") or []
+    if isinstance(portfolio_items, str):
+        try:
+            portfolio_items = json.loads(portfolio_items)
+        except (json.JSONDecodeError, TypeError):
+            portfolio_items = []
+    if not isinstance(portfolio_items, list):
+        portfolio_items = []
+
+    profile = {
+        "id": uid,
+        "user_id": uid,
+        "username": data.get("username") or "",
+        "display_name": data.get("display_name") or data.get("username") or "",
+        "primary_roles": data.get("creative_types") or [],
+        "secondary_skills": [],
+        "bio": data.get("bio"),
+        "tagline": None,
+        "avatar_url": data.get("avatar_url"),
+        "cover_url": data.get("banner_url"),
+        "banner_url": data.get("banner_url"),
+        "city": data.get("location"),
+        "country": None,
+        "location_display": data.get("location"),
+        "website": data.get("website"),
+        "social_links": social_links,
+        "availability_status": "open",
+        "open_to": [],
+        "is_public": data.get("is_public", True),
+        "is_featured": False,
+        "is_verified": False,
+        "creative_types": data.get("creative_types") or [],
+        "portfolio_items": portfolio_items,
+        "created_at": data.get("created_at"),
+        "updated_at": data.get("updated_at"),
+    }
+    return JSONResponse(profile)
 
 
 async def street_profiles_batch_lookup(request: Request) -> JSONResponse:
