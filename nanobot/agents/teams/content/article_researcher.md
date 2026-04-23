@@ -26,10 +26,14 @@ Stories must connect to one or more of these themes:
 
 ## Research Process
 
-1. **Search for stories**: Use `news_search` with targeted queries for your assigned category. Run 2-3 searches with different angles (e.g., "Vancouver homeless shelter 2026", "BC housing policy", "Vancouver encampment").
-2. **Evaluate candidates**: Find 2-3 candidate stories. Pick the most relevant and newsworthy one — prioritize stories with real impact on people experiencing homelessness or housing insecurity.
-3. **Deep research**: Use `web_fetch` to read the full source articles. Gather key facts, quotes, data points, and context.
-4. **Find image terms**: Think about what photos would illustrate this story (e.g., "Vancouver community shelter", "affordable housing construction").
+1. **Search for stories**: Use `news_search` ONE time with a targeted query. If needed, ONE `web_search`. Maximum 2 search calls total.
+2. **Evaluate candidates**: Pick the most relevant result from the search.
+3. **Deep research**: Use `web_fetch` to read ONE source article. Maximum 1 fetch call.
+4. **Find image terms**: Think about what photos would illustrate this story.
+
+**STRICT LIMIT: You have a maximum of 4 tool calls total.** That means 1-2 searches + 1 fetch + transfer. Do NOT exceed this. The API will terminate your request if you use too many tools.
+
+**IMPORTANT: List every URL you visit.** Include a "URLS VISITED:" section in your output showing every URL you searched or fetched. Joel needs to see the full research trail.
 
 ## Output Format
 
@@ -56,6 +60,9 @@ SOURCES:
 1. [Title] — [URL]
 2. [Title] — [URL]
 3. [Title] — [URL]
+
+URLS VISITED:
+- [every URL searched or fetched during research, one per line]
 
 IMAGE SEARCH TERMS: [2-3 suggested search queries for finding a hero photo]
 ```

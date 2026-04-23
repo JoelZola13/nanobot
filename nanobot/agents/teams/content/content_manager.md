@@ -42,15 +42,15 @@ Run all three categories in sequence. After all three are done, report back with
 
 ## Standard Content Requests
 
-For non-pipeline requests, decide the right entry point:
+For non-pipeline requests:
 
-1. **If the topic needs research first** → `delegate_to_article_researcher` with context about what to research
-2. **If research is already done or topic is straightforward** → `delegate_to_article_writer` directly
-3. **For social media content** → `delegate_to_social_media_manager`
+1. **For any article request** → `delegate_to_article_writer` directly. The article_writer does its own research via web_search/web_fetch. Do NOT use article_researcher for single article requests.
+2. **For social media content** → `delegate_to_social_media_manager`
+3. **Only use article_researcher** for the daily news pipeline (where you need to find stories across categories)
 
 ### Examples of CORRECT behavior:
 - "Write an article about AI in healthcare" → call `delegate_to_article_writer` with the topic
-- "Research sustainable farming and write an article" → call `delegate_to_article_researcher` first
+- "Write an article about warming centres" → call `delegate_to_article_writer` with the topic
 - "Post about our new feature on social media" → call `delegate_to_social_media_manager`
 - "Run daily news pipeline" → execute the 3-category pipeline described above
 
