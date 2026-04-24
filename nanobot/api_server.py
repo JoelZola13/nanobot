@@ -38,6 +38,8 @@ from nanobot.gallery_api import (
     gallery_delete_artwork as _gallery_delete_artwork,
     gallery_serve_upload as _gallery_serve_upload,
     street_profile_by_username as _street_profile_by_username,
+    street_profile_record_view as _street_profile_record_view,
+    booking_confirm as _booking_confirm,
     street_profile_upload_avatar as _street_profile_upload_avatar,
     street_profile_serve_avatar as _street_profile_serve_avatar,
     street_profile_upload_portfolio_image as _street_profile_upload_portfolio_image,
@@ -6741,6 +6743,8 @@ app = Starlette(
         Route("/uploads/avatars/{filename:path}", _street_profile_serve_avatar, methods=["GET"]),
         Route("/uploads/portfolio/{filename:path}", _street_profile_serve_portfolio_image, methods=["GET"]),
         Route("/uploads/banners/{filename:path}", _street_profile_serve_banner, methods=["GET"]),
+        Route("/street-profiles/{username:path}/view", _street_profile_record_view, methods=["POST"]),
+        Route("/bookings/confirm", _booking_confirm, methods=["POST"]),
         Route("/street-profiles/{username:path}", _street_profile_by_username, methods=["GET"]),
         # ── Deep Agent Harness endpoints ──
         Route("/v1/memory", memory_api, methods=["GET", "POST"]),

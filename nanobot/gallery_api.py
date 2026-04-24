@@ -5,17 +5,86 @@ Database: PostgreSQL via asyncpg, using the social-postgres container.
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import smtplib
+import ssl
 import uuid
 import json
 from datetime import datetime
 from decimal import Decimal
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
 import asyncpg
+from loguru import logger
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
+
+
+def _load_smtp_config() -> dict[str, Any] | None:
+    """Read SMTP settings from ~/.nanobot/config.json (channels.email)."""
+    try:
+        cfg_path = Path.home() / ".nanobot" / "config.json"
+        if not cfg_path.is_file():
+            return None
+        cfg = json.loads(cfg_path.read_text())
+        email_cfg = (cfg.get("channels", {}) or {}).get("email") or cfg.get("email") or {}
+        host = email_cfg.get("smtpHost") or email_cfg.get("smtp_host")
+        port = email_cfg.get("smtpPort") or email_cfg.get("smtp_port") or 587
+        user = email_cfg.get("smtpUsername") or email_cfg.get("smtp_username")
+        pwd = email_cfg.get("smtpPassword") or email_cfg.get("smtp_password")
+        from_addr = email_cfg.get("fromAddress") or user
+        if not (host and user and pwd and from_addr):
+            return None
+        return {
+            "host": host,
+            "port": int(port),
+            "user": user,
+            "password": pwd,
+            "from_addr": from_addr,
+            "use_tls": bool(email_cfg.get("smtpUseTls", email_cfg.get("smtp_use_tls", True))),
+            "use_ssl": bool(email_cfg.get("smtpUseSsl", email_cfg.get("smtp_use_ssl", False))),
+        }
+    except Exception as e:
+        logger.warning(f"SMTP config load failed: {e}")
+        return None
+
+
+def _send_email_sync(to_addr: str, subject: str, body_text: str, body_html: str | None = None) -> bool:
+    """Blocking SMTP send. Returns True on success."""
+    smtp_cfg = _load_smtp_config()
+    if smtp_cfg is None:
+        logger.warning("SMTP not configured; skipping email send")
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = smtp_cfg["from_addr"]
+    msg["To"] = to_addr
+    msg.set_content(body_text)
+    if body_html:
+        msg.add_alternative(body_html, subtype="html")
+    try:
+        if smtp_cfg["use_ssl"]:
+            with smtplib.SMTP_SSL(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as smtp:
+                smtp.login(smtp_cfg["user"], smtp_cfg["password"])
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(smtp_cfg["host"], smtp_cfg["port"], timeout=30) as smtp:
+                if smtp_cfg["use_tls"]:
+                    smtp.starttls(context=ssl.create_default_context())
+                smtp.login(smtp_cfg["user"], smtp_cfg["password"])
+                smtp.send_message(msg)
+        return True
+    except Exception as e:
+        logger.error(f"SMTP send to {to_addr} failed: {e}")
+        return False
+
+
+async def _send_email(to_addr: str, subject: str, body_text: str, body_html: str | None = None) -> bool:
+    """Async wrapper — runs SMTP in a thread so the event loop stays free."""
+    return await asyncio.to_thread(_send_email_sync, to_addr, subject, body_text, body_html)
 
 # Persistent upload directory (volume-mounted in docker-compose via ~/.nanobot).
 GALLERY_UPLOAD_DIR = Path(
@@ -841,13 +910,19 @@ async def street_profile_by_username(request: Request) -> JSONResponse:
         row = await conn.fetchrow(
             "SELECT id, username, display_name, email, avatar_url, banner_url, bio, "
             "location, website, creative_types, social_links, portfolio_items, "
-            "is_public, created_at, updated_at "
+            "profile_views, is_public, created_at, updated_at "
             "FROM users WHERE username = $1",
             username,
         )
-
-    if row is None:
-        return JSONResponse({"error": "profile not found"}, status_code=404)
+        if row is None:
+            return JSONResponse({"error": "profile not found"}, status_code=404)
+        uid = row["id"]
+        follower_count = await conn.fetchval(
+            "SELECT count(*)::int FROM follows WHERE following_id = $1", uid
+        )
+        following_count = await conn.fetchval(
+            "SELECT count(*)::int FROM follows WHERE follower_id = $1", uid
+        )
 
     data = _serialise(row)
     uid = data.get("id") or ""
@@ -857,6 +932,8 @@ async def street_profile_by_username(request: Request) -> JSONResponse:
             social_links = json.loads(social_links)
         except (json.JSONDecodeError, TypeError):
             social_links = {}
+
+    profile_views = int(data.get("profile_views") or 0)
 
     portfolio_items = data.get("portfolio_items") or []
     if isinstance(portfolio_items, str):
@@ -891,10 +968,141 @@ async def street_profile_by_username(request: Request) -> JSONResponse:
         "is_verified": False,
         "creative_types": data.get("creative_types") or [],
         "portfolio_items": portfolio_items,
+        "profile_views": profile_views,
+        "follower_count": follower_count or 0,
+        "following_count": following_count or 0,
         "created_at": data.get("created_at"),
         "updated_at": data.get("updated_at"),
     }
     return JSONResponse(profile)
+
+
+async def booking_confirm(request: Request) -> JSONResponse:
+    """POST /bookings/confirm — send booking confirmation emails.
+
+    JSON body:
+      artist_username    required — looked up in users table to get artist email/display name
+      client_name        required
+      client_email       required
+      service_name       required (e.g. "Mural Commission")
+      service_type       optional (e.g. "Video Call", "In Person")
+      booking_date       required (human-readable string like "Thursday, April 23, 2026")
+      booking_time       required (e.g. "11:00 AM")
+      message            optional — client's message to the artist
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid json"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be an object"}, status_code=400)
+
+    required = ["artist_username", "client_name", "client_email", "service_name",
+                "booking_date", "booking_time"]
+    missing = [f for f in required if not str(body.get(f) or "").strip()]
+    if missing:
+        return JSONResponse(
+            {"error": f"missing fields: {', '.join(missing)}"}, status_code=400
+        )
+
+    artist_username = str(body["artist_username"]).strip()
+    client_name = str(body["client_name"]).strip()
+    client_email = str(body["client_email"]).strip()
+    service_name = str(body["service_name"]).strip()
+    service_type = str(body.get("service_type") or "Consultation").strip()
+    booking_date = str(body["booking_date"]).strip()
+    booking_time = str(body["booking_time"]).strip()
+    client_message = str(body.get("message") or "").strip()
+
+    # Look up the artist so we can email them and include their display name.
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        artist_row = await conn.fetchrow(
+            "SELECT id, username, display_name, email FROM users WHERE username = $1",
+            artist_username,
+        )
+    artist_display = (artist_row and artist_row["display_name"]) or artist_username
+    artist_email = artist_row and artist_row["email"]
+
+    # ── Client confirmation ──
+    client_subject = f"Your booking with {artist_display} is confirmed"
+    client_text = (
+        f"Hi {client_name},\n\n"
+        f"Your consultation with {artist_display} has been scheduled.\n\n"
+        f"Service: {service_name}\n"
+        f"Type: {service_type}\n"
+        f"Date: {booking_date}\n"
+        f"Time: {booking_time}\n\n"
+        f"{artist_display} will confirm your booking within 48 hours. You can "
+        f"cancel up to 24 hours before your appointment for a full refund.\n\n"
+        f"— Street Voices"
+    )
+    client_html = f"""<!doctype html><html><body style="font-family:Inter,Arial,sans-serif;background:#0f0f14;color:#f1f1f4;padding:32px;">
+      <div style="max-width:520px;margin:0 auto;background:#1a1a22;border-radius:16px;padding:32px;border:1px solid rgba(255,255,255,0.08);">
+        <h1 style="color:#FFD700;margin:0 0 8px;">Booking Confirmed</h1>
+        <p style="margin:0 0 24px;color:#c5c5cc;">Your consultation with <strong style="color:#fff;">{artist_display}</strong> has been scheduled.</p>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;color:#9a9aa1;">Service</td><td style="padding:8px 0;text-align:right;color:#fff;">{service_name}</td></tr>
+          <tr><td style="padding:8px 0;color:#9a9aa1;">Type</td><td style="padding:8px 0;text-align:right;color:#fff;">{service_type}</td></tr>
+          <tr><td style="padding:8px 0;color:#9a9aa1;">Date</td><td style="padding:8px 0;text-align:right;color:#fff;">{booking_date}</td></tr>
+          <tr><td style="padding:8px 0;color:#9a9aa1;">Time</td><td style="padding:8px 0;text-align:right;color:#fff;">{booking_time}</td></tr>
+        </table>
+        <p style="margin:24px 0 0;color:#9a9aa1;font-size:13px;">{artist_display} will confirm within 48 hours. Cancel up to 24 hours before for a full refund.</p>
+      </div>
+    </body></html>"""
+
+    client_sent = await _send_email(client_email, client_subject, client_text, client_html)
+
+    # ── Artist notification (if we have their email) ──
+    artist_sent = False
+    if artist_email:
+        artist_subject = f"New booking request — {service_name} with {client_name}"
+        artist_text = (
+            f"Hi {artist_display},\n\n"
+            f"{client_name} ({client_email}) requested a {service_name} "
+            f"({service_type}) on {booking_date} at {booking_time}.\n\n"
+        )
+        if client_message:
+            artist_text += f"Their message:\n{client_message}\n\n"
+        artist_text += (
+            "Log in to Street Voices to confirm or reschedule.\n\n"
+            "— Street Voices"
+        )
+        artist_sent = await _send_email(artist_email, artist_subject, artist_text)
+
+    return JSONResponse({
+        "ok": bool(client_sent),
+        "client_email_sent": client_sent,
+        "artist_email_sent": artist_sent,
+    })
+
+
+async def street_profile_record_view(request: Request) -> JSONResponse:
+    """POST /street-profiles/{username}/view — increment view counter.
+
+    Skipped if the caller is the profile owner (query param viewer_id matches
+    the profile's user id).  No-op for unknown usernames.
+    """
+    username = request.path_params.get("username", "").strip()
+    viewer_id = request.query_params.get("viewer_id", "").strip()
+    if not username:
+        return JSONResponse({"error": "username required"}, status_code=400)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, profile_views FROM users WHERE username = $1", username
+        )
+        if row is None:
+            return JSONResponse({"error": "profile not found"}, status_code=404)
+        if viewer_id and viewer_id == row["id"]:
+            return JSONResponse({"ok": True, "profile_views": row["profile_views"], "self": True})
+        updated = await conn.fetchval(
+            "UPDATE users SET profile_views = profile_views + 1 "
+            "WHERE id = $1 RETURNING profile_views",
+            row["id"],
+        )
+    return JSONResponse({"ok": True, "profile_views": updated or 0, "self": False})
 
 
 async def street_profiles_batch_lookup(request: Request) -> JSONResponse:
