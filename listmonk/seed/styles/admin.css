@@ -1,0 +1,185 @@
+/* Street Voices — Listmonk admin theming */
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;900&display=swap');
+
+/* Base */
+html, body {
+  background-color: #faf8f3 !important;
+  font-family: 'Rubik', 'Helvetica Neue', Arial, sans-serif !important;
+  color: #2d2d2d !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+body, .navbar, .button, .input, .textarea, .select, .select select,
+.menu, .field, .label, .title, .subtitle, .tag, .tabs,
+.b-table, .table, .modal-card, .dropdown-content, .breadcrumb {
+  font-family: 'Rubik', 'Helvetica Neue', Arial, sans-serif !important;
+}
+
+.title { font-weight: 700 !important; letter-spacing: -0.5px !important; color: #0a0a0a !important; }
+.title.is-1, h1.title { font-size: 32px !important; line-height: 1.2 !important; }
+.title.is-2 { font-size: 26px !important; }
+.title.is-4, h4.title { font-size: 18px !important; }
+.subtitle { color: #777 !important; font-weight: 400 !important; }
+
+/* Navbar */
+.navbar {
+  background-color: #fff !important;
+  border-bottom: 1px solid #eeeae0 !important;
+  padding: 0.5rem 1.5rem !important;
+  min-height: 64px;
+}
+.navbar-end .navbar-item { color: #2d2d2d !important; font-weight: 500; }
+.sv-brand-text {
+  font-family: 'Rubik', sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  font-size: 16px !important;
+  line-height: 32px !important;
+  color: #0a0a0a !important;
+}
+
+/* Sidebar */
+aside.menu, .menu { background-color: transparent !important; padding: 1rem 0.75rem !important; }
+aside.menu .menu-list a, .menu-list a {
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  color: #2d2d2d !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+  border-left: none !important;
+}
+aside.menu .menu-list a:hover, .menu-list a:hover {
+  background-color: rgba(0,0,0,0.03) !important;
+  color: #0a0a0a !important;
+}
+aside.menu .menu-list a.is-active, .menu-list a.is-active, aside.menu li a.is-active {
+  background-color: #ffd600 !important;
+  color: #0a0a0a !important;
+  font-weight: 700 !important;
+  border-left: none !important;
+  box-shadow: 0 2px 6px rgba(255, 214, 0, 0.3);
+}
+aside.menu .menu-list ul a.is-active, .menu-list ul a.is-active, .menu-list li ul li a.is-active {
+  background-color: rgba(255, 214, 0, 0.22) !important;
+  color: #0a0a0a !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+.menu-list ul { margin-left: 0 !important; padding-left: 0 !important; border-left: 1px solid #eeeae0 !important; margin-top: 4px !important; }
+.menu-list ul a { padding-left: 24px !important; }
+.menu-label { color: #777 !important; font-size: 11px !important; letter-spacing: 1px !important; text-transform: uppercase !important; padding: 0 16px !important; }
+
+/* Cards / boxes */
+.box, .card, .modal-card, .b-table, .notification {
+  background-color: #fff !important;
+  border-radius: 16px !important;
+  border: 1px solid #eeeae0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04) !important;
+  padding: 1.25rem 1.5rem !important;
+}
+.card-header { border-bottom: 1px solid #eeeae0 !important; box-shadow: none !important; }
+.card-content { padding: 1.5rem !important; }
+
+/* Buttons */
+.button {
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+  padding: 0.6em 1.5em !important;
+  height: auto !important;
+  transition: all 0.15s ease !important;
+  border-width: 1px !important;
+}
+.button.is-primary { background-color: #ffd600 !important; color: #0a0a0a !important; border-color: #ffd600 !important; }
+.button.is-primary:hover, .button.is-primary:focus {
+  background-color: #e6c200 !important; border-color: #e6c200 !important; color: #0a0a0a !important;
+  transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 214, 0, 0.4);
+}
+.button.is-link, .button.is-info { background-color: #ffd600 !important; color: #0a0a0a !important; border-color: #ffd600 !important; font-weight: 600 !important; }
+.button.is-link:hover, .button.is-info:hover { background-color: #e6c200 !important; border-color: #e6c200 !important; color: #0a0a0a !important; }
+.button.is-outlined { border-color: #eeeae0 !important; }
+.button.is-outlined:hover { border-color: #0a0a0a !important; color: #0a0a0a !important; }
+.button.is-danger { background-color: #fff !important; color: #d32f2f !important; border-color: #fbd9d9 !important; }
+.button.is-danger:hover { background-color: #d32f2f !important; color: #fff !important; }
+
+/* Inputs */
+.input, .textarea, .select select {
+  border-radius: 12px !important;
+  border: 1px solid #eeeae0 !important;
+  padding: 0.6em 0.9em !important;
+  height: auto !important;
+  background-color: #fff !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+.input:focus, .textarea:focus, .select select:focus {
+  border-color: #ffd600 !important;
+  box-shadow: 0 0 0 3px rgba(255, 214, 0, 0.18) !important;
+  outline: none !important;
+}
+.label { font-weight: 600 !important; color: #2d2d2d !important; font-size: 13px !important; }
+
+/* Tags */
+.tag { border-radius: 999px !important; font-weight: 600 !important; padding: 0.3em 0.9em !important; font-size: 11px !important; letter-spacing: 0.3px !important; }
+.tag.is-primary, .tag.is-link { background-color: #ffd600 !important; color: #0a0a0a !important; }
+.tag.is-info { background-color: #fffbe6 !important; color: #0a0a0a !important; border: 1px solid #ffd600 !important; }
+.tag.is-success { background-color: #e6f7ed !important; color: #1b7a3e !important; }
+.tag.is-warning { background-color: #fff4e0 !important; color: #b06a00 !important; }
+.tag.is-danger { background-color: #fdecec !important; color: #b22020 !important; }
+
+/* Tables */
+.b-table .table { background-color: transparent !important; border: none !important; }
+.table thead th {
+  font-weight: 700 !important; color: #777 !important; text-transform: uppercase !important;
+  font-size: 11px !important; letter-spacing: 0.5px !important;
+  border-bottom: 2px solid #eeeae0 !important; background: transparent !important; padding: 12px 16px !important;
+}
+.table tbody td { border-bottom: 1px solid #eeeae0 !important; padding: 14px 16px !important; vertical-align: middle !important; }
+.table tbody tr:hover { background-color: rgba(255, 214, 0, 0.04) !important; }
+
+/* Tabs */
+.tabs ul { border-bottom: 1px solid #eeeae0 !important; }
+.tabs li a { border-bottom-width: 2px !important; color: #777 !important; font-weight: 500 !important; padding: 0.75em 1em !important; }
+.tabs li.is-active a { border-bottom-color: #ffd600 !important; color: #0a0a0a !important; font-weight: 700 !important; }
+
+/* Notifications */
+.notification { border-left: 4px solid #ffd600 !important; padding: 1rem 1.25rem !important; }
+.notification.is-primary, .notification.is-link, .notification.is-info { background-color: #fffbe6 !important; color: #0a0a0a !important; }
+
+/* Progress / loading */
+progress { border-radius: 999px !important; height: 6px !important; background-color: #f0ece2 !important; }
+progress::-webkit-progress-value { background-color: #ffd600 !important; border-radius: 999px !important; }
+progress::-moz-progress-bar { background-color: #ffd600 !important; }
+.b-loading-icon::after { border-color: #ffd600 transparent #ffd600 transparent !important; }
+[id*="nprogress"] .bar { background: #ffd600 !important; }
+
+/* Modals */
+.modal-card { border-radius: 16px !important; overflow: hidden; }
+.modal-card-head, .modal-card-foot { background-color: #fff !important; border-color: #eeeae0 !important; }
+
+/* Dropdowns */
+.dropdown-content { border-radius: 12px !important; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04) !important; border: 1px solid #eeeae0 !important; }
+.dropdown-item { padding: 0.6em 1em !important; font-weight: 500 !important; }
+.dropdown-item:hover { background-color: #fffbe6 !important; color: #0a0a0a !important; }
+
+/* Switches */
+.switch input[type="checkbox"]:checked + .check { background-color: #ffd600 !important; }
+
+/* Pre-hide Listmonk's default dashboard (our custom 2x2 replaces it) */
+.dashboard,
+section.section > .tile.is-ancestor,
+section.section > .tile.is-ancestor ~ .columns,
+section.section > .box {
+  opacity: 0 !important;
+  transition: none !important;
+}
+#sv-dashboard, #sv-dashboard * { opacity: 1 !important; }
+
+/* Misc */
+a, a:visited { color: #2d2d2d; }
+a:hover { color: #0a0a0a; }
+.has-text-link, .has-text-info, .has-text-primary { color: #0a0a0a !important; }
+.has-background-link, .has-background-info, .has-background-primary { background-color: #ffd600 !important; color: #0a0a0a !important; }
+.navbar-brand a[href*="listmonk.app"] { display: none !important; }
+hr { background-color: #eeeae0 !important; height: 1px !important; }

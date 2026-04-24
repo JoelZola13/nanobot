@@ -1,0 +1,57 @@
+# Street Voices Listmonk — reproducible local setup
+# Run from this folder:  docker compose up -d
+# Then seed branded templates/settings/lists:  node seed.js
+#
+# Credentials, ports, and SendGrid key live in .env (see .env.example).
+
+x-db-credentials: &db-credentials
+  POSTGRES_USER: &db-user listmonk
+  POSTGRES_PASSWORD: &db-password listmonk
+  POSTGRES_DB: &db-name listmonk
+
+services:
+  listmonk:
+    image: listmonk/listmonk:latest
+    container_name: listmonk_app
+    restart: unless-stopped
+    ports:
+      - "${LISTMONK_PORT:-9001}:9000"
+    depends_on:
+      - listmonk-db
+    command: [sh, -c, "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"]
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__user: *db-user
+      LISTMONK_db__password: *db-password
+      LISTMONK_db__database: *db-name
+      LISTMONK_db__host: listmonk-db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_db__max_open: 25
+      LISTMONK_db__max_idle: 25
+      LISTMONK_db__max_lifetime: 300s
+      TZ: Etc/UTC
+      # Admin user created on first install
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-admin}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:-$$treetvoices26}
+    volumes:
+      - ./uploads:/listmonk/uploads:rw
+
+  listmonk-db:
+    image: postgres:17-alpine
+    container_name: listmonk_db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LISTMONK_DB_PORT:-15432}:5432"
+    environment:
+      <<: *db-credentials
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U listmonk"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - listmonk-data:/var/lib/postgresql/data
+
+volumes:
+  listmonk-data:

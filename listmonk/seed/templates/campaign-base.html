@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+<title>{{ .Campaign.Subject }}</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<base target="_blank">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;color:#1a1a1a;-webkit-font-smoothing:antialiased;">
+<div style="display:none;max-height:0;overflow:hidden;">{{ .Campaign.Subject }} — Street Voices</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f4f4;">
+<tr><td align="center" style="padding:24px 12px;">
+
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;">
+
+    <tr><td align="center" style="padding:32px 24px 16px 24px;background-color:#ffffff;">
+      <img src="__LOGO_URL__" width="120" height="120" alt="Street Voices" style="display:block;width:120px;height:120px;border:0;outline:none;">
+    </td></tr>
+
+    <tr><td style="padding:0 24px;"><div style="height:4px;background-color:#ffd600;border-radius:2px;"></div></td></tr>
+
+    <tr><td style="padding:24px 32px 8px 32px;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;font-size:16px;line-height:26px;color:#1a1a1a;">
+      {{ template "content" . }}
+    </td></tr>
+
+    <tr><td style="padding:24px 32px 0 32px;"><div style="height:1px;background-color:#ffd600;"></div></td></tr>
+
+    <tr><td align="left" style="padding:24px 32px 8px 32px;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#1a1a1a;">
+      <img src="__LOGO_URL__" width="72" height="72" alt="Street Voices" style="display:block;width:72px;height:72px;border:0;outline:none;margin-bottom:12px;">
+      <div style="font-weight:bold;letter-spacing:0.4px;text-transform:uppercase;color:#000000;">STREET VOICES&nbsp;&nbsp;<span style="color:#ffd600;">|</span>&nbsp;&nbsp;COMMUNICATIONS</div>
+      <div style="margin-top:3px;"><a href="https://streetvoices.ca" style="color:#000000;text-decoration:underline;font-weight:bold;text-transform:uppercase;">STREETVOICES.CA</a>&nbsp;&nbsp;<span style="color:#ffd600;font-weight:bold;">|</span>&nbsp;&nbsp;<span style="font-weight:bold;">(416) 697-6626</span></div>
+      <div style="margin-top:3px;font-weight:bold;text-transform:uppercase;">720 BATHURST STREET, TOR ON, M5S 2R4</div>
+    </td></tr>
+
+    <tr><td align="left" style="padding:12px 32px 24px 32px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="padding-right:8px;">
+          <a href="https://www.facebook.com/StreetVoicesTO/" style="text-decoration:none;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td align="center" valign="middle" width="36" height="36" style="width:36px;height:36px;background-color:#ffd600;border-radius:18px;text-align:center;vertical-align:middle;">
+                <img src="__FB_URL__" width="22" height="22" alt="Facebook" style="display:block;width:22px;height:22px;border:0;outline:none;margin:0 auto;">
+              </td>
+            </tr></table>
+          </a>
+        </td>
+        <td style="padding-right:8px;">
+          <a href="https://x.com/StreetVoicesTO" style="text-decoration:none;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td align="center" valign="middle" width="36" height="36" style="width:36px;height:36px;background-color:#ffd600;border-radius:18px;text-align:center;vertical-align:middle;">
+                <img src="__X_URL__" width="22" height="22" alt="X" style="display:block;width:22px;height:22px;border:0;outline:none;margin:0 auto;">
+              </td>
+            </tr></table>
+          </a>
+        </td>
+        <td>
+          <a href="https://www.instagram.com/streetvoicesto" style="text-decoration:none;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td align="center" valign="middle" width="36" height="36" style="width:36px;height:36px;background-color:#ffd600;border-radius:18px;text-align:center;vertical-align:middle;">
+                <img src="__IG_URL__" width="22" height="22" alt="Instagram" style="display:block;width:22px;height:22px;border:0;outline:none;margin:0 auto;">
+              </td>
+            </tr></table>
+          </a>
+        </td>
+      </tr></table>
+    </td></tr>
+
+    <tr><td style="padding:0 24px 24px 24px;"><div style="height:4px;background-color:#ffd600;border-radius:2px;"></div></td></tr>
+
+  </table>
+
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
+    <tr><td align="center" style="padding:16px 24px 8px 24px;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#666666;">
+      You're receiving this email because you subscribed to updates from Street Voices.<br>
+      Sent to {{ .Subscriber.Email }} from Street Voices, 720 Bathurst Street, Tor ON, M5S 2R4, Canada.
+    </td></tr>
+    <tr><td align="center" style="padding:0 24px 24px 24px;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#666666;">
+      <a href="{{ UnsubscribeURL }}" style="color:#000000;text-decoration:underline;font-weight:bold;">Unsubscribe</a>
+      &nbsp;<span style="color:#ffd600;">&middot;</span>&nbsp;
+      <a href="{{ ManageURL }}" style="color:#000000;text-decoration:underline;font-weight:bold;">Manage preferences</a>
+      &nbsp;<span style="color:#ffd600;">&middot;</span>&nbsp;
+      <a href="{{ MessageURL }}" style="color:#000000;text-decoration:underline;font-weight:bold;">View in browser</a>
+    </td></tr>
+  </table>
+
+</td></tr>
+</table>
+{{ TrackView }}
+</body>
+</html>
