@@ -4,9 +4,16 @@ Reproducible local email-marketing stack. Spins up Listmonk + Postgres with the 
 
 ## How state sharing works
 
-On a **fresh DB volume** (first `docker compose up -d`), Postgres auto-runs `seed/initial-state.sql.gz` — a sanitized snapshot of the maintainer's Listmonk (lists, subscribers, campaigns, templates, settings, branding). Teammates get a byte-identical copy of the data. After that, each person's DB evolves independently.
+On a **fresh DB volume** (first `docker compose up -d`), Postgres auto-runs two init steps in order:
 
-The SMTP password is **stripped** from the snapshot for git safety — apply your own via `.env` + `node seed.js`.
+1. `10-initial-state.sql.gz` — restores a sanitized snapshot of the maintainer's Listmonk (lists, subscribers, campaigns, templates, settings, branding). Teammates get a byte-identical copy of the data.
+2. `20-patch-urls.sh` — substitutes the `__SV_ROOT_URL__` placeholder in templates/settings/campaigns with whatever your `.env`'s `SV_ROOT_URL` is set to (defaults to `http://localhost:9001`). So image URLs, unsubscribe links, and tracking pixels all point at YOUR local Listmonk.
+
+After init, each person's DB evolves independently.
+
+Two things are stripped from the committed snapshot for safety:
+- **SMTP password** — apply your own via `.env` + `node seed.js`
+- **Public tunnel URL** — replaced by the `__SV_ROOT_URL__` placeholder
 
 ## Refreshing the snapshot (maintainer)
 
