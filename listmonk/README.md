@@ -1,6 +1,27 @@
 # Street Voices Listmonk — local setup
 
-Reproducible local email-marketing stack. Spins up Listmonk + Postgres with Street Voices branding, templates, lists, and custom CSS/JS pre-provisioned.
+Reproducible local email-marketing stack. Spins up Listmonk + Postgres with the **maintainer's full state restored**: same lists, same subscribers, same campaigns, same templates, same branding. Operates identically on any teammate's machine.
+
+## How state sharing works
+
+On a **fresh DB volume** (first `docker compose up -d`), Postgres auto-runs `seed/initial-state.sql.gz` — a sanitized snapshot of the maintainer's Listmonk (lists, subscribers, campaigns, templates, settings, branding). Teammates get a byte-identical copy of the data. After that, each person's DB evolves independently.
+
+The SMTP password is **stripped** from the snapshot for git safety — apply your own via `.env` + `node seed.js`.
+
+## Refreshing the snapshot (maintainer)
+
+To share your updated state:
+
+```
+docker exec listmonk_db pg_dump -U listmonk -d listmonk --clean --if-exists --no-owner --no-privileges > seed/initial-state.sql
+sed -i "s/SG\.[A-Za-z0-9_.-]*//g" seed/initial-state.sql    # strip SendGrid key
+gzip -f seed/initial-state.sql
+git add seed/initial-state.sql.gz && git commit -m "Refresh Listmonk snapshot" && git push
+```
+
+Teammates pull, then either:
+- **Full reset (get your state, wipe theirs):** `docker compose down -v && docker compose up -d && node seed.js`
+- **Keep their data:** skip the volume wipe; they'll only get template/branding updates via `node seed.js`.
 
 ## One-time setup (~3 minutes)
 

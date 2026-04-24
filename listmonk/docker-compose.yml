@@ -52,6 +52,12 @@ services:
       retries: 6
     volumes:
       - listmonk-data:/var/lib/postgresql/data
+      # On a FRESH (empty) volume, Postgres runs any .sql/.sql.gz/.sh files in
+      # /docker-entrypoint-initdb.d/ before accepting client connections.
+      # This restores the maintainer's snapshot: lists, campaigns, subscribers,
+      # templates, branding settings — everything. (SMTP password is stripped
+      # from the dump; seed.js re-applies it from .env on first run.)
+      - ./seed/initial-state.sql.gz:/docker-entrypoint-initdb.d/10-initial-state.sql.gz:ro
 
 volumes:
   listmonk-data:
