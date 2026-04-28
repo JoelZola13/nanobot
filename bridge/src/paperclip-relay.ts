@@ -696,6 +696,7 @@ async function handleIssues(
   url: URL
 ): Promise<void> {
   const issueId = url.pathname.split("/issues/")[1]?.split("/")[0];
+  const isCommentsRoute = url.pathname.endsWith("/comments");
 
   // GET /issues — list all issues with optional filters
   if (req.method === "GET" && !issueId) {
@@ -721,6 +722,23 @@ async function handleIssues(
       children,
       comments,
     });
+    return;
+  }
+
+  // GET /issues/:id/comments — list comments for a single issue
+  if (req.method === "GET" && issueId && isCommentsRoute) {
+    const comments = await pcGet(`/issues/${issueId}/comments`).catch(() => []);
+    jsonResp(res, 200, comments);
+    return;
+  }
+
+  // POST /issues/:id/comments — add a comment to a single issue
+  if (req.method === "POST" && issueId && isCommentsRoute) {
+    const body = JSON.parse(await readBody(req));
+    const comment = await pcPost(`/issues/${issueId}/comments`, {
+      body: typeof body.body === "string" ? body.body : "",
+    });
+    jsonResp(res, 201, comment);
     return;
   }
 
