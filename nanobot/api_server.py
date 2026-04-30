@@ -89,6 +89,7 @@ _redis_bus: Any = None  # RedisBus | None — cross-service event bus
 def _academy_default_state() -> dict[str, list[dict[str, Any]]]:
     return {
         "enrollments": [],
+        "enrollment_applications": [],
         "attendance_records": [],
         "learning_paths": [],
         "live_sessions": [],
@@ -2090,6 +2091,18 @@ async def _handle_reviews(request: Request, parts: list[str]) -> Response:
     state = _load_academy_state()
     method = request.method
 
+    def _review_payload(review: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(review)
+        first_name = str(review.get("first_name") or "").strip()
+        last_name = str(review.get("last_name") or "").strip()
+        submitted_name = " ".join(part for part in [first_name, last_name] if part).strip()
+        payload["user_name"] = submitted_name or _academy_display_name_for_user(
+            state,
+            str(review.get("user_id") or ""),
+            course_id=str(review.get("course_id") or "") or None,
+        )
+        return payload
+
     if len(parts) >= 4 and parts[1] == "course" and parts[3] == "stats" and method == "GET":
         course_id = parts[2]
         rows = [item for item in state["reviews"] if item.get("course_id") == course_id]
@@ -2104,7 +2117,7 @@ async def _handle_reviews(request: Request, parts: list[str]) -> Response:
         course_id = parts[2]
         rows = [item for item in state["reviews"] if item.get("course_id") == course_id]
         rows.sort(key=lambda item: item.get("created_at", ""), reverse=True)
-        return JSONResponse(rows)
+        return JSONResponse([_review_payload(row) for row in rows])
 
     if len(parts) >= 5 and parts[1] == "user" and parts[3] == "course" and method == "GET":
         user_id = parts[2]
@@ -2117,16 +2130,31 @@ async def _handle_reviews(request: Request, parts: list[str]) -> Response:
             ),
             None,
         )
-        return JSONResponse(review)
+        return JSONResponse(_review_payload(review) if review else None)
 
     if len(parts) == 1 and method == "POST":
         body = await request.json()
+        workshop_feedback = body.get("workshop_feedback")
+        rating_reason = body.get("rating_reason")
+        other_feedback = body.get("other_feedback")
+        review_text = (
+            body.get("review_text")
+            or workshop_feedback
+            or rating_reason
+            or other_feedback
+        )
         review = {
             "id": _academy_make_id("review"),
             "user_id": body.get("user_id"),
             "course_id": body.get("course_id"),
             "rating": body.get("rating"),
-            "review_text": body.get("review_text"),
+            "review_text": review_text,
+            "first_name": body.get("first_name"),
+            "last_name": body.get("last_name"),
+            "email": body.get("email"),
+            "workshop_feedback": workshop_feedback,
+            "rating_reason": rating_reason,
+            "other_feedback": other_feedback,
             "created_at": _academy_now_iso(),
             "updated_at": _academy_now_iso(),
         }
@@ -2137,7 +2165,7 @@ async def _handle_reviews(request: Request, parts: list[str]) -> Response:
         ]
         state["reviews"].append(review)
         _save_academy_state(state)
-        return JSONResponse(review, status_code=201)
+        return JSONResponse(_review_payload(review), status_code=201)
 
     review = _academy_find(state["reviews"], parts[1] if len(parts) >= 2 else "")
     if not review:
@@ -2146,16 +2174,159 @@ async def _handle_reviews(request: Request, parts: list[str]) -> Response:
         body = await request.json()
         if "rating" in body:
             review["rating"] = body.get("rating")
+        if "first_name" in body:
+            review["first_name"] = body.get("first_name")
+        if "last_name" in body:
+            review["last_name"] = body.get("last_name")
+        if "email" in body:
+            review["email"] = body.get("email")
+        if "workshop_feedback" in body:
+            review["workshop_feedback"] = body.get("workshop_feedback")
+        if "rating_reason" in body:
+            review["rating_reason"] = body.get("rating_reason")
+        if "other_feedback" in body:
+            review["other_feedback"] = body.get("other_feedback")
         if "review_text" in body:
             review["review_text"] = body.get("review_text")
+        elif any(
+            key in body
+            for key in ("workshop_feedback", "rating_reason", "other_feedback")
+        ):
+            review["review_text"] = (
+                review.get("workshop_feedback")
+                or review.get("rating_reason")
+                or review.get("other_feedback")
+            )
         review["updated_at"] = _academy_now_iso()
         _save_academy_state(state)
-        return JSONResponse(review)
+        return JSONResponse(_review_payload(review))
     if method == "DELETE":
         state["reviews"] = [item for item in state["reviews"] if item.get("id") != review["id"]]
         _save_academy_state(state)
         return JSONResponse({"ok": True})
     return JSONResponse({"detail": "Unsupported reviews route"}, status_code=404)
+
+
+async def _handle_enrollment_applications(request: Request, parts: list[str]) -> Response:
+    state = _load_academy_state()
+    method = request.method
+    query = request.query_params
+
+    def _matches(item: dict[str, Any]) -> bool:
+        user_id = query.get("user_id")
+        course_id = query.get("course_id")
+        target_type = query.get("target_type")
+        target_id = query.get("target_id")
+
+        if user_id and item.get("user_id") != user_id:
+            return False
+        if target_type and str(item.get("target_type") or "") != target_type:
+            return False
+        if target_id and str(item.get("target_id") or "") != target_id:
+            return False
+        if course_id:
+            linked_course_ids = [str(value) for value in item.get("course_ids") or [] if str(value).strip()]
+            primary_course_id = str(item.get("course_id") or "").strip()
+            if course_id != primary_course_id and course_id not in linked_course_ids:
+                return False
+        return True
+
+    if len(parts) == 1 and method == "GET":
+        rows = [item for item in state["enrollment_applications"] if _matches(item)]
+        rows.sort(
+            key=lambda item: item.get("updated_at") or item.get("submitted_at") or item.get("created_at") or "",
+            reverse=True,
+        )
+        return JSONResponse(rows)
+
+    if len(parts) == 1 and method == "POST":
+        body = await request.json()
+        user_id = str(body.get("user_id") or "").strip()
+        target_type = str(body.get("target_type") or "course").strip().lower()
+        target_id = str(body.get("target_id") or body.get("course_id") or "").strip()
+        target_title = str(body.get("target_title") or "").strip()
+        course_ids = [
+            str(course_id).strip()
+            for course_id in body.get("course_ids", [])
+            if str(course_id).strip()
+        ]
+        if not user_id or not target_id:
+            return JSONResponse({"detail": "user_id and target_id are required"}, status_code=400)
+        if not course_ids:
+            return JSONResponse({"detail": "course_ids is required"}, status_code=400)
+
+        now_iso = _academy_now_iso()
+        application = {
+            "id": _academy_make_id("application"),
+            "user_id": user_id,
+            "target_type": target_type if target_type in {"course", "learning_path"} else "course",
+            "target_id": target_id,
+            "target_title": target_title or None,
+            "course_id": course_ids[0],
+            "course_ids": course_ids,
+            "first_name": str(body.get("first_name") or "").strip(),
+            "last_name": str(body.get("last_name") or "").strip(),
+            "preferred_name": str(body.get("preferred_name") or "").strip() or None,
+            "full_name": str(body.get("full_name") or "").strip()
+            or " ".join(
+                part for part in [str(body.get("first_name") or "").strip(), str(body.get("last_name") or "").strip()] if part
+            ).strip()
+            or None,
+            "email": str(body.get("email") or "").strip() or None,
+            "heard_about": str(body.get("heard_about") or "").strip() or None,
+            "prior_experience": str(body.get("prior_experience") or "").strip() or None,
+            "interest_areas": [
+                str(item).strip()
+                for item in body.get("interest_areas", [])
+                if str(item).strip()
+            ],
+            "past_project": str(body.get("past_project") or "").strip() or None,
+            "future_project": str(body.get("future_project") or "").strip() or None,
+            "program_goals": str(body.get("program_goals") or "").strip() or None,
+            "challenges": str(body.get("challenges") or "").strip() or None,
+            "general_comments": str(body.get("general_comments") or "").strip() or None,
+            "sample_work_attachments": body.get("sample_work_attachments") or [],
+            "status": str(body.get("status") or "submitted").strip() or "submitted",
+            "submitted_at": now_iso,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        state["enrollment_applications"].append(application)
+        _save_academy_state(state)
+        return JSONResponse(application, status_code=201)
+
+    application = _academy_find(state["enrollment_applications"], parts[1] if len(parts) >= 2 else "")
+    if not application:
+        return JSONResponse({"detail": "Enrollment application not found"}, status_code=404)
+
+    if method in {"PATCH", "PUT"}:
+        body = await request.json()
+        for key in (
+            "first_name",
+            "last_name",
+            "preferred_name",
+            "full_name",
+            "email",
+            "heard_about",
+            "prior_experience",
+            "past_project",
+            "future_project",
+            "program_goals",
+            "challenges",
+            "general_comments",
+            "status",
+        ):
+            if key in body:
+                application[key] = body.get(key)
+        if "interest_areas" in body:
+            application["interest_areas"] = [str(item).strip() for item in body.get("interest_areas", []) if str(item).strip()]
+        if "sample_work_attachments" in body:
+            application["sample_work_attachments"] = body.get("sample_work_attachments") or []
+        application["updated_at"] = _academy_now_iso()
+        _save_academy_state(state)
+        return JSONResponse(application)
+
+    return JSONResponse({"detail": "Unsupported enrollment applications route"}, status_code=404)
 
 
 async def _handle_certificates(request: Request, parts: list[str]) -> Response:
@@ -5313,6 +5484,8 @@ async def academy_proxy(request: Request) -> Response:
         return await _handle_learning_paths(request, parts)
     if resource == "reviews":
         return await _handle_reviews(request, parts)
+    if resource == "enrollment-applications":
+        return await _handle_enrollment_applications(request, parts)
     if resource == "certificates":
         return await _handle_certificates(request, parts)
     if resource == "enrollments":
