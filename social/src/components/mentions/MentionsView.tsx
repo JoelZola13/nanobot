@@ -4,7 +4,9 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { AtSign, Bot, Hash, MessageSquare } from "lucide-react";
 import MarkdownContent from "@/components/channels/MarkdownContent";
+import JumpToMessageLink from "@/components/messages/JumpToMessageLink";
 import ProfilePopover from "@/components/users/ProfilePopover";
+import { getJumpToMessageLabel } from "@/lib/messageLinks";
 import type { MentionResult } from "@/lib/mentions";
 
 export default function MentionsView({
@@ -61,21 +63,28 @@ function MentionCard({ mention }: { mention: MentionResult }) {
 
   return (
     <article className="rounded-lg border border-border bg-bg-surface px-4 py-3">
-      <Link
-        href={mention.href}
-        className="mb-2 flex min-w-0 items-center gap-2 rounded-md text-xs text-text-muted hover:text-accent"
-      >
-        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary">
-          {isDm ? <MessageSquare size={13} /> : <Hash size={13} />}
-        </span>
-        <span className="truncate font-medium text-text-secondary">
-          {mention.channelLabel}
-        </span>
-        <span>/</span>
-        <span className="shrink-0">
-          {formatDistanceToNow(new Date(mention.createdAt), { addSuffix: true })}
-        </span>
-      </Link>
+      <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <Link
+          href={mention.href}
+          className="flex min-w-0 items-center gap-2 rounded-md text-xs text-text-muted hover:text-accent"
+        >
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary">
+            {isDm ? <MessageSquare size={13} /> : <Hash size={13} />}
+          </span>
+          <span className="truncate font-medium text-text-secondary">
+            {mention.channelLabel}
+          </span>
+          <span>/</span>
+          <span className="shrink-0">
+            {formatDistanceToNow(new Date(mention.createdAt), { addSuffix: true })}
+          </span>
+        </Link>
+        <JumpToMessageLink
+          href={mention.href}
+          label={getJumpToMessageLabel("mention")}
+          channelLabel={mention.channelLabel}
+        />
+      </div>
 
       <div className="flex gap-3">
         <ProfilePopover
@@ -122,12 +131,6 @@ function MentionCard({ mention }: { mention: MentionResult }) {
           <div className="text-sm leading-6 text-text-primary/90">
             <MarkdownContent content={mention.content} />
           </div>
-          <Link
-            href={mention.href}
-            className="mt-3 inline-flex rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-accent hover:text-accent"
-          >
-            Open context
-          </Link>
         </div>
       </div>
     </article>

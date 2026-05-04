@@ -5,8 +5,10 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Bookmark, Bot, Hash, MessageSquare, X } from "lucide-react";
 import MarkdownContent from "@/components/channels/MarkdownContent";
+import JumpToMessageLink from "@/components/messages/JumpToMessageLink";
 import ProfilePopover from "@/components/users/ProfilePopover";
 import { apiUrl } from "@/lib/apiUrl";
+import { getJumpToMessageLabel } from "@/lib/messageLinks";
 import type { SavedItemResult } from "@/lib/savedItems";
 
 export default function SavedItemsView({
@@ -91,22 +93,29 @@ function SavedItemCard({
 
   return (
     <article className="rounded-lg border border-border bg-bg-surface px-4 py-3">
-      <div className="mb-2 flex min-w-0 items-center gap-2 text-xs text-text-muted">
-        <Link
+      <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            href={savedItem.href}
+            className="flex min-w-0 items-center gap-2 rounded-md hover:text-accent"
+          >
+            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary">
+              {isDm ? <MessageSquare size={13} /> : <Hash size={13} />}
+            </span>
+            <span className="truncate font-medium text-text-secondary">
+              {savedItem.channelLabel}
+            </span>
+          </Link>
+          <span>/</span>
+          <span className="shrink-0">
+            saved {formatDistanceToNow(new Date(savedItem.savedAt), { addSuffix: true })}
+          </span>
+        </div>
+        <JumpToMessageLink
           href={savedItem.href}
-          className="flex min-w-0 items-center gap-2 rounded-md hover:text-accent"
-        >
-          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary">
-            {isDm ? <MessageSquare size={13} /> : <Hash size={13} />}
-          </span>
-          <span className="truncate font-medium text-text-secondary">
-            {savedItem.channelLabel}
-          </span>
-        </Link>
-        <span>/</span>
-        <span className="shrink-0">
-          saved {formatDistanceToNow(new Date(savedItem.savedAt), { addSuffix: true })}
-        </span>
+          label={getJumpToMessageLabel("saved")}
+          channelLabel={savedItem.channelLabel}
+        />
       </div>
 
       <div className="flex gap-3">
@@ -155,12 +164,6 @@ function SavedItemCard({
             <MarkdownContent content={savedItem.content} />
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Link
-              href={savedItem.href}
-              className="inline-flex rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-accent hover:text-accent"
-            >
-              Open context
-            </Link>
             <button
               type="button"
               onClick={() => onUnsave(savedItem.messageId)}

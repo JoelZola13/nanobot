@@ -317,6 +317,34 @@ describe("Message draft storage", () => {
   });
 });
 
+describe("Message deep links", () => {
+  test("builds highlighted conversation hrefs for channel and DM messages", () => {
+    const {
+      getJumpToMessageLabel,
+      getMessageHref,
+    } = loadTsModule("src/lib/messageLinks.ts");
+
+    assert.equal(
+      getMessageHref({
+        channelId: "channel-general",
+        messageId: "message-1",
+        channelType: "PUBLIC",
+      }),
+      "/channels/channel-general?message=message-1",
+    );
+    assert.equal(
+      getMessageHref({
+        channelId: "dm-channel-1",
+        messageId: "message-2",
+        channelType: "DM",
+      }),
+      "/dm/dm-channel-1?message=message-2",
+    );
+    assert.equal(getJumpToMessageLabel("mention"), "Jump to mention");
+    assert.equal(getJumpToMessageLabel("saved"), "Jump to saved message");
+  });
+});
+
 describe("Browser notification helpers", () => {
   function createStorage() {
     const values = new Map();

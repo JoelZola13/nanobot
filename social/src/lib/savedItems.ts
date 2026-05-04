@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getMessageHref } from "@/lib/messageLinks";
 
 export type SavedItemResult = {
   id: string;
@@ -74,7 +75,6 @@ export async function getSavedItemsForUser(userId: string, limit = 50) {
     const channelLabel = isDm
       ? otherDmMember?.user.displayName || "Direct message"
       : `#${message.channel.name || "channel"}`;
-    const basePath = isDm ? "dm" : "channels";
 
     return {
       id: savedItem.id,
@@ -83,7 +83,11 @@ export async function getSavedItemsForUser(userId: string, limit = 50) {
       content: message.content,
       createdAt: message.createdAt.toISOString(),
       savedAt: savedItem.createdAt.toISOString(),
-      href: `/${basePath}/${message.channelId}?message=${message.id}`,
+      href: getMessageHref({
+        channelId: message.channelId,
+        messageId: message.id,
+        channelType: message.channel.type,
+      }),
       channelLabel,
       channelType: message.channel.type,
       author: message.author,

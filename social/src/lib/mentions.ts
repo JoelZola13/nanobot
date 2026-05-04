@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getMessageHref } from "@/lib/messageLinks";
 
 const MENTION_FETCH_LIMIT = 100;
 
@@ -93,14 +94,17 @@ export async function getMentionMessagesForUser(userId: string, limit = 50) {
       const channelLabel = isDm
         ? otherDmMember?.user.displayName || "Direct message"
         : `#${message.channel.name || "channel"}`;
-      const basePath = isDm ? "dm" : "channels";
 
       return {
         id: message.id,
         channelId: message.channelId,
         content: message.content,
         createdAt: message.createdAt.toISOString(),
-        href: `/${basePath}/${message.channelId}?message=${message.id}`,
+        href: getMessageHref({
+          channelId: message.channelId,
+          messageId: message.id,
+          channelType: message.channel.type,
+        }),
         channelLabel,
         channelType: message.channel.type,
         author: message.author,

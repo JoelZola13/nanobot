@@ -94,4 +94,4 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Keep the LibreChat Messages wrapper synced with channel/message permalink query changes.
 - [x] Add a visible copied-link recovery affordance when clipboard access is blocked.
 - [x] Add permalink smoke coverage for highlighted messages inside the embedded Social app.
-- [ ] Add a compact jump-to-mentioned-message treatment for mentions and saved items.
+- [x] Add a compact jump-to-mentioned-message treatment for mentions and saved items.
