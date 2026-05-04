@@ -16,6 +16,26 @@ type LibreChatBridgeUser = {
   image?: string;
 };
 
+type AuthOptions = {
+  bridgeUnavailable?: "ignore" | "throw";
+};
+
+export class LibreChatBridgeUnavailableError extends Error {
+  status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "LibreChatBridgeUnavailableError";
+    this.status = status;
+  }
+}
+
+export function isLibreChatBridgeUnavailableError(
+  error: unknown,
+): error is LibreChatBridgeUnavailableError {
+  return error instanceof LibreChatBridgeUnavailableError;
+}
+
 const LIBRECHAT_AUTH_BRIDGE_URL =
   process.env.LIBRECHAT_AUTH_BRIDGE_URL ||
   "http://api:3180/api/auth/social-session";
@@ -24,7 +44,24 @@ function getLibreChatCookieHeader() {
   return headers().get("cookie") || "";
 }
 
-async function getLibreChatBridgeUser(): Promise<LibreChatBridgeUser | null> {
+function shouldTreatBridgeStatusAsUnavailable(status: number) {
+  return status === 403 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function handleBridgeUnavailable(
+  message: string,
+  options: AuthOptions,
+  status?: number,
+) {
+  console.error("[AUTH]", message);
+  if (options.bridgeUnavailable === "throw") {
+    throw new LibreChatBridgeUnavailableError(message, status);
+  }
+}
+
+async function getLibreChatBridgeUser(
+  options: AuthOptions = {},
+): Promise<LibreChatBridgeUser | null> {
   const cookie = getLibreChatCookieHeader();
   if (!cookie) return null;
 
@@ -37,18 +74,32 @@ async function getLibreChatBridgeUser(): Promise<LibreChatBridgeUser | null> {
     },
     cache: "no-store",
   }).catch((error) => {
-    console.error("[AUTH] LibreChat bridge request failed:", (error as Error).message);
+    handleBridgeUnavailable(
+      `LibreChat bridge request failed: ${(error as Error).message}`,
+      options,
+    );
     return null;
   });
 
-  if (!res?.ok) return null;
+  if (!res) return null;
+  if (!res.ok) {
+    if (shouldTreatBridgeStatusAsUnavailable(res.status)) {
+      const body = await res.text().catch(() => "");
+      handleBridgeUnavailable(
+        `LibreChat bridge returned ${res.status}${body ? `: ${body}` : ""}`,
+        options,
+        res.status,
+      );
+    }
+    return null;
+  }
 
   const payload = (await res.json().catch(() => null)) as { user?: LibreChatBridgeUser } | null;
   return payload?.user || null;
 }
 
-async function getLibreChatSession(): Promise<Session | null> {
-  const libreUser = await getLibreChatBridgeUser();
+async function getLibreChatSession(options: AuthOptions = {}): Promise<Session | null> {
+  const libreUser = await getLibreChatBridgeUser(options);
   if (!libreUser) return null;
 
   const casdoorId =
@@ -90,6 +141,6 @@ async function getLibreChatSession(): Promise<Session | null> {
   };
 }
 
-export async function auth() {
-  return (await getServerSession(authOptions)) || (await getLibreChatSession());
+export async function auth(options: AuthOptions = {}) {
+  return (await getServerSession(authOptions)) || (await getLibreChatSession(options));
 }

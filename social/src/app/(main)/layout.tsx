@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/session";
+import { auth, isLibreChatBridgeUnavailableError } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import {
   ensureDefaultChannelsForUser,
@@ -16,7 +16,16 @@ export default async function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth({ bridgeUnavailable: "throw" });
+  } catch (error) {
+    if (isLibreChatBridgeUnavailableError(error)) {
+      redirect("/bridge-unavailable");
+    }
+    throw error;
+  }
+
   if (!session?.user) redirect("/login");
 
   const userId = session.user.id;

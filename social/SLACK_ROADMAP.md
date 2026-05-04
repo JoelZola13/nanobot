@@ -12,7 +12,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Route production Social data to `social-postgres` instead of the LobeHub database.
 - [x] Resolve Casdoor/LibaChat identities to local Social user ids on every session read.
 - [x] Add a one-command health check for auth, database, socket, and Social routes.
-- [ ] Add a friendly error screen when the Social session bridge is unavailable.
+- [x] Add a friendly error screen when the Social session bridge is unavailable.
 
 ## Phase 1: Slack-Like Shell
 

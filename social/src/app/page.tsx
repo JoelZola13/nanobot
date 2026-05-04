@@ -1,8 +1,17 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/session";
+import { auth, isLibreChatBridgeUnavailableError } from "@/lib/session";
 
 export default async function Home() {
-  const session = await auth();
+  let session;
+  try {
+    session = await auth({ bridgeUnavailable: "throw" });
+  } catch (error) {
+    if (isLibreChatBridgeUnavailableError(error)) {
+      redirect("/bridge-unavailable");
+    }
+    throw error;
+  }
+
   if (session?.user) {
     redirect("/dm");
   } else {
