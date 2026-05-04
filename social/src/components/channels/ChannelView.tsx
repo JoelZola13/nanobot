@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import AgentActivity, { type ActivityEvent } from "./AgentActivity";
@@ -68,6 +69,8 @@ export default function ChannelView({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   // Read receipts: map of userId -> messageId they've read up to
   const [readReceipts, setReadReceipts] = useState<Map<string, string>>(new Map());
+  const searchParams = useSearchParams();
+  const highlightedMessageId = searchParams.get("message");
   const socket = useSocket();
   const setActiveChannel = useUnreadStore((s) => s.setActive);
   const clearUnread = useUnreadStore((s) => s.clear);
@@ -235,6 +238,19 @@ export default function ChannelView({
     setOpenThreadId(null);
   }, [channelId, initialMessages]);
 
+  useEffect(() => {
+    if (!highlightedMessageId || messages.length === 0) return;
+
+    const timeout = window.setTimeout(() => {
+      document.getElementById(`message-${highlightedMessageId}`)?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    }, 150);
+
+    return () => window.clearTimeout(timeout);
+  }, [channelId, highlightedMessageId, messages.length]);
+
   const handleSend = async (content: string) => {
     setSending(true);
     try {
@@ -390,6 +406,7 @@ export default function ChannelView({
           messages={messages}
           currentUserId={currentUserId}
           emptyState={emptyState}
+          highlightedMessageId={highlightedMessageId}
           readReceipts={readReceipts}
           onReaction={handleReaction}
           onEdit={handleEdit}

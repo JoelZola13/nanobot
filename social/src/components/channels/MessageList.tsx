@@ -8,6 +8,7 @@ import {
   CheckCheck,
   Hash,
   Lock,
+  Link2,
   MessageSquare,
   MoreHorizontal,
   Pencil,
@@ -37,6 +38,7 @@ interface MessageListProps {
   messages: MessageData[];
   currentUserId: string;
   emptyState: MessageEmptyState;
+  highlightedMessageId?: string | null;
   readReceipts?: Map<string, string>;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
@@ -49,6 +51,7 @@ export default function MessageList({
   messages,
   currentUserId,
   emptyState,
+  highlightedMessageId,
   readReceipts,
   onReaction,
   onEdit,
@@ -59,8 +62,9 @@ export default function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (highlightedMessageId) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, highlightedMessageId]);
 
   if (messages.length === 0) {
     return <EmptyConversation state={emptyState} />;
@@ -109,6 +113,8 @@ export default function MessageList({
                 isGrouped={isGrouped}
                 isOwn={msg.author.id === currentUserId}
                 readByCount={getReadByCount(msgIdx)}
+                channelKind={emptyState.kind}
+                isHighlighted={msg.id === highlightedMessageId}
                 onReaction={onReaction}
                 onEdit={onEdit}
                 onDelete={onDelete}
@@ -168,10 +174,45 @@ function EmptyConversation({ state }: { state: MessageEmptyState }) {
   );
 }
 
+function copyWithHiddenTextarea(value: string) {
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "0";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, value.length);
+
+  try {
+    return document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function MessageRow({
-  msg, isGrouped, isOwn, readByCount, onReaction, onEdit, onDelete, onPin, onOpenThread,
+  msg,
+  isGrouped,
+  isOwn,
+  readByCount,
+  channelKind,
+  isHighlighted,
+  onReaction,
+  onEdit,
+  onDelete,
+  onPin,
+  onOpenThread,
 }: {
-  msg: MessageData; isGrouped: boolean; isOwn: boolean; readByCount: number;
+  msg: MessageData;
+  isGrouped: boolean;
+  isOwn: boolean;
+  readByCount: number;
+  channelKind: "channel" | "dm";
+  isHighlighted: boolean;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
@@ -181,8 +222,10 @@ function MessageRow({
   const [showMenu, setShowMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<{ status: "copied" | "ready"; permalink: string } | null>(null);
   const [editContent, setEditContent] = useState(msg.content);
   const menuRef = useRef<HTMLDivElement>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (!showMenu && !showEmojiPicker) return;
@@ -196,6 +239,12 @@ function MessageRow({
     return () => document.removeEventListener("mousedown", handler);
   }, [showMenu, showEmojiPicker]);
 
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
+
   const handleSaveEdit = () => {
     if (editContent.trim() && editContent !== msg.content) {
       onEdit?.(msg.id, editContent.trim());
@@ -203,8 +252,42 @@ function MessageRow({
     setEditing(false);
   };
 
+  const handleCopyLink = async () => {
+    const params = new URLSearchParams({
+      channel: `${channelKind === "dm" ? "dm" : "channel"}-${msg.channelId}`,
+      message: msg.id,
+    });
+    const permalink = `${window.location.origin}/messages?${params.toString()}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(permalink);
+        } catch {
+          if (!copyWithHiddenTextarea(permalink)) {
+            throw new Error("Copy command failed");
+          }
+        }
+      } else if (!copyWithHiddenTextarea(permalink)) {
+        throw new Error("Copy command failed");
+      }
+
+      setCopyNotice({ status: "copied", permalink });
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopyNotice(null), 1800);
+    } catch {
+      setCopyNotice({ status: "ready", permalink });
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopyNotice(null), 8000);
+    }
+  };
+
   return (
-    <div className="channel-message group">
+    <div
+      id={`message-${msg.id}`}
+      className={`channel-message group scroll-mt-20 ${isHighlighted ? "bg-accent-muted ring-1 ring-inset ring-accent" : ""}`}
+      aria-current={isHighlighted ? "true" : undefined}
+    >
       <div className="flex gap-3">
         {isGrouped ? (
           <div className="w-8 shrink-0 flex items-start justify-center pt-1 opacity-0 group-hover:opacity-100">
@@ -333,10 +416,32 @@ function MessageRow({
               )}
             </div>
           )}
+          {copyNotice && (
+            copyNotice.status === "copied" ? (
+              <div className="mt-1 text-2xs font-medium text-accent">Link copied</div>
+            ) : (
+              <div className="mt-2 max-w-xl rounded-lg border border-border bg-bg-elevated p-2">
+                <div className="mb-1 text-2xs font-medium text-text-muted">Link ready</div>
+                <input
+                  readOnly
+                  value={copyNotice.permalink}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-2xs text-text-secondary outline-none focus:border-accent"
+                />
+              </div>
+            )
+          )}
         </div>
 
         {/* Hover actions */}
         <div ref={menuRef} className="opacity-0 group-hover:opacity-100 flex items-start gap-0.5 pt-0.5 transition-opacity relative">
+          <button
+            onClick={() => void handleCopyLink()}
+            className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            title={copyNotice?.status === "copied" ? "Link copied" : "Copy message link"}
+          >
+            <Link2 size={14} />
+          </button>
           <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
             <SmilePlus size={14} />
           </button>
@@ -364,6 +469,10 @@ function MessageRow({
               <button onClick={() => { onPin?.(msg.id, msg.isPinned); setShowMenu(false); }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
                 <Pin size={12} /> {msg.isPinned ? "Unpin" : "Pin"} message
+              </button>
+              <button onClick={() => { void handleCopyLink(); setShowMenu(false); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
+                <Link2 size={12} /> Copy link
               </button>
               {isOwn && (
                 <button onClick={() => { onDelete?.(msg.id); setShowMenu(false); }}
