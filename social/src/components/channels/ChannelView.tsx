@@ -73,6 +73,7 @@ export default function ChannelView({
     initialOldestMessageCursor,
   );
   const [autoScrollKey, setAutoScrollKey] = useState(0);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const [agentActivities, setAgentActivities] = useState<ActivityEvent[]>([]);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -114,6 +115,7 @@ export default function ChannelView({
           return [...prev, msg];
         });
         setAutoScrollKey((current) => current + 1);
+        setShowJumpToLatest(false);
         if (msg.author.isAgent) {
           setTimeout(() => {
             setAgentActivities((prev) =>
@@ -246,6 +248,7 @@ export default function ChannelView({
     setMessages(initialMessages);
     setOldestMessageCursor(initialOldestMessageCursor);
     setAutoScrollKey((current) => current + 1);
+    setShowJumpToLatest(false);
     setAgentActivities([]);
     setOpenThreadId(null);
   }, [channelId, initialMessages, initialOldestMessageCursor]);
@@ -276,6 +279,7 @@ export default function ChannelView({
       const msg = await res.json();
       setMessages((prev) => [...prev, msg]);
       setAutoScrollKey((current) => current + 1);
+      setShowJumpToLatest(false);
       socket?.emit("message:send", msg);
       socket?.emit("typing:stop", { channelId, userId: currentUserId });
     } finally {
@@ -347,10 +351,16 @@ export default function ChannelView({
         );
         return [...uniqueOlderMessages, ...prev];
       });
+      if (olderMessages.length > 0) setShowJumpToLatest(true);
       setOldestMessageCursor(data.nextCursor || null);
     } finally {
       setLoadingOlder(false);
     }
+  };
+
+  const handleJumpToLatest = () => {
+    setAutoScrollKey((current) => current + 1);
+    setShowJumpToLatest(false);
   };
 
   const handlePin = async (messageId: string, isPinned: boolean) => {
@@ -407,6 +417,8 @@ export default function ChannelView({
     if (res.ok) {
       const msg = await res.json();
       setMessages((prev) => [...prev, msg]);
+      setAutoScrollKey((current) => current + 1);
+      setShowJumpToLatest(false);
       socket?.emit("message:send", msg);
 
       // Auto-transcribe in the background
@@ -450,6 +462,8 @@ export default function ChannelView({
     if (res.ok) {
       const msg = await res.json();
       setMessages((prev) => [...prev, msg]);
+      setAutoScrollKey((current) => current + 1);
+      setShowJumpToLatest(false);
       socket?.emit("message:send", msg);
     }
   };
@@ -470,8 +484,10 @@ export default function ChannelView({
           hasMoreMessages={Boolean(oldestMessageCursor)}
           loadingOlder={loadingOlder}
           autoScrollKey={autoScrollKey}
+          showJumpToLatest={showJumpToLatest}
           canModerateMessages={canManageMessages}
           onLoadOlder={handleLoadOlder}
+          onJumpToLatest={handleJumpToLatest}
           onReaction={handleReaction}
           onEdit={handleEdit}
           onDelete={handleDelete}

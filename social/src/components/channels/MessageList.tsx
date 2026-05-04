@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
+  ArrowDown,
   Bookmark,
   BookmarkCheck,
   Bot,
@@ -46,8 +47,10 @@ interface MessageListProps {
   hasMoreMessages?: boolean;
   loadingOlder?: boolean;
   autoScrollKey?: number;
+  showJumpToLatest?: boolean;
   canModerateMessages?: boolean;
   onLoadOlder?: () => void;
+  onJumpToLatest?: () => void;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string, reason?: string) => void;
@@ -65,7 +68,9 @@ export default function MessageList({
   hasMoreMessages = false,
   loadingOlder = false,
   autoScrollKey,
+  showJumpToLatest = false,
   canModerateMessages = false,
+  onJumpToLatest,
   onLoadOlder,
   onReaction,
   onEdit,
@@ -106,7 +111,7 @@ export default function MessageList({
   let lastDate = "";
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="relative flex-1 overflow-y-auto">
       <div className="py-2">
         {hasMoreMessages && (
           <div className="flex justify-center px-4 py-3">
@@ -155,6 +160,18 @@ export default function MessageList({
           );
         })}
         <div ref={bottomRef} />
+        {showJumpToLatest && (
+          <div className="sticky bottom-3 z-10 flex justify-center px-4 pointer-events-none">
+            <button
+              type="button"
+              onClick={onJumpToLatest}
+              className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-bg-surface px-3 py-1.5 text-xs font-semibold text-accent shadow-lg transition-colors hover:bg-accent-muted"
+            >
+              <ArrowDown size={13} />
+              <span>Jump to latest</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
