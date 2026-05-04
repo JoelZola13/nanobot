@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AtSign,
   Bell,
   ChevronDown,
   Hash,
@@ -21,7 +22,7 @@ import ProfilePopover from "@/components/users/ProfilePopover";
 interface TopBarProps {
   title: string;
   description?: string;
-  type?: "channel" | "dm" | "feed" | "profile";
+  type?: "channel" | "dm" | "feed" | "profile" | "mentions";
   memberCount?: number;
   channelId?: string;
   otherUserId?: string;
@@ -44,6 +45,7 @@ export default function TopBar({
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
   const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
+  const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : Users;
 
   const handleCall = (callType: "audio" | "video") => {
     if (socket && otherUserId && channelId) {
@@ -65,7 +67,7 @@ export default function TopBar({
       <header className="h-14 px-4 flex items-center justify-between border-b border-border bg-bg-surface backdrop-blur-glass shrink-0">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-bg-elevated text-text-secondary">
-            {type === "channel" ? <Hash size={17} /> : <Users size={17} />}
+            <HeaderIcon size={17} />
           </div>
           <div className="min-w-0">
             {type === "dm" && otherUserId ? (

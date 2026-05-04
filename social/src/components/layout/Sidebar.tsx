@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AtSign,
   Bot,
   ChevronDown,
   Hash,
@@ -275,6 +276,14 @@ export default function Sidebar({ channels, dms, userId, mobileOpen = false, onM
                 {formatUnread(dmUnreadTotal)}
               </span>
             )}
+          </Link>
+          <Link
+            href="/mentions"
+            onClick={onMobileClose}
+            className={`sidebar-item ${pathname === "/mentions" ? "active" : ""}`}
+          >
+            <AtSign size={16} className="shrink-0" />
+            <span>Mentions</span>
           </Link>
           <Link
             href="/channels"
