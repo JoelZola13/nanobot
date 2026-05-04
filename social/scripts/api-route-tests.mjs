@@ -84,11 +84,11 @@ async function responseJson(response) {
   return response.json();
 }
 
-function createAuthMock(userId = "current-user") {
+function createAuthMock(userId = "current-user", role) {
   return {
     async auth() {
       if (!userId) return null;
-      return { user: { id: userId, name: "Current User" } };
+      return { user: { id: userId, name: "Current User", role } };
     },
   };
 }
@@ -419,6 +419,238 @@ describe("DM API route", () => {
   });
 });
 
+describe("Channel management permissions", () => {
+  test("normalizes manager roles and channel names", () => {
+    const {
+      canCreateWorkspaceChannels,
+      canManageChannel,
+      normalizeChannelDescription,
+      normalizeChannelName,
+      normalizeChannelVisibility,
+    } = loadTsModule("src/lib/channelManagement.ts");
+
+    assert.equal(canCreateWorkspaceChannels({ role: "ADMIN" }), true);
+    assert.equal(canCreateWorkspaceChannels({ role: "USER" }), false);
+    assert.equal(canManageChannel({ role: "USER" }, "owner"), true);
+    assert.equal(canManageChannel({ role: "USER" }, "admin"), true);
+    assert.equal(canManageChannel({ role: "USER" }, "member"), false);
+    assert.equal(normalizeChannelName(" #Team Updates!! "), "team-updates");
+    assert.equal(normalizeChannelDescription("  Planning channel  "), "Planning channel");
+    assert.equal(normalizeChannelDescription("   "), null);
+    assert.equal(normalizeChannelVisibility("PRIVATE"), "PRIVATE");
+    assert.equal(normalizeChannelVisibility("GROUP_DM"), "PUBLIC");
+  });
+});
+
+describe("Channel API route", () => {
+  const defaultChannelMocks = {
+    DEFAULT_CHANNELS: [
+      { slug: "announcements" },
+      { slug: "general" },
+      { slug: "help" },
+    ],
+    async ensureDefaultChannelsForUser() {},
+  };
+
+  test("requires workspace admin access to create channels", async () => {
+    let createCalled = false;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { POST } = loadTsModule("src/app/api/channels/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("current-user", "USER"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique() {
+              return null;
+            },
+            async create() {
+              createCalled = true;
+            },
+          },
+        },
+      },
+      "@/lib/defaultChannels": defaultChannelMocks,
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await POST(jsonRequest({ name: "team-updates" }));
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Workspace admin access required",
+    });
+    assert.equal(createCalled, false);
+  });
+
+  test("creates a normalized channel for workspace admins", async () => {
+    let createArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { POST } = loadTsModule("src/app/api/channels/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "ADMIN"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique({ where }) {
+              assert.deepEqual(where, { slug: "team-updates" });
+              return null;
+            },
+            async create(args) {
+              createArgs = args;
+              return {
+                id: "channel-new",
+                name: args.data.name,
+                slug: args.data.slug,
+                description: args.data.description,
+                type: args.data.type,
+                iconEmoji: null,
+                isDefault: false,
+                _count: { members: 1, messages: 0 },
+              };
+            },
+          },
+        },
+      },
+      "@/lib/defaultChannels": defaultChannelMocks,
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await POST(jsonRequest({
+      name: " #Team Updates!! ",
+      description: "  Planning channel  ",
+      type: "PRIVATE",
+    }));
+
+    assert.equal(response.status, 201);
+    assert.equal(createArgs.data.name, "team-updates");
+    assert.equal(createArgs.data.slug, "team-updates");
+    assert.equal(createArgs.data.description, "Planning channel");
+    assert.equal(createArgs.data.type, "PRIVATE");
+    assert.deepEqual(createArgs.data.members.create, {
+      userId: "admin-user",
+      role: "owner",
+    });
+    assert.deepEqual(await responseJson(response), {
+      id: "channel-new",
+      name: "team-updates",
+      slug: "team-updates",
+      description: "Planning channel",
+      type: "PRIVATE",
+      iconEmoji: null,
+      isDefault: false,
+      isMember: true,
+      memberCount: 1,
+      messageCount: 0,
+      role: "owner",
+      canCreate: true,
+      canManage: true,
+    });
+  });
+
+  test("allows channel owners to edit custom channels", async () => {
+    let updateArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("owner-user", "USER"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique({ where }) {
+              if (where.id === "channel-1") {
+                return {
+                  id: "channel-1",
+                  name: "old-name",
+                  slug: "old-name",
+                  description: null,
+                  type: "PUBLIC",
+                  iconEmoji: null,
+                  isArchived: false,
+                  isDefault: false,
+                  members: [{ role: "owner" }],
+                  _count: { members: 3, messages: 9 },
+                };
+              }
+              if (where.slug === "new-name") return null;
+              return null;
+            },
+            async update(args) {
+              updateArgs = args;
+              return {
+                id: "channel-1",
+                name: args.data.name,
+                slug: args.data.slug,
+                description: args.data.description,
+                type: args.data.type,
+                iconEmoji: null,
+                isDefault: false,
+                members: [{ role: "owner" }],
+                _count: { members: 3, messages: 9 },
+              };
+            },
+          },
+        },
+      },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ name: "new name", description: "Updated", type: "PRIVATE" }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(updateArgs.data, {
+      name: "new-name",
+      slug: "new-name",
+      description: "Updated",
+      type: "PRIVATE",
+    });
+    assert.equal((await responseJson(response)).canManage, true);
+  });
+
+  test("blocks regular channel members from editing channels", async () => {
+    let updateCalled = false;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("member-user", "USER"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique() {
+              return {
+                id: "channel-1",
+                type: "PUBLIC",
+                isArchived: false,
+                isDefault: false,
+                members: [{ role: "member" }],
+                _count: { members: 2, messages: 0 },
+              };
+            },
+            async update() {
+              updateCalled = true;
+            },
+          },
+        },
+      },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ name: "new name", type: "PUBLIC" }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Workspace admin access required",
+    });
+    assert.equal(updateCalled, false);
+  });
+});
+
 describe("Channel membership API route", () => {
   test("joins a public channel with a member role", async () => {
     let upsertArgs;
@@ -627,6 +859,7 @@ describe("Social session bridge auth", () => {
           name: "Jane Doe",
           email: "jane@example.test",
           avatar: "https://example.test/jane.png",
+          role: "ADMIN",
         },
       });
     };
@@ -656,6 +889,7 @@ describe("Social session bridge auth", () => {
     assert.equal(session.user.name, "Jane Local");
     assert.equal(session.user.username, "jane");
     assert.equal(session.user.casdoorId, "casdoor-user-1");
+    assert.equal(session.user.role, "ADMIN");
   });
 
   test("throws the bridge unavailable error when requested", async () => {

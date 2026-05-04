@@ -19,6 +19,7 @@ import {
   Lock,
   LogOut,
   MessageSquare,
+  Pencil,
   Plus,
   Search,
   ShieldCheck,
@@ -38,6 +39,8 @@ type ChannelSummary = {
   memberCount?: number;
   messageCount?: number;
   role?: string;
+  canCreate?: boolean;
+  canManage?: boolean;
 };
 
 type ChannelVisibility = "PUBLIC" | "PRIVATE";
@@ -60,6 +63,11 @@ export default function ChannelsPage() {
   const [description, setDescription] = useState("");
   const [channelType, setChannelType] = useState<ChannelVisibility>("PUBLIC");
   const [creating, setCreating] = useState(false);
+  const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editType, setEditType] = useState<ChannelVisibility>("PUBLIC");
+  const [updating, setUpdating] = useState(false);
   const [busyChannelId, setBusyChannelId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
@@ -137,6 +145,7 @@ export default function ChannelsPage() {
       ),
     [visibleChannels],
   );
+  const canCreateChannels = channels.some((channel) => channel.canCreate);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -153,12 +162,67 @@ export default function ChannelsPage() {
       if (!res.ok) throw new Error("Failed to create channel");
 
       const channel = await res.json();
+      setShowCreate(false);
+      setName("");
+      setDescription("");
+      setChannelType("PUBLIC");
       router.push(`/channels/${channel.id}`);
       router.refresh();
     } catch {
       setError("Channel could not be created.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditChannel = (channel: ChannelSummary) => {
+    setShowCreate(false);
+    setEditingChannel(channel);
+    setEditName(normalizeChannelName(channel));
+    setEditDescription(channel.description || "");
+    setEditType(channel.type === "PRIVATE" ? "PRIVATE" : "PUBLIC");
+  };
+
+  const updateChannel = (updatedChannel: ChannelSummary) => {
+    setChannels((currentChannels) =>
+      currentChannels.map((channel) =>
+        channel.id === updatedChannel.id
+          ? {
+              ...channel,
+              ...updatedChannel,
+              isMember: Boolean(updatedChannel.isMember),
+            }
+          : channel,
+      ),
+    );
+  };
+
+  const handleUpdate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingChannel || !editName.trim() || updating) return;
+    setUpdating(true);
+    setError(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/channels/${editingChannel.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          description: editDescription,
+          type: editType,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update channel");
+
+      const updatedChannel = (await res.json()) as ChannelSummary;
+      updateChannel(updatedChannel);
+      setEditingChannel(null);
+      router.refresh();
+    } catch {
+      setError(`#${normalizeChannelName(editingChannel)} could not be updated.`);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -246,14 +310,19 @@ export default function ChannelsPage() {
                   : formatCount(channels.length, "workspace channel")}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCreate(!showCreate)}
-              className="btn-primary inline-flex items-center gap-2 self-start text-sm"
-            >
-              <Plus size={16} />
-              <span>New Channel</span>
-            </button>
+            {canCreateChannels && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingChannel(null);
+                  setShowCreate(!showCreate);
+                }}
+                className="btn-primary inline-flex items-center gap-2 self-start text-sm"
+              >
+                <Plus size={16} />
+                <span>New Channel</span>
+              </button>
+            )}
           </div>
 
           <div className="mb-5 flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2">
@@ -349,6 +418,105 @@ export default function ChannelsPage() {
             </form>
           )}
 
+          {editingChannel && (
+            <form
+              onSubmit={handleUpdate}
+              className="mb-6 space-y-4 rounded-lg border border-border bg-bg-surface p-5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-heading text-base font-semibold text-text-primary">
+                    Edit channel
+                  </h3>
+                  <p className="text-sm text-text-muted">
+                    Manage #{normalizeChannelName(editingChannel)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingChannel(null)}
+                  className="btn-ghost text-sm"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                  Channel name
+                </label>
+                <div className="flex items-center gap-2">
+                  <Hash size={16} className="shrink-0 text-text-muted" />
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="input-field flex-1"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                  Visibility
+                </label>
+                <div
+                  className="grid gap-2 sm:grid-cols-2"
+                  role="group"
+                  aria-label="Channel visibility"
+                >
+                  <VisibilityButton
+                    active={editType === "PUBLIC"}
+                    icon={<Globe2 size={15} />}
+                    title="Public"
+                    subtitle="Open access"
+                    onClick={() => setEditType("PUBLIC")}
+                  />
+                  <VisibilityButton
+                    active={editType === "PRIVATE"}
+                    icon={<Lock size={15} />}
+                    title="Private"
+                    subtitle="Invite-only"
+                    onClick={() => setEditType("PRIVATE")}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                  Description{" "}
+                  <span className="font-normal text-text-muted">
+                    (optional)
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="What's this channel about?"
+                  className="input-field w-full"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingChannel(null)}
+                  className="btn-ghost text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editName.trim() || updating}
+                  className="btn-primary text-sm"
+                >
+                  {updating ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </form>
+          )}
+
           {error && (
             <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
               {error}
@@ -367,6 +535,7 @@ export default function ChannelsPage() {
                 busyChannelId={busyChannelId}
                 onJoin={handleJoin}
                 onLeave={handleLeave}
+                onEdit={openEditChannel}
               />
               <ChannelSection
                 title="Your public channels"
@@ -374,6 +543,7 @@ export default function ChannelsPage() {
                 busyChannelId={busyChannelId}
                 onJoin={handleJoin}
                 onLeave={handleLeave}
+                onEdit={openEditChannel}
               />
               <ChannelSection
                 title="Private channels"
@@ -381,6 +551,7 @@ export default function ChannelsPage() {
                 busyChannelId={busyChannelId}
                 onJoin={handleJoin}
                 onLeave={handleLeave}
+                onEdit={openEditChannel}
               />
               <ChannelSection
                 title="Browse public channels"
@@ -388,6 +559,7 @@ export default function ChannelsPage() {
                 busyChannelId={busyChannelId}
                 onJoin={handleJoin}
                 onLeave={handleLeave}
+                onEdit={openEditChannel}
               />
             </div>
           ) : (
@@ -449,12 +621,14 @@ function ChannelSection({
   busyChannelId,
   onJoin,
   onLeave,
+  onEdit,
 }: {
   title: string;
   channels: ChannelSummary[];
   busyChannelId: string | null;
   onJoin: (channel: ChannelSummary) => void;
   onLeave: (channel: ChannelSummary) => void;
+  onEdit: (channel: ChannelSummary) => void;
 }) {
   if (channels.length === 0) return null;
 
@@ -474,6 +648,7 @@ function ChannelSection({
             busy={busyChannelId === channel.id}
             onJoin={onJoin}
             onLeave={onLeave}
+            onEdit={onEdit}
           />
         ))}
       </div>
@@ -486,11 +661,13 @@ function ChannelRow({
   busy,
   onJoin,
   onLeave,
+  onEdit,
 }: {
   channel: ChannelSummary;
   busy: boolean;
   onJoin: (channel: ChannelSummary) => void;
   onLeave: (channel: ChannelSummary) => void;
+  onEdit: (channel: ChannelSummary) => void;
 }) {
   const isPrivate = channel.type === "PRIVATE";
   const isMember = Boolean(channel.isMember);
@@ -543,6 +720,12 @@ function ChannelRow({
             {channel.role && (
               <span className="capitalize">{channel.role}</span>
             )}
+            {channel.canManage && (
+              <span className="inline-flex items-center gap-1 text-accent">
+                <ShieldCheck size={13} />
+                Manage
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -550,6 +733,16 @@ function ChannelRow({
       <div className="flex shrink-0 items-center gap-2 sm:pt-0.5">
         {isMember ? (
           <>
+            {channel.canManage && (
+              <button
+                type="button"
+                onClick={() => onEdit(channel)}
+                className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+              >
+                <Pencil size={14} />
+                <span>Edit</span>
+              </button>
+            )}
             <Link
               href={`/channels/${channel.id}`}
               className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
@@ -574,15 +767,27 @@ function ChannelRow({
             )}
           </>
         ) : (
-          <button
-            type="button"
-            onClick={() => onJoin(channel)}
-            disabled={busy || isPrivate}
-            className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
-          >
-            <Plus size={14} />
-            <span>{busy ? "Joining..." : isPrivate ? "Invite only" : "Join"}</span>
-          </button>
+          <>
+            {channel.canManage && (
+              <button
+                type="button"
+                onClick={() => onEdit(channel)}
+                className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+              >
+                <Pencil size={14} />
+                <span>Edit</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onJoin(channel)}
+              disabled={busy || isPrivate}
+              className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+            >
+              <Plus size={14} />
+              <span>{busy ? "Joining..." : isPrivate ? "Invite only" : "Join"}</span>
+            </button>
+          </>
         )}
       </div>
     </article>

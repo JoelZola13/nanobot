@@ -5,6 +5,13 @@ import {
   DEFAULT_CHANNELS,
   ensureDefaultChannelsForUser,
 } from "@/lib/defaultChannels";
+import {
+  canCreateWorkspaceChannels,
+  canManageChannel,
+  normalizeChannelDescription,
+  normalizeChannelName,
+  normalizeChannelVisibility,
+} from "@/lib/channelManagement";
 
 const DEFAULT_CHANNEL_ORDER = new Map<string, number>(
   DEFAULT_CHANNELS.map((channel, index) => [channel.slug, index]),
@@ -60,6 +67,7 @@ export async function GET() {
     },
     orderBy: { updatedAt: "desc" },
   });
+  const canCreate = canCreateWorkspaceChannels(session.user);
 
   return NextResponse.json(
     sortBrowserChannels(channels).map((channel) => {
@@ -77,6 +85,8 @@ export async function GET() {
         memberCount: channel._count.members,
         messageCount: channel._count.messages,
         role: membership?.role,
+        canCreate,
+        canManage: canManageChannel(session.user, membership?.role) && !channel.isDefault,
       };
     }),
   );
@@ -89,8 +99,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, description } = body;
-  const type = body.type === "PRIVATE" ? "PRIVATE" : "PUBLIC";
+  if (!canCreateWorkspaceChannels(session.user)) {
+    return NextResponse.json(
+      { error: "Workspace admin access required" },
+      { status: 403 },
+    );
+  }
+
+  const name = normalizeChannelName(body.name);
+  const description = normalizeChannelDescription(body.description);
+  const type = normalizeChannelVisibility(body.type);
 
   if (!name)
     return NextResponse.json(
@@ -98,15 +116,21 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
 
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  const existing = await prisma.channel.findUnique({
+    where: { slug: name },
+    select: { id: true },
+  });
+  if (existing) {
+    return NextResponse.json(
+      { error: "A channel with that name already exists" },
+      { status: 409 },
+    );
+  }
 
   const channel = await prisma.channel.create({
     data: {
       name,
-      slug,
+      slug: name,
       description,
       type,
       createdById: session.user.id,
@@ -117,8 +141,25 @@ export async function POST(req: NextRequest) {
         },
       },
     },
-    include: { _count: { select: { members: true } } },
+    include: { _count: { select: { members: true, messages: true } } },
   });
 
-  return NextResponse.json(channel, { status: 201 });
+  return NextResponse.json(
+    {
+      id: channel.id,
+      name: channel.name,
+      slug: channel.slug,
+      description: channel.description,
+      type: channel.type,
+      iconEmoji: channel.iconEmoji,
+      isDefault: channel.isDefault,
+      isMember: true,
+      memberCount: channel._count.members,
+      messageCount: channel._count.messages,
+      role: "owner",
+      canCreate: true,
+      canManage: true,
+    },
+    { status: 201 },
+  );
 }

@@ -15,6 +15,7 @@ type LibreChatBridgeUser = {
   email?: string;
   avatar?: string;
   image?: string;
+  role?: string;
 };
 
 type AuthOptions = {
@@ -148,10 +149,12 @@ async function getLibreChatSession(options: AuthOptions = {}): Promise<Session |
       image: socialUser.avatarUrl || libreUser.avatar || libreUser.image || null,
       username: socialUser.username || libreUser.username,
       casdoorId,
+      role: getString(libreUser.role),
     } as Session["user"] & {
       id: string;
       username?: string | null;
       casdoorId?: string;
+      role?: string;
     },
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   };
