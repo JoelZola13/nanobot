@@ -307,6 +307,7 @@ export default function MessageInput({
       )}
       <div className="overflow-hidden rounded-lg border border-border bg-bg-surface shadow-sm transition-colors focus-within:border-accent">
         <textarea
+          data-testid="message-composer"
           ref={textareaRef}
           value={content}
           onChange={handleInput}
@@ -350,8 +351,12 @@ export default function MessageInput({
             </button>
           </div>
           <button
+            type="button"
+            data-testid="message-send-button"
             onClick={handleSubmit}
             disabled={!content.trim() || disabled}
+            title="Send message"
+            aria-label="Send message"
             className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
               content.trim()
                 ? "bg-accent text-white hover:bg-accent-hover"

@@ -80,14 +80,23 @@ export default function ThreadPanel({
   };
 
   return (
-    <div className="sv-thread-panel w-[400px] border-l border-border flex flex-col bg-bg-base shrink-0">
+    <div
+      data-testid="thread-panel"
+      className="sv-thread-panel w-[400px] border-l border-border flex flex-col bg-bg-base shrink-0"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Reply size={16} className="text-text-muted" />
           <span className="font-heading font-semibold text-sm text-text-primary">Thread</span>
         </div>
-        <button onClick={onClose} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
+        <button
+          onClick={onClose}
+          className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+          type="button"
+          title="Close thread"
+          aria-label="Close thread"
+        >
           <X size={16} />
         </button>
       </div>

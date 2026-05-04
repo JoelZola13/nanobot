@@ -50,7 +50,8 @@ export default function TopBar({
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
-  const canCall = type === "dm" && Boolean(socket && otherUserId && channelId);
+  const canShowCallControls = type === "dm" && Boolean(otherUserId && channelId);
+  const canStartCall = Boolean(socket && otherUserId && channelId);
   const canConfigureNotifications = Boolean(channelId && (type === "channel" || type === "dm"));
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
@@ -59,7 +60,7 @@ export default function TopBar({
   const NotificationIcon = notificationLevel === "MUTED" ? BellOff : Bell;
 
   const handleCall = (callType: "audio" | "video") => {
-    if (socket && otherUserId && channelId) {
+    if (canStartCall && socket && otherUserId && channelId) {
       initiateCall(socket, otherUserId, otherUserName || title, callType, channelId);
     }
   };
@@ -115,12 +116,24 @@ export default function TopBar({
               <span>{memberCount}</span>
             </button>
           )}
-          {canCall && (
+          {canShowCallControls && (
             <>
-              <button className="btn-ghost h-9 w-9 p-0" title="Voice call" onClick={() => handleCall("audio")}>
+              <button
+                className="btn-ghost h-9 w-9 p-0 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Voice call"
+                aria-label="Voice call"
+                disabled={!canStartCall}
+                onClick={() => handleCall("audio")}
+              >
                 <Phone size={16} />
               </button>
-              <button className="btn-ghost h-9 w-9 p-0" title="Video call" onClick={() => handleCall("video")}>
+              <button
+                className="btn-ghost h-9 w-9 p-0 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Video call"
+                aria-label="Video call"
+                disabled={!canStartCall}
+                onClick={() => handleCall("video")}
+              >
                 <Video size={16} />
               </button>
             </>

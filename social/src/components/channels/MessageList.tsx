@@ -294,6 +294,8 @@ function MessageRow({
   return (
     <div
       id={`message-${msg.id}`}
+      data-testid="message-row"
+      data-message-id={msg.id}
       className={`channel-message group scroll-mt-20 ${isHighlighted ? "bg-accent-muted ring-1 ring-inset ring-accent" : ""}`}
       aria-current={isHighlighted ? "true" : undefined}
     >
@@ -467,16 +469,32 @@ function MessageRow({
             onClick={() => void handleCopyLink()}
             className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
             title={copyNotice?.status === "copied" ? "Link copied" : "Copy message link"}
+            aria-label={copyNotice?.status === "copied" ? "Link copied" : "Copy message link"}
           >
             <Link2 size={14} />
           </button>
-          <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            title="Add reaction"
+            aria-label="Add reaction"
+          >
             <SmilePlus size={14} />
           </button>
-          <button onClick={() => onOpenThread?.(msg.id)} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
+          <button
+            onClick={() => onOpenThread?.(msg.id)}
+            className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            title="Reply in thread"
+            aria-label="Reply in thread"
+          >
             <Reply size={14} />
           </button>
-          <button onClick={() => setShowMenu(!showMenu)} className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
+            title="More message actions"
+            aria-label="More message actions"
+          >
             <MoreHorizontal size={14} />
           </button>
 

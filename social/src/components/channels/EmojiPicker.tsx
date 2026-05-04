@@ -64,6 +64,8 @@ export default function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
                   key={emoji}
                   onClick={() => onSelect(emoji)}
                   className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg-hover text-base transition-colors"
+                  type="button"
+                  aria-label={`React with ${emoji}`}
                 >
                   {emoji}
                 </button>

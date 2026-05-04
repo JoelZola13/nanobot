@@ -292,9 +292,12 @@ function PersonRow({
       </ProfilePopover>
 
       <button
+        data-testid="start-dm-button"
+        data-user-id={person.id}
         onClick={() => onMessage(person.id)}
         disabled={loading}
         className="btn-ghost flex h-8 items-center gap-1.5 px-2 text-xs md:opacity-0 md:group-hover:opacity-100"
+        type="button"
       >
         <MessageSquare size={13} />
         <span>{loading ? "Opening" : "Message"}</span>

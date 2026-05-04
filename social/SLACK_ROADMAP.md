@@ -56,7 +56,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 
 - [x] Fix websocket proxy routing so `/ws-social` reaches the Social Socket.IO server.
 - [x] Add the internal socket broadcast bridge used by message API routes.
-- [ ] Add Playwright coverage for sign-in, DM start, message send, reaction, thread, and call buttons.
+- [x] Add Playwright coverage for sign-in, DM start, message send, reaction, thread, and call buttons.
 - [ ] Add API tests for DM creation, channel membership, and Social session bridge.
 - [ ] Add production deployment notes for the Social service and websocket routing.
 - [ ] Add telemetry or structured logs for auth bridge failures and socket disconnects.
