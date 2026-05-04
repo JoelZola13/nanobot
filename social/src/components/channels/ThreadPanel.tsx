@@ -13,10 +13,17 @@ interface ThreadPanelProps {
   channelId: string;
   parentMessage: MessageData;
   currentUserId: string;
+  onReplyCreated?: (reply: MessageData) => void;
   onClose: () => void;
 }
 
-export default function ThreadPanel({ channelId, parentMessage, currentUserId: _currentUserId, onClose }: ThreadPanelProps) {
+export default function ThreadPanel({
+  channelId,
+  parentMessage,
+  currentUserId: _currentUserId,
+  onReplyCreated,
+  onClose,
+}: ThreadPanelProps) {
   const [replies, setReplies] = useState<MessageData[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -63,6 +70,7 @@ export default function ThreadPanel({ channelId, parentMessage, currentUserId: _
       if (res.ok) {
         const msg = await res.json();
         setReplies((prev) => [...prev, msg]);
+        onReplyCreated?.(msg);
         socket?.emit("message:send", msg);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       }

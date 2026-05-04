@@ -3,6 +3,7 @@ import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { invokeAgentStreaming } from "@/lib/nanobot";
 import { getIO } from "@/lib/socketServer";
+import { formatMessageForClient } from "@/lib/messageFormat";
 
 // GET /api/channels/[id]/messages — fetch messages
 export async function GET(
@@ -33,6 +34,16 @@ export async function GET(
       },
       reactions: { select: { emoji: true, userId: true } },
       attachments: true,
+      replies: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        include: {
+          author: {
+            select: { id: true, username: true, displayName: true, avatarUrl: true, isAgent: true },
+          },
+        },
+      },
       _count: { select: { replies: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -40,51 +51,13 @@ export async function GET(
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  const formatted = messages.map((msg) => {
-    const reactionMap = new Map<string, { count: number; userReacted: boolean }>();
-    for (const r of msg.reactions) {
-      const existing = reactionMap.get(r.emoji) || { count: 0, userReacted: false };
-      existing.count++;
-      if (r.userId === session.user!.id) existing.userReacted = true;
-      reactionMap.set(r.emoji, existing);
-    }
-    return {
-      id: msg.id, channelId: msg.channelId, content: msg.content,
-      createdAt: msg.createdAt.toISOString(), isEdited: msg.isEdited,
-      isPinned: msg.isPinned, parentId: msg.parentId,
-      replyCount: msg._count.replies, author: msg.author,
-      metadata: msg.metadata || undefined,
-      reactions: Array.from(reactionMap.entries()).map(([emoji, { count, userReacted }]) => ({ emoji, count, userReacted })),
-      attachments: msg.attachments.map((a) => ({ id: a.id, fileName: a.fileName, mimeType: a.mimeType, url: a.url, width: a.width, height: a.height })),
-    };
-  });
+  const formatted = messages.map((msg) => formatMessageForClient(msg, session.user!.id));
 
   return NextResponse.json({
     messages: formatted,
     nextCursor: messages.length === limit ? messages[messages.length - 1].id : null,
   });
 }
-
-function formatMessage(msg: {
-  id: string; channelId: string; content: string; createdAt: Date;
-  isEdited: boolean; isPinned: boolean; parentId: string | null;
-  metadata?: unknown;
-  author: { id: string; username: string; displayName: string; avatarUrl: string | null; isAgent: boolean };
-  attachments?: { id: string; fileName: string; mimeType: string; url: string; s3Key: string; fileSize: number; width: number | null; height: number | null }[];
-}) {
-  return {
-    id: msg.id, channelId: msg.channelId, content: msg.content,
-    createdAt: msg.createdAt.toISOString(), isEdited: msg.isEdited,
-    isPinned: msg.isPinned, parentId: msg.parentId,
-    metadata: msg.metadata || undefined,
-    replyCount: 0, author: msg.author, reactions: [],
-    attachments: (msg.attachments || []).map((a) => ({
-      id: a.id, fileName: a.fileName, mimeType: a.mimeType, url: a.url,
-      width: a.width, height: a.height,
-    })),
-  };
-}
-
 
 // POST /api/channels/[id]/messages — send a message
 export async function POST(
@@ -135,7 +108,7 @@ export async function POST(
 
   await prisma.channel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
 
-  const userMessage = formatMessage(message);
+  const userMessage = formatMessageForClient(message, session.user.id);
 
   // --- Agent interaction ---
   const channel = await prisma.channel.findUnique({
@@ -282,7 +255,7 @@ async function triggerAgentResponseStreaming(
     await prisma.channel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
 
     // Broadcast final message
-    io?.to(`channel:${channelId}`).emit("message:new", formatMessage(agentMessage));
+    io?.to(`channel:${channelId}`).emit("message:new", formatMessageForClient(agentMessage, agent.id));
 
     // Broadcast completion with tools used
     io?.to(`channel:${channelId}`).emit("agent:activity", {

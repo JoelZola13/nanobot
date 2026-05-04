@@ -21,6 +21,38 @@ interface ChannelViewProps {
   emptyState: MessageEmptyState;
 }
 
+const toThreadParticipant = (author: MessageData["author"]) => ({
+  id: author.id,
+  displayName: author.displayName,
+  avatarUrl: author.avatarUrl,
+  isAgent: author.isAgent,
+});
+
+const addThreadReplyPreview = (message: MessageData, reply: MessageData): MessageData => {
+  if (message.threadPreview?.latestReply.id === reply.id) return message;
+
+  const replyParticipant = toThreadParticipant(reply.author);
+  const existingParticipants = message.threadPreview?.participants || [];
+  const participants = [
+    replyParticipant,
+    ...existingParticipants.filter((participant) => participant.id !== replyParticipant.id),
+  ].slice(0, 3);
+
+  return {
+    ...message,
+    replyCount: (message.replyCount || 0) + 1,
+    threadPreview: {
+      participants,
+      latestReply: {
+        id: reply.id,
+        content: reply.content,
+        createdAt: reply.createdAt,
+        author: replyParticipant,
+      },
+    },
+  };
+};
+
 export default function ChannelView({
   channelId,
   channelName,
@@ -58,6 +90,13 @@ export default function ChannelView({
 
     const handleNewMessage = (msg: MessageData) => {
       if (msg.channelId === channelId) {
+        if (msg.parentId) {
+          setMessages((prev) =>
+            prev.map((message) => (message.id === msg.parentId ? addThreadReplyPreview(message, msg) : message)),
+          );
+          return;
+        }
+
         setMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
@@ -265,6 +304,13 @@ export default function ChannelView({
     setOpenThreadId(messageId);
   };
 
+  const handleReplyCreated = (reply: MessageData) => {
+    if (!reply.parentId) return;
+    setMessages((prev) =>
+      prev.map((message) => (message.id === reply.parentId ? addThreadReplyPreview(message, reply) : message)),
+    );
+  };
+
   const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
     // Upload audio to S3
     const formData = new FormData();
@@ -374,6 +420,7 @@ export default function ChannelView({
           channelId={channelId}
           parentMessage={threadParent}
           currentUserId={currentUserId}
+          onReplyCreated={handleReplyCreated}
           onClose={() => setOpenThreadId(null)}
         />
       )}

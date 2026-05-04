@@ -33,6 +33,25 @@ export interface MessageData {
   isPinned: boolean;
   parentId: string | null;
   replyCount?: number;
+  threadPreview?: {
+    participants: {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
+      isAgent: boolean;
+    }[];
+    latestReply: {
+      id: string;
+      content: string;
+      createdAt: string;
+      author: {
+        id: string;
+        displayName: string;
+        avatarUrl: string | null;
+        isAgent: boolean;
+      };
+    };
+  };
   author: {
     id: string;
     username: string;

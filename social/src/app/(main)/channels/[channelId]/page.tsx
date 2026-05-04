@@ -3,6 +3,7 @@ import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import TopBar from "@/components/layout/TopBar";
 import ChannelView from "@/components/channels/ChannelView";
+import { formatMessageForClient } from "@/lib/messageFormat";
 
 export default async function ChannelPage({
   params,
@@ -43,50 +44,29 @@ export default async function ChannelPage({
       },
       reactions: { select: { emoji: true, userId: true } },
       attachments: true,
+      replies: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        include: {
+          author: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              isAgent: true,
+            },
+          },
+        },
+      },
       _count: { select: { replies: true } },
     },
     orderBy: { createdAt: "asc" },
     take: 100,
   });
 
-  const formatted = messages.map((msg) => {
-    const reactionMap = new Map<
-      string,
-      { count: number; userReacted: boolean }
-    >();
-    for (const r of msg.reactions) {
-      const existing = reactionMap.get(r.emoji) || {
-        count: 0,
-        userReacted: false,
-      };
-      existing.count++;
-      if (r.userId === session.user!.id) existing.userReacted = true;
-      reactionMap.set(r.emoji, existing);
-    }
-
-    return {
-      id: msg.id,
-      channelId: msg.channelId,
-      content: msg.content,
-      createdAt: msg.createdAt.toISOString(),
-      isEdited: msg.isEdited,
-      isPinned: msg.isPinned,
-      parentId: msg.parentId,
-      replyCount: msg._count.replies,
-      author: msg.author,
-      reactions: Array.from(reactionMap.entries()).map(
-        ([emoji, { count, userReacted }]) => ({ emoji, count, userReacted }),
-      ),
-      attachments: msg.attachments.map((a) => ({
-        id: a.id,
-        fileName: a.fileName,
-        mimeType: a.mimeType,
-        url: a.url,
-        width: a.width,
-        height: a.height,
-      })),
-    };
-  });
+  const formatted = messages.map((msg) => formatMessageForClient(msg, session.user!.id));
 
   return (
     <>

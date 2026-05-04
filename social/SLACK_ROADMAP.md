@@ -31,7 +31,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Use a Slack-style header with channel/DM identity and action buttons.
 - [x] Make the composer read naturally for channels and DMs.
 - [x] Add richer empty states per channel and DM.
-- [ ] Add threaded reply previews beside parent messages.
+- [x] Add threaded reply previews beside parent messages.
 - [ ] Add message permalink/copy-link actions.
 - [ ] Add slash command scaffolding.
 

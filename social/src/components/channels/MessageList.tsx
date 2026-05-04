@@ -317,10 +317,7 @@ function MessageRow({
           )}
 
           {(msg.replyCount || 0) > 0 && (
-            <button onClick={() => onOpenThread?.(msg.id)} className="flex items-center gap-1.5 mt-1.5 text-2xs text-accent hover:underline">
-              <Reply size={12} />
-              <span>{msg.replyCount} {msg.replyCount === 1 ? "reply" : "replies"}</span>
-            </button>
+            <ThreadReplyPreview msg={msg} onOpenThread={onOpenThread} />
           )}
 
           {/* Read receipts — show for own messages */}
@@ -378,6 +375,85 @@ function MessageRow({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ThreadReplyPreview({
+  msg,
+  onOpenThread,
+}: {
+  msg: MessageData;
+  onOpenThread?: (messageId: string) => void;
+}) {
+  const replyCount = msg.replyCount || 0;
+  const latestReply = msg.threadPreview?.latestReply;
+  const participants = msg.threadPreview?.participants || [];
+  const previewText = latestReply?.content.replace(/\s+/g, " ").trim();
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenThread?.(msg.id)}
+      className="mt-2 flex w-full max-w-2xl items-center gap-3 rounded-lg border border-border bg-bg-surface px-3 py-2 text-left transition-colors hover:border-accent/70 hover:bg-bg-hover"
+    >
+      {participants.length > 0 ? (
+        <div className="flex shrink-0 -space-x-1.5">
+          {participants.map((participant) => (
+            <ThreadParticipantAvatar key={participant.id} participant={participant} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-bg-elevated text-accent">
+          <Reply size={13} />
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2 text-2xs">
+          <span className="shrink-0 font-semibold text-accent">
+            {replyCount} {replyCount === 1 ? "reply" : "replies"}
+          </span>
+          {latestReply && (
+            <>
+              <span className="text-text-muted">/</span>
+              <span className="truncate text-text-muted">
+                Latest from {latestReply.author.displayName} {formatDistanceToNow(new Date(latestReply.createdAt), { addSuffix: true })}
+              </span>
+            </>
+          )}
+        </div>
+        {previewText && (
+          <div className="mt-0.5 truncate text-xs text-text-secondary">{previewText}</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function ThreadParticipantAvatar({
+  participant,
+}: {
+  participant: {
+    displayName: string;
+    avatarUrl: string | null;
+    isAgent: boolean;
+  };
+}) {
+  return (
+    <div
+      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-bg text-2xs font-semibold ${
+        participant.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"
+      }`}
+      title={participant.displayName}
+    >
+      {participant.avatarUrl ? (
+        <img src={participant.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+      ) : participant.isAgent ? (
+        <Bot size={12} />
+      ) : (
+        participant.displayName[0]?.toUpperCase()
+      )}
     </div>
   );
 }
