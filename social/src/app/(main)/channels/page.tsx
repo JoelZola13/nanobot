@@ -25,6 +25,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
@@ -47,6 +48,15 @@ type ChannelSummary = {
 };
 
 type ChannelVisibility = "PUBLIC" | "PRIVATE";
+
+type WorkspacePolicies = {
+  defaultChannelVisibility: ChannelVisibility;
+  defaultNotificationLevel: "ALL" | "MENTIONS" | "MUTED";
+  publicChannelJoinPolicy: "OPEN" | "WORKSPACE_ADMINS";
+  privateChannelJoinPolicy: "INVITE_ONLY";
+  channelCreationPolicy: "WORKSPACE_ADMINS";
+  canManage: boolean;
+};
 
 const formatCount = (count: number | undefined, label: string) => {
   const value = count ?? 0;
@@ -75,6 +85,8 @@ export default function ChannelsPage() {
   const [archivingChannelId, setArchivingChannelId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
+  const [workspacePolicies, setWorkspacePolicies] =
+    useState<WorkspacePolicies | null>(null);
 
   const loadChannels = useCallback(async () => {
     setLoading(true);
@@ -167,6 +179,31 @@ export default function ChannelsPage() {
   const canViewArchivedChannels = channels.some(
     (channel) => channel.canCreate || channel.canManage,
   );
+
+  useEffect(() => {
+    if (!canCreateChannels) {
+      setWorkspacePolicies(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(apiUrl("/api/workspace/policies"), { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load workspace policies");
+        return res.json() as Promise<WorkspacePolicies>;
+      })
+      .then((data) => {
+        if (!cancelled) setWorkspacePolicies(data);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspacePolicies(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canCreateChannels]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -440,6 +477,10 @@ export default function ChannelsPage() {
             )}
           </div>
 
+          {workspacePolicies?.canManage && (
+            <WorkspacePolicySummary policies={workspacePolicies} />
+          )}
+
           {showCreate && (
             <form
               onSubmit={handleCreate}
@@ -700,6 +741,71 @@ export default function ChannelsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function WorkspacePolicySummary({
+  policies,
+}: {
+  policies: WorkspacePolicies;
+}) {
+  const notificationLabels: Record<
+    WorkspacePolicies["defaultNotificationLevel"],
+    string
+  > = {
+    ALL: "All activity",
+    MENTIONS: "Mentions",
+    MUTED: "Muted",
+  };
+  const publicJoinLabels: Record<
+    WorkspacePolicies["publicChannelJoinPolicy"],
+    string
+  > = {
+    OPEN: "Open",
+    WORKSPACE_ADMINS: "Admins only",
+  };
+  const items = [
+    {
+      label: "New channels",
+      value:
+        policies.defaultChannelVisibility === "PRIVATE" ? "Private" : "Public",
+    },
+    {
+      label: "New members",
+      value: notificationLabels[policies.defaultNotificationLevel],
+    },
+    {
+      label: "Public joins",
+      value: publicJoinLabels[policies.publicChannelJoinPolicy],
+    },
+    {
+      label: "Private joins",
+      value: "Invite-only",
+    },
+  ];
+
+  return (
+    <section className="mb-5 rounded-lg border border-border bg-bg-surface p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
+        <SlidersHorizontal size={16} className="text-accent" />
+        <span>Workspace defaults</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="min-w-0 rounded-md border border-border bg-bg-base px-3 py-2"
+          >
+            <div className="truncate text-2xs font-semibold uppercase tracking-wide text-text-muted">
+              {item.label}
+            </div>
+            <div className="mt-0.5 truncate text-sm font-medium text-text-primary">
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

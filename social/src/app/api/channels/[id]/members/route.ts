@@ -5,6 +5,7 @@ import {
   canManageChannel,
   normalizeAssignableChannelRole,
 } from "@/lib/channelManagement";
+import { getDefaultMembershipPreferences } from "@/lib/workspacePolicies";
 
 const userSelect = {
   id: true,
@@ -179,7 +180,7 @@ export async function POST(
         select: memberSelect,
       })
     : await prisma.channelMember.create({
-        data: { channelId, userId, role },
+        data: { channelId, userId, role, ...getDefaultMembershipPreferences() },
         select: memberSelect,
       });
 

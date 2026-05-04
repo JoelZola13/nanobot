@@ -10,8 +10,11 @@ import {
   canManageChannel,
   normalizeChannelDescription,
   normalizeChannelName,
-  normalizeChannelVisibility,
 } from "@/lib/channelManagement";
+import {
+  getDefaultChannelVisibility,
+  getDefaultMembershipPreferences,
+} from "@/lib/workspacePolicies";
 
 const DEFAULT_CHANNEL_ORDER = new Map<string, number>(
   DEFAULT_CHANNELS.map((channel, index) => [channel.slug, index]),
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   const name = normalizeChannelName(body.name);
   const description = normalizeChannelDescription(body.description);
-  const type = normalizeChannelVisibility(body.type);
+  const type = getDefaultChannelVisibility(body.type);
 
   if (!name)
     return NextResponse.json(
@@ -155,6 +158,7 @@ export async function POST(req: NextRequest) {
         create: {
           userId: session.user.id,
           role: "owner",
+          ...getDefaultMembershipPreferences(),
         },
       },
     },

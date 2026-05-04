@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { getDefaultMembershipPreferences } from "@/lib/workspacePolicies";
 
 // POST /api/dm — create or find existing DM channel with another user
 export async function POST(req: NextRequest) {
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Create new DM channel
+  const membershipPreferences = getDefaultMembershipPreferences();
   const channel = await prisma.channel.create({
     data: {
       name: null, // DMs don't need names, we show the other user's name
@@ -59,8 +61,8 @@ export async function POST(req: NextRequest) {
       type: "DM",
       members: {
         create: [
-          { userId: currentUserId, role: "member" },
-          { userId: otherUserId, role: "member" },
+          { userId: currentUserId, role: "member", ...membershipPreferences },
+          { userId: otherUserId, role: "member", ...membershipPreferences },
         ],
       },
     },

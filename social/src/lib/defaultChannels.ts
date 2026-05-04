@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getDefaultMembershipPreferences } from "@/lib/workspacePolicies";
 
 export const DEFAULT_CHANNELS = [
   {
@@ -86,6 +87,7 @@ export async function ensureDefaultChannelsForUser(userId: string) {
           channelId: channel.id,
           userId,
           role: "member",
+          ...getDefaultMembershipPreferences(),
         },
       });
 

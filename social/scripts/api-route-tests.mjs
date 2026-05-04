@@ -36,6 +36,9 @@ afterEach(() => {
     globalThis.window = originalWindow;
   }
   delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
+  delete process.env.SOCIAL_DEFAULT_CHANNEL_VISIBILITY;
+  delete process.env.SOCIAL_DEFAULT_NOTIFICATION_LEVEL;
+  delete process.env.SOCIAL_PUBLIC_CHANNEL_JOIN_POLICY;
 });
 
 function loadTsModule(relativePath, mocks = {}) {
@@ -98,7 +101,18 @@ function createUnauthenticatedMocks() {
     "next/server": nextServerMock,
     "@/lib/session": createAuthMock(null),
     "@/lib/prisma": { prisma: {} },
+    "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
   };
+}
+
+function loadWorkspacePoliciesModule() {
+  const notificationPreferences = loadTsModule("src/lib/notificationPreferences.ts");
+  const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+
+  return loadTsModule("src/lib/workspacePolicies.ts", {
+    "@/lib/notificationPreferences": notificationPreferences,
+    "@/lib/channelManagement": channelManagement,
+  });
 }
 
 describe("Social structured logs", () => {
@@ -339,6 +353,7 @@ describe("DM API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma: {} },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({}));
@@ -371,6 +386,7 @@ describe("DM API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({ userId: "other-user" }));
@@ -404,6 +420,7 @@ describe("DM API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({ userId: "other-user" }));
@@ -413,8 +430,18 @@ describe("DM API route", () => {
     assert.equal(createArgs.data.type, "DM");
     assert.equal(createArgs.data.slug, "dm-current-user-other-user");
     assert.deepEqual(createArgs.data.members.create, [
-      { userId: "current-user", role: "member" },
-      { userId: "other-user", role: "member" },
+      {
+        userId: "current-user",
+        role: "member",
+        notificationLevel: "ALL",
+        mutedAt: null,
+      },
+      {
+        userId: "other-user",
+        role: "member",
+        notificationLevel: "ALL",
+        mutedAt: null,
+      },
     ]);
   });
 });
@@ -448,6 +475,68 @@ describe("Channel management permissions", () => {
   });
 });
 
+describe("Workspace policies", () => {
+  test("normalizes env-backed workspace defaults", () => {
+    process.env.SOCIAL_DEFAULT_CHANNEL_VISIBILITY = "private";
+    process.env.SOCIAL_DEFAULT_NOTIFICATION_LEVEL = "mentions";
+    process.env.SOCIAL_PUBLIC_CHANNEL_JOIN_POLICY = "workspace-admins";
+    const now = new Date("2026-05-04T10:00:00.000Z");
+    const {
+      canJoinPublicChannel,
+      getDefaultChannelVisibility,
+      getDefaultMembershipPreferences,
+      getWorkspacePolicies,
+    } = loadWorkspacePoliciesModule();
+
+    assert.deepEqual(getWorkspacePolicies(), {
+      defaultChannelVisibility: "PRIVATE",
+      defaultNotificationLevel: "MENTIONS",
+      publicChannelJoinPolicy: "WORKSPACE_ADMINS",
+      privateChannelJoinPolicy: "INVITE_ONLY",
+      channelCreationPolicy: "WORKSPACE_ADMINS",
+    });
+    assert.equal(getDefaultChannelVisibility(undefined), "PRIVATE");
+    assert.deepEqual(getDefaultMembershipPreferences(now), {
+      notificationLevel: "MENTIONS",
+      mutedAt: null,
+    });
+    assert.equal(canJoinPublicChannel({ role: "USER" }, null), false);
+    assert.equal(canJoinPublicChannel({ role: "ADMIN" }, null), true);
+    assert.equal(canJoinPublicChannel({ role: "USER" }, "member"), true);
+  });
+
+  test("uses muted timestamps for muted default memberships", () => {
+    process.env.SOCIAL_DEFAULT_NOTIFICATION_LEVEL = "muted";
+    const now = new Date("2026-05-04T11:00:00.000Z");
+    const { getDefaultMembershipPreferences } = loadWorkspacePoliciesModule();
+
+    assert.deepEqual(getDefaultMembershipPreferences(now), {
+      notificationLevel: "MUTED",
+      mutedAt: now,
+    });
+  });
+
+  test("returns workspace policies for signed-in users", async () => {
+    process.env.SOCIAL_DEFAULT_CHANNEL_VISIBILITY = "PRIVATE";
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { GET } = loadTsModule("src/app/api/workspace/policies/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "ADMIN"),
+      "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
+    });
+
+    const response = await GET();
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.equal(body.defaultChannelVisibility, "PRIVATE");
+    assert.equal(body.defaultNotificationLevel, "ALL");
+    assert.equal(body.channelCreationPolicy, "WORKSPACE_ADMINS");
+    assert.equal(body.canManage, true);
+  });
+});
+
 describe("Channel API route", () => {
   const defaultChannelMocks = {
     DEFAULT_CHANNELS: [
@@ -478,6 +567,7 @@ describe("Channel API route", () => {
       },
       "@/lib/defaultChannels": defaultChannelMocks,
       "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({ name: "team-updates" }));
@@ -521,6 +611,7 @@ describe("Channel API route", () => {
       },
       "@/lib/defaultChannels": defaultChannelMocks,
       "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({
@@ -537,6 +628,8 @@ describe("Channel API route", () => {
     assert.deepEqual(createArgs.data.members.create, {
       userId: "admin-user",
       role: "owner",
+      notificationLevel: "ALL",
+      mutedAt: null,
     });
     assert.deepEqual(await responseJson(response), {
       id: "channel-new",
@@ -554,6 +647,47 @@ describe("Channel API route", () => {
       canCreate: true,
       canManage: true,
     });
+  });
+
+  test("uses the workspace default visibility when type is omitted", async () => {
+    process.env.SOCIAL_DEFAULT_CHANNEL_VISIBILITY = "PRIVATE";
+    let createArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { POST } = loadTsModule("src/app/api/channels/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "ADMIN"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique() {
+              return null;
+            },
+            async create(args) {
+              createArgs = args;
+              return {
+                id: "channel-private-default",
+                name: args.data.name,
+                slug: args.data.slug,
+                description: args.data.description,
+                type: args.data.type,
+                iconEmoji: null,
+                isDefault: false,
+                isArchived: false,
+                _count: { members: 1, messages: 0 },
+              };
+            },
+          },
+        },
+      },
+      "@/lib/defaultChannels": defaultChannelMocks,
+      "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
+    });
+
+    const response = await POST(jsonRequest({ name: "Ops Planning" }));
+
+    assert.equal(response.status, 201);
+    assert.equal(createArgs.data.type, "PRIVATE");
   });
 
   test("allows channel owners to edit custom channels", async () => {
@@ -836,6 +970,7 @@ describe("Channel membership API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
@@ -847,6 +982,8 @@ describe("Channel membership API route", () => {
       role: "member",
     });
     assert.equal(upsertArgs.create.role, "member");
+    assert.equal(upsertArgs.create.notificationLevel, "ALL");
+    assert.equal(upsertArgs.create.mutedAt, null);
     assert.deepEqual(upsertArgs.where.channelId_userId, {
       channelId: "channel-1",
       userId: "current-user",
@@ -875,6 +1012,7 @@ describe("Channel membership API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(jsonRequest({}), { params: Promise.resolve({ id: "private-1" }) });
@@ -882,6 +1020,41 @@ describe("Channel membership API route", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await responseJson(response), {
       error: "Private channels require an invitation",
+    });
+    assert.equal(upsertCalled, false);
+  });
+
+  test("enforces workspace public channel join policy", async () => {
+    process.env.SOCIAL_PUBLIC_CHANNEL_JOIN_POLICY = "WORKSPACE_ADMINS";
+    let upsertCalled = false;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-1", type: "PUBLIC", isArchived: false };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return null;
+        },
+        async upsert() {
+          upsertCalled = true;
+          return { role: "member" };
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/channels/[id]/membership/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("member-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
+    });
+
+    const response = await POST(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Workspace admin access required to join public channels",
     });
     assert.equal(upsertCalled, false);
   });
@@ -904,6 +1077,7 @@ describe("Channel membership API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await DELETE(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
@@ -931,6 +1105,7 @@ describe("Channel membership API route", () => {
       "next/server": nextServerMock,
       "@/lib/session": createAuthMock(),
       "@/lib/prisma": { prisma },
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await DELETE(jsonRequest({}), { params: Promise.resolve({ id: "channel-general" }) });
@@ -990,6 +1165,7 @@ describe("Channel members API route", () => {
       "@/lib/session": createAuthMock("owner-user", "USER"),
       "@/lib/prisma": { prisma },
       "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await GET(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
@@ -1044,6 +1220,7 @@ describe("Channel members API route", () => {
       "@/lib/session": createAuthMock("admin-user", "USER"),
       "@/lib/prisma": { prisma },
       "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(
@@ -1057,6 +1234,8 @@ describe("Channel members API route", () => {
       channelId: "channel-1",
       userId: "target-user",
       role: "member",
+      notificationLevel: "ALL",
+      mutedAt: null,
     });
     assert.equal(body.userId, "target-user");
     assert.equal(body.role, "member");
@@ -1087,6 +1266,7 @@ describe("Channel members API route", () => {
       "@/lib/session": createAuthMock("member-user", "USER"),
       "@/lib/prisma": { prisma },
       "@/lib/channelManagement": channelManagement,
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
     });
 
     const response = await POST(

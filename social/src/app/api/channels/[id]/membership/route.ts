@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import {
+  canJoinPublicChannel,
+  getDefaultMembershipPreferences,
+} from "@/lib/workspacePolicies";
 
 export async function POST(
   _req: Request,
@@ -38,6 +42,16 @@ export async function POST(
     );
   }
 
+  if (
+    channel.type === "PUBLIC" &&
+    !canJoinPublicChannel(session.user, existingMembership?.role)
+  ) {
+    return NextResponse.json(
+      { error: "Workspace admin access required to join public channels" },
+      { status: 403 },
+    );
+  }
+
   if (channel.type !== "PUBLIC" && channel.type !== "PRIVATE") {
     return NextResponse.json(
       { error: "Channel cannot be joined" },
@@ -57,6 +71,7 @@ export async function POST(
       channelId,
       userId: session.user.id,
       role: "member",
+      ...getDefaultMembershipPreferences(),
     },
     select: { role: true },
   });
