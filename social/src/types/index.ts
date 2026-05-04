@@ -20,7 +20,10 @@ export interface ChannelInfo {
   description: string | null;
   type: "PUBLIC" | "PRIVATE" | "DM" | "GROUP_DM";
   iconEmoji: string | null;
+  isDefault?: boolean;
   memberCount?: number;
+  messageCount?: number;
+  role?: string;
   unreadCount?: number;
 }
 

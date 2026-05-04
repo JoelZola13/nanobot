@@ -12,6 +12,7 @@ import {
   PencilLine,
   Plus,
   Search,
+  ShieldCheck,
   Sparkles,
   Users,
   X,
@@ -318,9 +319,21 @@ export default function Sidebar({ channels, dms, userId, mobileOpen = false, onM
                   ) : (
                     <Hash size={14} className="shrink-0" />
                   )}
-                  <span className={`truncate ${unread > 0 ? "font-semibold" : ""}`}>{ch.name || "unnamed"}</span>
+                  <span className={`truncate ${unread > 0 ? "font-semibold" : ""}`}>
+                    {ch.name || "unnamed"}
+                  </span>
+                  {ch.isDefault && (
+                    <ShieldCheck
+                      size={13}
+                      className="ml-auto shrink-0"
+                      style={{ color: "var(--sv-sidebar-muted)" }}
+                      aria-label="Default channel"
+                    />
+                  )}
                   {unread > 0 && (
-                    <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]">
+                    <span
+                      className={`${ch.isDefault ? "" : "ml-auto"} rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]`}
+                    >
                       {formatUnread(unread)}
                     </span>
                   )}

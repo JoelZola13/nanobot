@@ -59,6 +59,7 @@ model Channel {
   avatarUrl   String?     @map("avatar_url")
   createdById String?     @map("created_by_id")
   isArchived  Boolean     @default(false) @map("is_archived")
+  isDefault   Boolean     @default(false) @map("is_default")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 

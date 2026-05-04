@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureDefaultChannelsForUser,
+  sortDefaultChannelMemberships,
+} from "@/lib/defaultChannels";
 
 // GET /api/channels — list user's channels
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  await ensureDefaultChannelsForUser(session.user.id);
 
   const memberships = await prisma.channelMember.findMany({
     where: { userId: session.user.id },
@@ -19,16 +25,23 @@ export async function GET() {
   });
 
   return NextResponse.json(
-    memberships.map((m) => ({
-      id: m.channel.id,
-      name: m.channel.name,
-      slug: m.channel.slug,
-      description: m.channel.description,
-      type: m.channel.type,
-      iconEmoji: m.channel.iconEmoji,
-      memberCount: m.channel._count.members,
-      role: m.role,
-    })),
+    sortDefaultChannelMemberships(memberships)
+      .filter(
+        (m) =>
+          m.channel.type === "PUBLIC" || m.channel.type === "PRIVATE",
+      )
+      .map((m) => ({
+        id: m.channel.id,
+        name: m.channel.name,
+        slug: m.channel.slug,
+        description: m.channel.description,
+        type: m.channel.type,
+        iconEmoji: m.channel.iconEmoji,
+        isDefault: m.channel.isDefault,
+        memberCount: m.channel._count.members,
+        messageCount: m.channel._count.messages,
+        role: m.role,
+      })),
   );
 }
 

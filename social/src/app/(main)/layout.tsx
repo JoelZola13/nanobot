@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureDefaultChannelsForUser,
+  sortDefaultChannelMemberships,
+} from "@/lib/defaultChannels";
 import ResponsiveMessagesShell from "@/components/layout/ResponsiveMessagesShell";
 import SocketProvider from "@/components/providers/SocketProvider";
 import CallOverlay from "@/components/calls/CallOverlay";
@@ -14,8 +18,8 @@ export default async function MainLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-
   const userId = session.user.id;
+  await ensureDefaultChannelsForUser(userId);
 
   // Fetch user's channels and DMs
   const memberships = await prisma.channelMember.findMany({
@@ -37,7 +41,9 @@ export default async function MainLayout({
     orderBy: { channel: { updatedAt: "desc" } },
   });
 
-  const channels = memberships
+  const sortedMemberships = sortDefaultChannelMemberships(memberships);
+
+  const channels = sortedMemberships
     .filter(
       (m) =>
         m.channel.type === "PUBLIC" || m.channel.type === "PRIVATE",
@@ -49,10 +55,12 @@ export default async function MainLayout({
       description: m.channel.description,
       type: m.channel.type as "PUBLIC" | "PRIVATE",
       iconEmoji: m.channel.iconEmoji,
+      isDefault: m.channel.isDefault,
       memberCount: m.channel._count.members,
+      role: m.role,
     }));
 
-  const dms = memberships
+  const dms = sortedMemberships
     .filter(
       (m) => m.channel.type === "DM" || m.channel.type === "GROUP_DM",
     )

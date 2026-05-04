@@ -28,6 +28,7 @@ const AGENTS = [
 ];
 
 const CHANNELS = [
+  ["announcements", "Official team updates and workspace announcements.", true],
   ["executive", "Executive team discussions"],
   ["communication", "Communication and outreach"],
   ["content", "Content creation and editorial"],
@@ -36,7 +37,8 @@ const CHANNELS = [
   ["grant", "Grant writing and management"],
   ["research", "Research and insights"],
   ["scraping", "Data collection and scraping"],
-  ["general", "General discussion for everyone"],
+  ["general", "Team-wide discussion for everyday coordination.", true],
+  ["help", "Questions, blockers, and teammate support.", true],
   ["random", "Off-topic fun and banter"],
 ];
 
@@ -51,9 +53,9 @@ for (const [username, displayName, model] of AGENTS) {
 console.log(`  Done: ${AGENTS.length} agents\n`);
 
 console.log("Creating team channels...");
-for (const [name, desc] of CHANNELS) {
+for (const [name, desc, isDefault = false] of CHANNELS) {
   const id = `channel-${name}`;
-  psql(`INSERT INTO channels (id, name, slug, description, type, created_at, updated_at) VALUES ('${id}', '${name}', '${name}', '${desc}', 'PUBLIC', NOW(), NOW()) ON CONFLICT (slug) DO NOTHING`);
+  psql(`INSERT INTO channels (id, name, slug, description, type, is_default, created_at, updated_at) VALUES ('${id}', '${name}', '${name}', '${desc}', 'PUBLIC', ${isDefault}, NOW(), NOW()) ON CONFLICT (slug) DO UPDATE SET description = EXCLUDED.description, is_default = EXCLUDED.is_default, updated_at = NOW()`);
 }
 console.log(`  Done: ${CHANNELS.length} channels\n`);
 

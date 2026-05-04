@@ -40,7 +40,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Turn the DM landing page into a denser people directory.
 - [x] Separate online teammates, offline teammates, and AI agents.
 - [x] Add invite/onboarding copy for newly added teammates.
-- [ ] Add admin-managed default channels.
+- [x] Add admin-managed default channels.
 - [ ] Add profile popovers from DMs and mentions.
 
 ## Phase 4: Slack Workflows
