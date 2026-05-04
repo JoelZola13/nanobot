@@ -18,6 +18,25 @@ SOCIAL_POSTGRES_CONTAINER=nanobot-social-postgres npm run health
 SOCIAL_HEALTH_BRIDGE_SECRET=street-voices-social-bridge-2026 npm run health
 ```
 
+## API Tests
+
+Run the route-level Messages API coverage without touching live workspace data:
+
+```bash
+npm run test:api
+```
+
+The test runner covers DM creation, channel membership join/leave behavior, and the LibreChat session bridge fallback.
+
+## Production Deployment
+
+Use the production checklist in [Messages Production Deployment](../docs/messages-production-deployment.md) before promoting Social outside the local stack. The important pieces are:
+
+- `sv-social` runs the Social Next.js app on `3182` and Socket.IO on `3183`.
+- `social-postgres` is the only production database for Messages data.
+- nginx must route `/social` to Social HTTP and `/ws-social` to Social Socket.IO.
+- LibreChat and Social must share `LIBRECHAT_AUTH_BRIDGE_SECRET`.
+
 ## Getting Started
 
 This is a [Next.js](https://nextjs.org) app. For local development, run:
@@ -46,9 +65,3 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
