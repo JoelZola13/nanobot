@@ -1,0 +1,436 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { afterEach, describe, test } from "node:test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import Module from "node:module";
+import ts from "typescript";
+
+const ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+const nextServerMock = {
+  NextRequest: class NextRequest {},
+  NextResponse: {
+    json(body, init = {}) {
+      return Response.json(body, init);
+    },
+  },
+};
+
+const originalFetch = globalThis.fetch;
+const originalConsoleError = console.error;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  console.error = originalConsoleError;
+  delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
+});
+
+function loadTsModule(relativePath, mocks = {}) {
+  const filename = join(ROOT_DIR, relativePath);
+  const source = readFileSync(filename, "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    fileName: filename,
+    compilerOptions: {
+      esModuleInterop: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+
+  const loadedModule = new Module(filename);
+  loadedModule.filename = filename;
+  loadedModule.paths = Module._nodeModulePaths(dirname(filename));
+
+  const previousLoad = Module._load;
+  Module._load = (request, parent, isMain) => {
+    if (Object.prototype.hasOwnProperty.call(mocks, request)) {
+      return mocks[request];
+    }
+    return previousLoad(request, parent, isMain);
+  };
+
+  try {
+    loadedModule._compile(outputText, filename);
+  } finally {
+    Module._load = previousLoad;
+  }
+
+  return loadedModule.exports;
+}
+
+function jsonRequest(body) {
+  return {
+    async json() {
+      return body;
+    },
+  };
+}
+
+async function responseJson(response) {
+  return response.json();
+}
+
+function createAuthMock(userId = "current-user") {
+  return {
+    async auth() {
+      if (!userId) return null;
+      return { user: { id: userId, name: "Current User" } };
+    },
+  };
+}
+
+function createUnauthenticatedMocks() {
+  return {
+    "next/server": nextServerMock,
+    "@/lib/session": createAuthMock(null),
+    "@/lib/prisma": { prisma: {} },
+  };
+}
+
+describe("DM API route", () => {
+  test("rejects unauthenticated DM creation", async () => {
+    const { POST } = loadTsModule("src/app/api/dm/route.ts", createUnauthenticatedMocks());
+
+    const response = await POST(jsonRequest({ userId: "other-user" }));
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await responseJson(response), { error: "Unauthorized" });
+  });
+
+  test("requires the other user id", async () => {
+    const { POST } = loadTsModule("src/app/api/dm/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma: {} },
+    });
+
+    const response = await POST(jsonRequest({}));
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await responseJson(response), { error: "userId required" });
+  });
+
+  test("returns an existing DM instead of creating a duplicate", async () => {
+    let createCalled = false;
+    const prisma = {
+      user: {
+        async findUnique({ where }) {
+          if (where.id === "current-user") return { id: "current-user" };
+          if (where.id === "other-user") return { displayName: "Other User", username: "other" };
+          return null;
+        },
+      },
+      channel: {
+        async findFirst() {
+          return { id: "existing-dm", _count: { members: 2 } };
+        },
+        async create() {
+          createCalled = true;
+          return { id: "should-not-be-used" };
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/dm/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await POST(jsonRequest({ userId: "other-user" }));
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await responseJson(response), { channelId: "existing-dm" });
+    assert.equal(createCalled, false);
+  });
+
+  test("creates a two-member DM channel when none exists", async () => {
+    let createArgs;
+    const prisma = {
+      user: {
+        async findUnique({ where }) {
+          if (where.id === "current-user") return { id: "current-user" };
+          if (where.id === "other-user") return { displayName: "Other User", username: "other" };
+          return null;
+        },
+      },
+      channel: {
+        async findFirst() {
+          return null;
+        },
+        async create(args) {
+          createArgs = args;
+          return { id: "new-dm" };
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/dm/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await POST(jsonRequest({ userId: "other-user" }));
+
+    assert.equal(response.status, 201);
+    assert.deepEqual(await responseJson(response), { channelId: "new-dm" });
+    assert.equal(createArgs.data.type, "DM");
+    assert.equal(createArgs.data.slug, "dm-current-user-other-user");
+    assert.deepEqual(createArgs.data.members.create, [
+      { userId: "current-user", role: "member" },
+      { userId: "other-user", role: "member" },
+    ]);
+  });
+});
+
+describe("Channel membership API route", () => {
+  test("joins a public channel with a member role", async () => {
+    let upsertArgs;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-1", type: "PUBLIC", isArchived: false };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return null;
+        },
+        async upsert(args) {
+          upsertArgs = args;
+          return { role: "member" };
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/channels/[id]/membership/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await POST(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await responseJson(response), {
+      channelId: "channel-1",
+      isMember: true,
+      role: "member",
+    });
+    assert.equal(upsertArgs.create.role, "member");
+    assert.deepEqual(upsertArgs.where.channelId_userId, {
+      channelId: "channel-1",
+      userId: "current-user",
+    });
+  });
+
+  test("blocks joining a private channel without an existing membership", async () => {
+    let upsertCalled = false;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "private-1", type: "PRIVATE", isArchived: false };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return null;
+        },
+        async upsert() {
+          upsertCalled = true;
+          return { role: "member" };
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/channels/[id]/membership/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await POST(jsonRequest({}), { params: Promise.resolve({ id: "private-1" }) });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Private channels require an invitation",
+    });
+    assert.equal(upsertCalled, false);
+  });
+
+  test("leaves a non-default public channel", async () => {
+    let deleteArgs;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-1", type: "PUBLIC", isArchived: false, isDefault: false };
+        },
+      },
+      channelMember: {
+        async deleteMany(args) {
+          deleteArgs = args;
+        },
+      },
+    };
+    const { DELETE } = loadTsModule("src/app/api/channels/[id]/membership/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await DELETE(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await responseJson(response), { channelId: "channel-1", isMember: false });
+    assert.deepEqual(deleteArgs.where, { channelId: "channel-1", userId: "current-user" });
+  });
+
+  test("does not allow leaving a default channel", async () => {
+    let deleteCalled = false;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-general", type: "PUBLIC", isArchived: false, isDefault: true };
+        },
+      },
+      channelMember: {
+        async deleteMany() {
+          deleteCalled = true;
+        },
+      },
+    };
+    const { DELETE } = loadTsModule("src/app/api/channels/[id]/membership/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(),
+      "@/lib/prisma": { prisma },
+    });
+
+    const response = await DELETE(jsonRequest({}), { params: Promise.resolve({ id: "channel-general" }) });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await responseJson(response), {
+      error: "Default channels cannot be left",
+    });
+    assert.equal(deleteCalled, false);
+  });
+});
+
+describe("Social session bridge auth", () => {
+  const getString = (value) => {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  };
+
+  function loadSessionModule({ cookie = "", serverSession = null, socialUser = null } = {}) {
+    const upsertCalls = [];
+    const moduleExports = loadTsModule("src/lib/session.ts", {
+      "next-auth": {
+        async getServerSession() {
+          return serverSession;
+        },
+      },
+      "next/headers": {
+        headers() {
+          return {
+            get(name) {
+              return name.toLowerCase() === "cookie" ? cookie : "";
+            },
+          };
+        },
+      },
+      "./auth": { authOptions: {} },
+      "./socialIdentity": {
+        getString,
+        async upsertSocialUserFromIdentity(identity) {
+          upsertCalls.push(identity);
+          return socialUser;
+        },
+      },
+    });
+
+    return { moduleExports, upsertCalls };
+  }
+
+  test("uses an existing NextAuth session before calling the bridge", async () => {
+    const existingSession = { user: { id: "social-user" }, expires: "2099-01-01T00:00:00.000Z" };
+    globalThis.fetch = async () => {
+      throw new Error("bridge should not be called");
+    };
+    const { moduleExports } = loadSessionModule({ cookie: "refreshToken=token", serverSession: existingSession });
+
+    const session = await moduleExports.auth();
+
+    assert.equal(session, existingSession);
+  });
+
+  test("returns null when there is no session cookie", async () => {
+    globalThis.fetch = async () => {
+      throw new Error("bridge should not be called");
+    };
+    const { moduleExports } = loadSessionModule();
+
+    const session = await moduleExports.auth();
+
+    assert.equal(session, null);
+  });
+
+  test("creates a Social session from the LibreChat bridge user", async () => {
+    process.env.LIBRECHAT_AUTH_BRIDGE_URL = "http://bridge.test/session";
+    const bridgeRequests = [];
+    globalThis.fetch = async (url, options) => {
+      bridgeRequests.push({ url, options });
+      return Response.json({
+        user: {
+          id: "casdoor-user-1",
+          username: "jane",
+          name: "Jane Doe",
+          email: "jane@example.test",
+          avatar: "https://example.test/jane.png",
+        },
+      });
+    };
+    const { moduleExports, upsertCalls } = loadSessionModule({
+      cookie: "refreshToken=bridge-cookie",
+      socialUser: {
+        id: "social-user-1",
+        username: "jane",
+        displayName: "Jane Local",
+        email: "jane@example.test",
+        avatarUrl: "https://example.test/local.png",
+      },
+    });
+
+    const session = await moduleExports.auth();
+
+    assert.equal(bridgeRequests[0].url, "http://bridge.test/session");
+    assert.equal(bridgeRequests[0].options.headers.cookie, "refreshToken=bridge-cookie");
+    assert.deepEqual(upsertCalls[0], {
+      casdoorId: "casdoor-user-1",
+      username: "jane",
+      displayName: "Jane Doe",
+      email: "jane@example.test",
+      avatarUrl: "https://example.test/jane.png",
+    });
+    assert.equal(session.user.id, "social-user-1");
+    assert.equal(session.user.name, "Jane Local");
+    assert.equal(session.user.username, "jane");
+    assert.equal(session.user.casdoorId, "casdoor-user-1");
+  });
+
+  test("throws the bridge unavailable error when requested", async () => {
+    process.env.LIBRECHAT_AUTH_BRIDGE_URL = "http://bridge.test/session";
+    console.error = () => {};
+    globalThis.fetch = async () => new Response("bridge down", { status: 503 });
+    const { moduleExports } = loadSessionModule({ cookie: "refreshToken=bridge-cookie" });
+
+    await assert.rejects(
+      () => moduleExports.auth({ bridgeUnavailable: "throw" }),
+      (error) =>
+        error?.name === "LibreChatBridgeUnavailableError" &&
+        error?.status === 503 &&
+        String(error.message).includes("bridge down"),
+    );
+  });
+});
