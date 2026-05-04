@@ -21,10 +21,14 @@ const nextServerMock = {
 
 const originalFetch = globalThis.fetch;
 const originalConsoleError = console.error;
+const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   console.error = originalConsoleError;
+  console.log = originalConsoleLog;
+  console.warn = originalConsoleWarn;
   delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
 });
 
@@ -90,6 +94,28 @@ function createUnauthenticatedMocks() {
     "@/lib/prisma": { prisma: {} },
   };
 }
+
+describe("Social structured logs", () => {
+  test("writes stable JSON log entries", () => {
+    const lines = [];
+    console.warn = (line) => lines.push(line);
+    const { socialLog } = loadTsModule("src/lib/telemetry.ts");
+
+    socialLog("warn", "social.auth.bridge_unavailable", {
+      status: 503,
+      omitted: undefined,
+    });
+
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assert.equal(entry.level, "warn");
+    assert.equal(entry.service, "street-voices-social");
+    assert.equal(entry.event, "social.auth.bridge_unavailable");
+    assert.equal(entry.status, 503);
+    assert.equal(typeof entry.timestamp, "string");
+    assert.equal(Object.prototype.hasOwnProperty.call(entry, "omitted"), false);
+  });
+});
 
 describe("DM API route", () => {
   test("rejects unauthenticated DM creation", async () => {
@@ -325,6 +351,7 @@ describe("Social session bridge auth", () => {
 
   function loadSessionModule({ cookie = "", serverSession = null, socialUser = null } = {}) {
     const upsertCalls = [];
+    const telemetryCalls = [];
     const moduleExports = loadTsModule("src/lib/session.ts", {
       "next-auth": {
         async getServerSession() {
@@ -341,6 +368,11 @@ describe("Social session bridge auth", () => {
         },
       },
       "./auth": { authOptions: {} },
+      "./telemetry": {
+        socialLog(level, event, fields) {
+          telemetryCalls.push({ level, event, fields });
+        },
+      },
       "./socialIdentity": {
         getString,
         async upsertSocialUserFromIdentity(identity) {
@@ -350,7 +382,7 @@ describe("Social session bridge auth", () => {
       },
     });
 
-    return { moduleExports, upsertCalls };
+    return { moduleExports, upsertCalls, telemetryCalls };
   }
 
   test("uses an existing NextAuth session before calling the bridge", async () => {
@@ -421,9 +453,8 @@ describe("Social session bridge auth", () => {
 
   test("throws the bridge unavailable error when requested", async () => {
     process.env.LIBRECHAT_AUTH_BRIDGE_URL = "http://bridge.test/session";
-    console.error = () => {};
     globalThis.fetch = async () => new Response("bridge down", { status: 503 });
-    const { moduleExports } = loadSessionModule({ cookie: "refreshToken=bridge-cookie" });
+    const { moduleExports, telemetryCalls } = loadSessionModule({ cookie: "refreshToken=bridge-cookie" });
 
     await assert.rejects(
       () => moduleExports.auth({ bridgeUnavailable: "throw" }),
@@ -432,5 +463,13 @@ describe("Social session bridge auth", () => {
         error?.status === 503 &&
         String(error.message).includes("bridge down"),
     );
+
+    assert.equal(telemetryCalls.length, 1);
+    assert.equal(telemetryCalls[0].level, "error");
+    assert.equal(telemetryCalls[0].event, "social.auth.bridge_unavailable");
+    assert.equal(telemetryCalls[0].fields.status, 503);
+    assert.equal(telemetryCalls[0].fields.bridgeUnavailableMode, "throw");
+    assert.equal(telemetryCalls[0].fields.bridgeUrl, "http://bridge.test/session");
+    assert.match(telemetryCalls[0].fields.message, /bridge down/);
   });
 });

@@ -59,4 +59,4 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add Playwright coverage for sign-in, DM start, message send, reaction, thread, and call buttons.
 - [x] Add API tests for DM creation, channel membership, and Social session bridge.
 - [x] Add production deployment notes for the Social service and websocket routing.
-- [ ] Add telemetry or structured logs for auth bridge failures and socket disconnects.
+- [x] Add telemetry or structured logs for auth bridge failures and socket disconnects.
