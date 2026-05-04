@@ -26,6 +26,8 @@ interface SidebarProps {
   channels: ChannelInfo[];
   dms: (ChannelInfo & { otherUser?: { id: string; displayName: string; avatarUrl: string | null; isAgent: boolean; status: string } | null })[];
   userId: string;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 type SearchUser = {
@@ -43,7 +45,7 @@ const isEditableShortcutTarget = (target: EventTarget | null) => {
   return tagName === "input" || tagName === "textarea" || tagName === "select" || target.isContentEditable;
 };
 
-export default function Sidebar({ channels, dms, userId }: SidebarProps) {
+export default function Sidebar({ channels, dms, userId, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showNewDM, setShowNewDM] = useState(false);
@@ -189,6 +191,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
       setShowNewDM(false);
       setSearchQuery("");
       setSearchResults([]);
+      onMobileClose?.();
       router.push(`/dm/${channelId}`);
       router.refresh();
     }
@@ -197,7 +200,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
   return (
     <aside
       aria-label="Messages workspace"
-      className="w-[280px] h-screen flex flex-col shrink-0"
+      className={`sv-messages-sidebar flex h-screen w-[280px] shrink-0 flex-col ${mobileOpen ? "is-mobile-open" : ""}`}
       style={{
         background: "var(--sv-sidebar-bg)",
         borderRight: "1px solid var(--sv-sidebar-border)",
@@ -221,6 +224,15 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
               </div>
             </div>
             <ChevronDown size={14} className="shrink-0" style={{ color: "var(--sv-sidebar-muted)" }} />
+          </button>
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="sv-sidebar-mobile-close sidebar-icon-button h-9 w-9"
+            title="Close messages sidebar"
+            aria-label="Close messages sidebar"
+          >
+            <X size={16} />
           </button>
           <button
             type="button"
@@ -252,6 +264,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
         <div className="space-y-0.5">
           <Link
             href="/dm"
+            onClick={onMobileClose}
             className={`sidebar-item ${pathname === "/dm" ? "active" : ""}`}
           >
             <MessageSquare size={16} className="shrink-0" />
@@ -264,6 +277,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
           </Link>
           <Link
             href="/channels"
+            onClick={onMobileClose}
             className={`sidebar-item ${pathname === "/channels" ? "active" : ""}`}
           >
             <Users size={16} className="shrink-0" />
@@ -279,7 +293,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
         <div>
           <div className="mb-1 flex items-center justify-between px-3">
             <span className="sidebar-section-label">Channels</span>
-            <Link href="/channels" className="sidebar-icon-button h-6 w-6" title="Add channel">
+            <Link href="/channels" onClick={onMobileClose} className="sidebar-icon-button h-6 w-6" title="Add channel">
               <Plus size={14} />
             </Link>
           </div>
@@ -296,6 +310,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
                 <Link
                   key={ch.id}
                   href={`/channels/${ch.id}`}
+                  onClick={onMobileClose}
                   className={`sidebar-item ${active ? "active" : ""}`}
                 >
                   {ch.type === "PRIVATE" ? (
@@ -382,6 +397,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
                 <Link
                   key={dm.id}
                   href={`/dm/${dm.id}`}
+                  onClick={onMobileClose}
                   className={`sidebar-item ${active ? "active" : ""}`}
                 >
                   <Avatar
@@ -407,7 +423,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
           <div className="mb-1 flex items-center px-3">
             <span className="sidebar-section-label">AI agents</span>
           </div>
-          <Link href="/dm" className="sidebar-item">
+          <Link href="/dm" onClick={onMobileClose} className="sidebar-item">
             <Sparkles size={16} className="shrink-0 text-teal" />
             <span>Browse agents</span>
             {agentDmCount > 0 && <span className="badge-teal ml-auto">{agentDmCount}</span>}

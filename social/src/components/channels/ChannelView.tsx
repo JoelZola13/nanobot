@@ -335,7 +335,7 @@ export default function ChannelView({
   const threadParent = openThreadId ? messages.find((m) => m.id === openThreadId) : null;
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <div className="relative flex flex-1 min-h-0">
       <div className="flex flex-col flex-1 min-w-0">
         <MessageList
           messages={messages}

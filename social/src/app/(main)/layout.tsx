@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import Sidebar from "@/components/layout/Sidebar";
+import ResponsiveMessagesShell from "@/components/layout/ResponsiveMessagesShell";
 import SocketProvider from "@/components/providers/SocketProvider";
 import CallOverlay from "@/components/calls/CallOverlay";
 import IncomingCallModal from "@/components/calls/IncomingCallModal";
@@ -79,10 +79,9 @@ export default async function MainLayout({
 
   return (
     <SocketProvider userId={userId} channelIds={allChannelIds} userName={username}>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar channels={channels} dms={dms} userId={userId} />
-        <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
-      </div>
+      <ResponsiveMessagesShell channels={channels} dms={dms} userId={userId}>
+        {children}
+      </ResponsiveMessagesShell>
       <CallOverlay />
       <IncomingCallModal />
     </SocketProvider>

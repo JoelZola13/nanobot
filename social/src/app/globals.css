@@ -80,12 +80,14 @@
     display: flex !important;
   }
 
-  body:has(#sv-standalone-sidebar) .flex.h-screen.overflow-hidden {
+  body:has(#sv-standalone-sidebar) .flex.h-screen.overflow-hidden,
+  body:has(#sv-standalone-sidebar) .sv-messages-shell {
     margin-left: 260px !important;
     width: calc(100vw - 260px) !important;
   }
 
-  body:has(#sv-standalone-sidebar.sv-collapsed) .flex.h-screen.overflow-hidden {
+  body:has(#sv-standalone-sidebar.sv-collapsed) .flex.h-screen.overflow-hidden,
+  body:has(#sv-standalone-sidebar.sv-collapsed) .sv-messages-shell {
     margin-left: 56px !important;
     width: calc(100vw - 56px) !important;
   }
@@ -226,5 +228,104 @@
 
   .badge-teal {
     @apply badge bg-teal-muted text-teal;
+  }
+}
+
+@layer utilities {
+  .sv-messages-shell {
+    min-width: 0;
+    background: var(--sv-bg);
+    color: var(--sv-text-primary);
+  }
+
+  .sv-messages-sidebar {
+    display: flex;
+  }
+
+  .sv-mobile-sidebar-toggle,
+  .sv-mobile-sidebar-backdrop,
+  .sv-sidebar-mobile-close {
+    display: none;
+  }
+
+  @media (max-width: 920px) {
+    .sv-messages-sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 40;
+      width: min(84vw, 300px);
+      max-width: 300px;
+      transform: translateX(-100%);
+      box-shadow: 24px 0 50px rgba(0, 0, 0, 0.26);
+      transition: transform 180ms ease;
+    }
+
+    .sv-messages-sidebar.is-mobile-open {
+      transform: translateX(0);
+    }
+
+    .sv-mobile-sidebar-toggle {
+      position: fixed;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 35;
+      display: inline-flex;
+      height: 2.25rem;
+      width: 2.25rem;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      border: 1px solid var(--sv-border);
+      background: var(--sv-bg-elevated);
+      color: var(--sv-text-primary);
+      box-shadow: var(--sv-glass-shadow);
+      transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+    }
+
+    .sv-mobile-sidebar-toggle:hover {
+      background: var(--sv-bg-hover);
+      border-color: var(--sv-border);
+    }
+
+    .sv-mobile-sidebar-backdrop.is-mobile-open {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: block;
+      background: rgba(0, 0, 0, 0.42);
+    }
+
+    .sv-sidebar-mobile-close {
+      display: inline-flex;
+    }
+
+    .sv-messages-main > header {
+      padding-left: 3.75rem;
+    }
+
+    .sv-thread-panel {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      width: 100%;
+      border-left: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .sv-messages-sidebar {
+      width: min(88vw, 300px);
+    }
+
+    .sv-messages-main > header {
+      min-height: 3.5rem;
+      padding-right: 0.75rem;
+    }
+
+    .sv-messages-main > header .btn-ghost {
+      height: 2rem;
+      width: 2rem;
+      padding: 0;
+    }
   }
 }

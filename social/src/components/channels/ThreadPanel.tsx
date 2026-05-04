@@ -72,7 +72,7 @@ export default function ThreadPanel({ channelId, parentMessage, currentUserId: _
   };
 
   return (
-    <div className="w-[400px] border-l border-border flex flex-col bg-bg-base shrink-0">
+    <div className="sv-thread-panel w-[400px] border-l border-border flex flex-col bg-bg-base shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
