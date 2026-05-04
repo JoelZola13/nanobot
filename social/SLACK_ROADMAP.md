@@ -20,7 +20,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Surface channels, direct messages, agents, unreads, and presence in one scan-friendly rail.
 - [x] Add a compact compose/search entry point for starting DMs.
 - [x] Let the Social app own its Slack-style sidebar on `/social` routes instead of the injected platform sidebar.
-- [ ] Add a real quick switcher for channels, DMs, and agents.
+- [x] Add a real quick switcher for channels, DMs, and agents.
 - [ ] Add keyboard shortcuts for search, compose, and channel switching.
 - [ ] Add responsive behavior for narrow browser widths.
 

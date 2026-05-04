@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChannelInfo } from "@/types";
+import QuickSwitcher from "./QuickSwitcher";
 import { usePresenceStore } from "@/stores/presenceStore";
 import { useUnreadStore } from "@/stores/unreadStore";
 import { apiUrl } from "@/lib/apiUrl";
@@ -40,6 +41,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showNewDM, setShowNewDM] = useState(false);
+  const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -114,9 +116,9 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
           </button>
           <button
             type="button"
-            onClick={() => setShowNewDM(true)}
+            onClick={() => setShowQuickSwitcher(true)}
             className="sidebar-icon-button h-9 w-9"
-            title="New message"
+            title="Open quick switcher"
           >
             <PencilLine size={16} />
           </button>
@@ -124,11 +126,11 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
 
         <button
           type="button"
-          onClick={() => setShowNewDM(true)}
+          onClick={() => setShowQuickSwitcher(true)}
           className="sidebar-surface-button-muted w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
         >
           <Search size={14} />
-          <span className="truncate">Jump to or start a DM</span>
+          <span className="truncate">Jump to channel, DM, or agent</span>
           <kbd
             className="ml-auto rounded border px-1.5 py-0.5 text-2xs"
             style={{ borderColor: "var(--sv-sidebar-border)", color: "var(--sv-sidebar-muted)" }}
@@ -305,6 +307,13 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
         </div>
       </nav>
 
+      <QuickSwitcher
+        open={showQuickSwitcher}
+        onClose={() => setShowQuickSwitcher(false)}
+        channels={channels}
+        dms={dms}
+        userId={userId}
+      />
     </aside>
   );
 }
