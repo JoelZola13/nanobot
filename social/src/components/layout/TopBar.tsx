@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AtSign,
   Bell,
+  Bookmark,
   ChevronDown,
   Hash,
   Info,
@@ -22,7 +23,7 @@ import ProfilePopover from "@/components/users/ProfilePopover";
 interface TopBarProps {
   title: string;
   description?: string;
-  type?: "channel" | "dm" | "feed" | "profile" | "mentions";
+  type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved";
   memberCount?: number;
   channelId?: string;
   otherUserId?: string;
@@ -45,7 +46,7 @@ export default function TopBar({
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
   const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
-  const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : Users;
+  const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : type === "saved" ? Bookmark : Users;
 
   const handleCall = (callType: "audio" | "video") => {
     if (socket && otherUserId && channelId) {

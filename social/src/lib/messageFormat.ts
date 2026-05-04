@@ -13,6 +13,10 @@ type RawReaction = {
   userId: string;
 };
 
+type RawSavedItem = {
+  userId: string;
+};
+
 type RawAttachment = {
   id: string;
   fileName: string;
@@ -40,6 +44,7 @@ type RawMessage = {
   metadata?: unknown;
   author: RawAuthor;
   reactions?: RawReaction[];
+  savedItems?: RawSavedItem[];
   attachments?: RawAttachment[];
   replies?: RawReply[];
   _count?: { replies: number };
@@ -96,6 +101,7 @@ export function formatMessageForClient(msg: RawMessage, currentUserId: string): 
     createdAt: msg.createdAt.toISOString(),
     isEdited: msg.isEdited,
     isPinned: msg.isPinned,
+    isSaved: Boolean(msg.savedItems?.some((savedItem) => savedItem.userId === currentUserId)),
     parentId: msg.parentId,
     replyCount: msg._count?.replies ?? 0,
     threadPreview: buildThreadPreview(msg.replies),

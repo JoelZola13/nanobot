@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
+  Bookmark,
+  BookmarkCheck,
   Bot,
   Check,
   CheckCheck,
@@ -45,6 +47,7 @@ interface MessageListProps {
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
   onPin?: (messageId: string, isPinned: boolean) => void;
+  onToggleSaved?: (messageId: string, isSaved: boolean) => void;
   onOpenThread?: (messageId: string) => void;
 }
 
@@ -58,6 +61,7 @@ export default function MessageList({
   onEdit,
   onDelete,
   onPin,
+  onToggleSaved,
   onOpenThread,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -120,6 +124,7 @@ export default function MessageList({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onPin={onPin}
+                onToggleSaved={onToggleSaved}
                 onOpenThread={onOpenThread}
               />
             </div>
@@ -206,6 +211,7 @@ function MessageRow({
   onEdit,
   onDelete,
   onPin,
+  onToggleSaved,
   onOpenThread,
 }: {
   msg: MessageData;
@@ -218,6 +224,7 @@ function MessageRow({
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string) => void;
   onPin?: (messageId: string, isPinned: boolean) => void;
+  onToggleSaved?: (messageId: string, isSaved: boolean) => void;
   onOpenThread?: (messageId: string) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
@@ -227,6 +234,7 @@ function MessageRow({
   const [editContent, setEditContent] = useState(msg.content);
   const menuRef = useRef<HTMLDivElement>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveLabel = msg.isSaved ? "Remove from Later" : "Save for later";
 
   useEffect(() => {
     if (!showMenu && !showEmojiPicker) return;
@@ -446,6 +454,16 @@ function MessageRow({
         {/* Hover actions */}
         <div ref={menuRef} className="opacity-0 group-hover:opacity-100 flex items-start gap-0.5 pt-0.5 transition-opacity relative">
           <button
+            onClick={() => onToggleSaved?.(msg.id, Boolean(msg.isSaved))}
+            className={`p-1 rounded hover:bg-bg-hover transition-colors ${
+              msg.isSaved ? "text-accent" : "text-text-muted hover:text-text-primary"
+            }`}
+            title={saveLabel}
+            aria-label={saveLabel}
+          >
+            {msg.isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+          </button>
+          <button
             onClick={() => void handleCopyLink()}
             className="p-1 rounded hover:bg-bg-hover text-text-muted hover:text-text-primary transition-colors"
             title={copyNotice?.status === "copied" ? "Link copied" : "Copy message link"}
@@ -479,6 +497,10 @@ function MessageRow({
               <button onClick={() => { onPin?.(msg.id, msg.isPinned); setShowMenu(false); }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
                 <Pin size={12} /> {msg.isPinned ? "Unpin" : "Pin"} message
+              </button>
+              <button onClick={() => { onToggleSaved?.(msg.id, Boolean(msg.isSaved)); setShowMenu(false); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
+                {msg.isSaved ? <BookmarkCheck size={12} /> : <Bookmark size={12} />} {saveLabel}
               </button>
               <button onClick={() => { void handleCopyLink(); setShowMenu(false); }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">

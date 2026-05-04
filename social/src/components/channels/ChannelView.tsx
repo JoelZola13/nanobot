@@ -316,6 +316,17 @@ export default function ChannelView({
     }
   };
 
+  const handleToggleSaved = async (messageId: string, isSaved: boolean) => {
+    const res = await fetch(apiUrl("/api/saved"), {
+      method: isSaved ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId }),
+    });
+    if (res.ok) {
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, isSaved: !isSaved } : m));
+    }
+  };
+
   const handleOpenThread = (messageId: string) => {
     setOpenThreadId(messageId);
   };
@@ -412,6 +423,7 @@ export default function ChannelView({
           onEdit={handleEdit}
           onDelete={handleDelete}
           onPin={handlePin}
+          onToggleSaved={handleToggleSaved}
           onOpenThread={handleOpenThread}
         />
         <AgentActivity activities={agentActivities} />

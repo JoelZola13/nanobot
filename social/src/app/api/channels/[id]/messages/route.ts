@@ -33,6 +33,10 @@ export async function GET(
         select: { id: true, username: true, displayName: true, avatarUrl: true, isAgent: true },
       },
       reactions: { select: { emoji: true, userId: true } },
+      savedItems: {
+        where: { userId: session.user.id },
+        select: { userId: true },
+      },
       attachments: true,
       replies: {
         where: { deletedAt: null },

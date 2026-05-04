@@ -46,7 +46,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 ## Phase 4: Slack Workflows
 
 - [x] Mentions view.
-- [ ] Saved items / Later view.
+- [x] Saved items / Later view.
 - [ ] Channel browser with join/leave and private channel indicators.
 - [ ] Notification preferences per channel and DM.
 - [ ] File browser for shared attachments.

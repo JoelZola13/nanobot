@@ -34,6 +34,7 @@ export interface MessageData {
   createdAt: string;
   isEdited: boolean;
   isPinned: boolean;
+  isSaved?: boolean;
   parentId: string | null;
   replyCount?: number;
   threadPreview?: {

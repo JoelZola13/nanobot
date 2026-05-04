@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AtSign,
   Bot,
+  Bookmark,
   ChevronDown,
   Hash,
   Lock,
@@ -284,6 +285,14 @@ export default function Sidebar({ channels, dms, userId, mobileOpen = false, onM
           >
             <AtSign size={16} className="shrink-0" />
             <span>Mentions</span>
+          </Link>
+          <Link
+            href="/saved"
+            onClick={onMobileClose}
+            className={`sidebar-item ${pathname === "/saved" ? "active" : ""}`}
+          >
+            <Bookmark size={16} className="shrink-0" />
+            <span>Later</span>
           </Link>
           <Link
             href="/channels"

@@ -36,6 +36,7 @@ model User {
   sentRequests     Connection[]  @relation("sentRequests")
   receivedRequests Connection[]  @relation("receivedRequests")
   readReceipts     ReadReceipt[]
+  savedItems       SavedItem[]
 
   @@map("users")
 }
@@ -106,6 +107,7 @@ model Message {
   reactions     Reaction[]
   attachments   Attachment[]
   readReceipts  ReadReceipt[]
+  savedItems     SavedItem[]
 
   @@index([channelId, createdAt])
   @@index([parentId])
@@ -153,6 +155,20 @@ model ReadReceipt {
 
   @@unique([userId, channelId])
   @@map("read_receipts")
+}
+
+model SavedItem {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  messageId String   @map("message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId])
+  @@index([userId, createdAt])
+  @@map("saved_items")
 }
 
 // ─── Feed (social posts) ──────────────────────────────────────────

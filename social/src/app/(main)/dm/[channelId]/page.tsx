@@ -52,6 +52,10 @@ export default async function DMConversationPage({
         },
       },
       reactions: { select: { emoji: true, userId: true } },
+      savedItems: {
+        where: { userId: session.user.id },
+        select: { userId: true },
+      },
       attachments: true,
       replies: {
         where: { deletedAt: null },
