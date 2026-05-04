@@ -23,12 +23,18 @@ const originalFetch = globalThis.fetch;
 const originalConsoleError = console.error;
 const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
+const originalWindow = globalThis.window;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   console.error = originalConsoleError;
   console.log = originalConsoleLog;
   console.warn = originalConsoleWarn;
+  if (originalWindow === undefined) {
+    delete globalThis.window;
+  } else {
+    globalThis.window = originalWindow;
+  }
   delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
 });
 
@@ -217,6 +223,104 @@ describe("Message draft storage", () => {
     writeMessageDraft("user-1:channel:general", "second draft", storage);
     clearMessageDraft("user-1:channel:general", storage);
     assert.equal(readMessageDraft("user-1:channel:general", storage), "");
+  });
+});
+
+describe("Browser notification helpers", () => {
+  function createStorage() {
+    const values = new Map();
+    return {
+      getItem(key) {
+        return values.get(key) ?? null;
+      },
+      setItem(key, value) {
+        values.set(key, value);
+      },
+    };
+  }
+
+  test("shows the quiet prompt only while permission is undecided and not dismissed", () => {
+    const storage = createStorage();
+    class FakeNotification {
+      static permission = "default";
+      static requestPermission = async () => "granted";
+    }
+    globalThis.window = {
+      Notification: FakeNotification,
+      localStorage: storage,
+    };
+    const {
+      dismissBrowserNotificationPrompt,
+      shouldShowBrowserNotificationPrompt,
+    } = loadTsModule("src/lib/browserNotifications.ts");
+
+    assert.equal(shouldShowBrowserNotificationPrompt(storage), true);
+    dismissBrowserNotificationPrompt(storage);
+    assert.equal(shouldShowBrowserNotificationPrompt(storage), false);
+  });
+
+  test("creates a clickable message notification for granted permission", () => {
+    const notifications = [];
+    let focused = false;
+    class FakeNotification {
+      static permission = "granted";
+      static requestPermission = async () => "granted";
+
+      constructor(title, options) {
+        this.title = title;
+        this.options = options;
+        this.closed = false;
+        notifications.push(this);
+      }
+
+      close() {
+        this.closed = true;
+      }
+    }
+    globalThis.window = {
+      Notification: FakeNotification,
+      localStorage: createStorage(),
+      location: { href: "" },
+      focus() {
+        focused = true;
+      },
+    };
+    const { showBrowserMessageNotification } = loadTsModule("src/lib/browserNotifications.ts");
+
+    const notification = showBrowserMessageNotification(
+      {
+        id: "message-1",
+        channelId: "channel-1",
+        content: "**Hello** [team](https://example.test)",
+        createdAt: "2026-05-04T12:00:00.000Z",
+        isEdited: false,
+        isPinned: false,
+        parentId: null,
+        author: {
+          id: "user-2",
+          username: "alex",
+          displayName: "Alex Rivera",
+          avatarUrl: "https://example.test/alex.png",
+          isAgent: false,
+        },
+        reactions: [],
+        attachments: [],
+      },
+      {
+        label: "general",
+        href: "/channels/channel-1",
+        type: "channel",
+      },
+    );
+
+    assert.equal(notification, notifications[0]);
+    assert.equal(notifications[0].title, "Alex Rivera in #general");
+    assert.equal(notifications[0].options.body, "Hello team");
+    assert.equal(notifications[0].options.icon, "https://example.test/alex.png");
+    notifications[0].onclick();
+    assert.equal(focused, true);
+    assert.equal(globalThis.window.location.href, "/channels/channel-1");
+    assert.equal(notifications[0].closed, true);
   });
 });
 

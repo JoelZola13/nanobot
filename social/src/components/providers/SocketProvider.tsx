@@ -13,6 +13,10 @@ import {
   messageMentionsUsername,
   type NotificationLevel,
 } from "@/lib/notificationPreferences";
+import {
+  showBrowserMessageNotification,
+  type BrowserNotificationDestination,
+} from "@/lib/browserNotifications";
 import type { MessageData } from "@/types";
 
 const SocketContext = createContext<Socket | null>(null);
@@ -28,18 +32,21 @@ export default function SocketProvider({
   userId,
   channelIds,
   userName,
+  notificationDestinations = {},
   notificationPreferences = {},
   children,
 }: {
   userId: string;
   channelIds: string[];
   userName?: string;
+  notificationDestinations?: Record<string, BrowserNotificationDestination>;
   notificationPreferences?: Record<string, NotificationLevel>;
   children: React.ReactNode;
 }) {
   const [socketState, setSocketState] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const notificationPreferencesRef = useRef(notificationPreferences);
+  const notificationDestinationsRef = useRef(notificationDestinations);
   const setPresence = usePresenceStore((s) => s.setStatus);
   const setAllPresence = usePresenceStore((s) => s.setAll);
   const incrementUnread = useUnreadStore((s) => s.increment);
@@ -48,6 +55,10 @@ export default function SocketProvider({
   useEffect(() => {
     notificationPreferencesRef.current = notificationPreferences;
   }, [notificationPreferences]);
+
+  useEffect(() => {
+    notificationDestinationsRef.current = notificationDestinations;
+  }, [notificationDestinations]);
 
   useEffect(() => {
     const handleNotificationPreference = (event: Event) => {
@@ -138,6 +149,10 @@ export default function SocketProvider({
       // Play notification sound if window is not focused
       if (document.hidden) {
         playMessageSound();
+        showBrowserMessageNotification(
+          msg,
+          notificationDestinationsRef.current[msg.channelId],
+        );
       }
     });
 

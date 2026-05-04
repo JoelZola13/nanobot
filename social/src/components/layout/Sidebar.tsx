@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { ChannelInfo } from "@/types";
 import QuickSwitcher, { type QuickSwitcherMode } from "./QuickSwitcher";
+import BrowserNotificationPrompt from "./BrowserNotificationPrompt";
 import { usePresenceStore } from "@/stores/presenceStore";
 import { useUnreadStore } from "@/stores/unreadStore";
 import { apiUrl } from "@/lib/apiUrl";
@@ -264,6 +265,8 @@ export default function Sidebar({ channels, dms, userId, mobileOpen = false, onM
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+        <BrowserNotificationPrompt />
+
         <div className="space-y-0.5">
           <Link
             href="/dm"

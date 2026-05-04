@@ -65,5 +65,5 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 
 - [x] Hydrate sidebar unread counts from persisted read receipts after reloads.
 - [x] Add draft persistence per channel and DM.
-- [ ] Add browser notifications with a quiet permission prompt.
+- [x] Add browser notifications with a quiet permission prompt.
 - [ ] Add channel creation and edit controls for workspace admins.

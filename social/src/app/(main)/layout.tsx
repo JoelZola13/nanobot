@@ -108,12 +108,31 @@ export default async function MainLayout({
       normalizeNotificationLevel(membership.notificationLevel, membership.mutedAt),
     ]),
   );
+  const notificationDestinations = Object.fromEntries([
+    ...channels.map((channel) => [
+      channel.id,
+      {
+        label: channel.name || "channel",
+        href: `/channels/${channel.id}`,
+        type: "channel" as const,
+      },
+    ]),
+    ...dms.map((dm) => [
+      dm.id,
+      {
+        label: dm.name || "Direct message",
+        href: `/dm/${dm.id}`,
+        type: dm.type === "GROUP_DM" ? "group_dm" as const : "dm" as const,
+      },
+    ]),
+  ]);
 
   return (
     <SocketProvider
       userId={userId}
       channelIds={allChannelIds}
       userName={username}
+      notificationDestinations={notificationDestinations}
       notificationPreferences={notificationPreferences}
     >
       <ResponsiveMessagesShell
