@@ -50,7 +50,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Channel browser with join/leave and private channel indicators.
 - [x] Notification preferences per channel and DM.
 - [x] File browser for shared attachments.
-- [ ] Search filters by sender, channel, date, and attachment type.
+- [x] Search filters by sender, channel, date, and attachment type.
 
 ## Phase 5: Reliability
 
