@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import os
+
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -21,6 +23,20 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
+
+# ── Local 3180 Analytics (sandboxed mount, gated on ANALYTICS_ENABLED) ──
+# Branch: local/analytics-platform. If ANALYTICS_ENABLED is unset/false the
+# import below is still safe (no side effects at import time), and the routes
+# / lifespan wrapper are simply not applied.
+_ANALYTICS_ENABLED = os.environ.get("ANALYTICS_ENABLED", "").lower() in ("1", "true", "yes")
+if _ANALYTICS_ENABLED:
+    from nanobot.analytics_collector import (
+        build_routes as _build_analytics_routes,
+        attach_to_lifespan as _attach_analytics_lifespan,
+    )
+    logger.info("analytics_collector: enabled, /api/analytics/* routes will be mounted")
+else:
+    logger.info("analytics_collector: disabled (set ANALYTICS_ENABLED=1 to enable)")
 
 # ── Gallery API (lazy import to avoid circular deps) ──
 from nanobot.gallery_api import (
@@ -6927,6 +6943,8 @@ app = Starlette(
         # ── Mission Control dashboard ──
         Route("/dashboard", serve_dashboard, methods=["GET"]),
         Mount("/static", app=StaticFiles(directory=str(GATEWAY_STATIC_DIR)), name="gateway-static"),
+        # ── Local 3180 Analytics (gated on ANALYTICS_ENABLED) ──────────
+        *(_build_analytics_routes() if _ANALYTICS_ENABLED else []),
         # ── WebSocket gateway ──
         WebSocketRoute("/ws", gateway_ws),
     ],
@@ -6938,5 +6956,5 @@ app = Starlette(
             allow_headers=["*"],
         ),
     ],
-    lifespan=lifespan,
+    lifespan=_attach_analytics_lifespan(lifespan) if _ANALYTICS_ENABLED else lifespan,
 )
