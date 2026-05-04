@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AtSign,
+  Bell,
   Bot,
   Bookmark,
   ChevronDown,
@@ -280,6 +281,14 @@ export default function Sidebar({ channels, dms, userId, mobileOpen = false, onM
                 {formatUnread(dmUnreadTotal)}
               </span>
             )}
+          </Link>
+          <Link
+            href="/activity"
+            onClick={onMobileClose}
+            className={`sidebar-item ${pathname === "/activity" ? "active" : ""}`}
+          >
+            <Bell size={16} className="shrink-0" />
+            <span>Activity</span>
           </Link>
           <Link
             href="/mentions"

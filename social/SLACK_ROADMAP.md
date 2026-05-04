@@ -95,3 +95,10 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add a visible copied-link recovery affordance when clipboard access is blocked.
 - [x] Add permalink smoke coverage for highlighted messages inside the embedded Social app.
 - [x] Add a compact jump-to-mentioned-message treatment for mentions and saved items.
+
+## Phase 11: Activity Inbox
+
+- [x] Add a Slack-style Activity page that combines mentions and saved follow-ups.
+- [ ] Add activity filters for mentions, saved items, threads, and reactions.
+- [ ] Add unread activity badges backed by persisted activity state.
+- [ ] Add notification preference shortcuts from Activity rows.

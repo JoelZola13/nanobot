@@ -345,6 +345,115 @@ describe("Message deep links", () => {
   });
 });
 
+describe("Activity inbox helpers", () => {
+  test("merges mentions and saved items by newest activity", () => {
+    const { mergeActivityItems } = loadTsModule("src/lib/activity.ts", {
+      "@/lib/mentions": {},
+      "@/lib/savedItems": {},
+    });
+
+    const author = {
+      id: "user-1",
+      username: "joel",
+      displayName: "Joel Zola",
+      avatarUrl: null,
+      isAgent: false,
+    };
+    const mentions = [
+      {
+        id: "mention-old",
+        channelId: "channel-general",
+        content: "@joel can you check this?",
+        createdAt: "2026-05-01T10:00:00.000Z",
+        href: "/channels/channel-general?message=mention-old",
+        channelLabel: "#general",
+        channelType: "PUBLIC",
+        author,
+      },
+    ];
+    const savedItems = [
+      {
+        id: "saved-new",
+        messageId: "message-new",
+        channelId: "dm-1",
+        content: "Follow up here.",
+        createdAt: "2026-05-01T09:00:00.000Z",
+        savedAt: "2026-05-02T10:00:00.000Z",
+        href: "/dm/dm-1?message=message-new",
+        channelLabel: "Alex Rivera",
+        channelType: "DM",
+        author,
+      },
+    ];
+
+    const items = mergeActivityItems({ mentions, savedItems });
+
+    assert.equal(items.length, 2);
+    assert.equal(items[0].id, "saved:saved-new");
+    assert.equal(items[0].kind, "saved");
+    assert.equal(items[1].id, "mention:mention-old");
+    assert.equal(items[1].kind, "mention");
+  });
+
+  test("limits merged activity items after sorting", () => {
+    const { mergeActivityItems } = loadTsModule("src/lib/activity.ts", {
+      "@/lib/mentions": {},
+      "@/lib/savedItems": {},
+    });
+
+    const author = {
+      id: "user-1",
+      username: "joel",
+      displayName: "Joel Zola",
+      avatarUrl: null,
+      isAgent: false,
+    };
+    const mentions = [
+      {
+        id: "mention-new",
+        channelId: "channel-general",
+        content: "@joel newer",
+        createdAt: "2026-05-03T10:00:00.000Z",
+        href: "/channels/channel-general?message=mention-new",
+        channelLabel: "#general",
+        channelType: "PUBLIC",
+        author,
+      },
+      {
+        id: "mention-old",
+        channelId: "channel-general",
+        content: "@joel older",
+        createdAt: "2026-05-01T10:00:00.000Z",
+        href: "/channels/channel-general?message=mention-old",
+        channelLabel: "#general",
+        channelType: "PUBLIC",
+        author,
+      },
+    ];
+    const savedItems = [
+      {
+        id: "saved-middle",
+        messageId: "message-middle",
+        channelId: "dm-1",
+        content: "Follow up.",
+        createdAt: "2026-05-02T08:00:00.000Z",
+        savedAt: "2026-05-02T10:00:00.000Z",
+        href: "/dm/dm-1?message=message-middle",
+        channelLabel: "Alex Rivera",
+        channelType: "DM",
+        author,
+      },
+    ];
+
+    const items = mergeActivityItems({ mentions, savedItems, limit: 2 });
+
+    assert.deepEqual(
+      items.map((item) => item.id),
+      ["mention:mention-new", "saved:saved-middle"],
+    );
+  });
+});
+
 describe("Browser notification helpers", () => {
   function createStorage() {
     const values = new Map();

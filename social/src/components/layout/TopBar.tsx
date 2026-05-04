@@ -32,7 +32,7 @@ import type { NotificationLevel } from "@/lib/notificationPreferences";
 interface TopBarProps {
   title: string;
   description?: string;
-  type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved";
+  type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved" | "activity";
   memberCount?: number;
   detailsMemberCount?: number;
   channelVisibility?: "PUBLIC" | "PRIVATE";
@@ -79,7 +79,16 @@ export default function TopBar({
   const isOffline = type === "dm" && currentDescription?.toLowerCase() === "offline";
   const subtitle = currentDescription || (memberCount !== undefined ? `${memberCount} members` : undefined);
   const resolvedDetailsMemberCount = detailsMemberCount ?? memberCount;
-  const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : type === "saved" ? Bookmark : Users;
+  const HeaderIcon =
+    type === "channel"
+      ? Hash
+      : type === "mentions"
+        ? AtSign
+        : type === "saved"
+          ? Bookmark
+          : type === "activity"
+            ? Bell
+            : Users;
   const NotificationIcon = notificationLevel === "MUTED" ? BellOff : Bell;
 
   const handleCall = (callType: "audio" | "video") => {
