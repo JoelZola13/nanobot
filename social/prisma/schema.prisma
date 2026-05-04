@@ -74,9 +74,10 @@ model ChannelMember {
   id        String    @id @default(cuid())
   channelId String    @map("channel_id")
   userId    String    @map("user_id")
-  role      String    @default("member")
-  joinedAt  DateTime  @default(now()) @map("joined_at")
-  mutedAt   DateTime? @map("muted_at")
+  role              String    @default("member")
+  joinedAt          DateTime  @default(now()) @map("joined_at")
+  mutedAt           DateTime? @map("muted_at")
+  notificationLevel String    @default("ALL") @map("notification_level")
 
   channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

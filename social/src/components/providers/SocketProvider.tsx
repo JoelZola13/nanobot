@@ -8,6 +8,11 @@ import { useUnreadStore } from "@/stores/unreadStore";
 import { useCallStore } from "@/stores/callStore";
 import { playMessageSound, playCallRingtone, stopCallRingtone } from "@/lib/sounds";
 import { createPeerConnection, getLocalMedia, createOffer, createAnswer } from "@/lib/webrtc";
+import {
+  isNotificationLevel,
+  messageMentionsUsername,
+  type NotificationLevel,
+} from "@/lib/notificationPreferences";
 import type { MessageData } from "@/types";
 
 const SocketContext = createContext<Socket | null>(null);
@@ -23,19 +28,53 @@ export default function SocketProvider({
   userId,
   channelIds,
   userName,
+  notificationPreferences = {},
   children,
 }: {
   userId: string;
   channelIds: string[];
   userName?: string;
+  notificationPreferences?: Record<string, NotificationLevel>;
   children: React.ReactNode;
 }) {
   const [socketState, setSocketState] = useState<Socket | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const notificationPreferencesRef = useRef(notificationPreferences);
   const setPresence = usePresenceStore((s) => s.setStatus);
   const setAllPresence = usePresenceStore((s) => s.setAll);
   const incrementUnread = useUnreadStore((s) => s.increment);
   const { setIncomingCall, setLocalStream, setRemoteStream, endCall } = useCallStore.getState();
+
+  useEffect(() => {
+    notificationPreferencesRef.current = notificationPreferences;
+  }, [notificationPreferences]);
+
+  useEffect(() => {
+    const handleNotificationPreference = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        channelId?: string;
+        level?: unknown;
+      };
+
+      if (!detail?.channelId || !isNotificationLevel(detail.level)) return;
+
+      notificationPreferencesRef.current = {
+        ...notificationPreferencesRef.current,
+        [detail.channelId]: detail.level,
+      };
+    };
+
+    window.addEventListener(
+      "social:notification-preference",
+      handleNotificationPreference,
+    );
+    return () => {
+      window.removeEventListener(
+        "social:notification-preference",
+        handleNotificationPreference,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const socket = getSocket(userId);
@@ -81,6 +120,19 @@ export default function SocketProvider({
 
     // ── Unread + Notification Sounds ──
     socket.on("message:new", (msg: MessageData) => {
+      if (msg.author.id === userId) return;
+
+      const notificationLevel =
+        notificationPreferencesRef.current[msg.channelId] || "ALL";
+
+      if (notificationLevel === "MUTED") return;
+      if (
+        notificationLevel === "MENTIONS" &&
+        !messageMentionsUsername(msg.content, userName)
+      ) {
+        return;
+      }
+
       // Track unread for channels not currently viewed
       incrementUnread(msg.channelId);
       // Play notification sound if window is not focused
