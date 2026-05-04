@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -11,10 +12,15 @@ import {
 } from "react";
 import TopBar from "@/components/layout/TopBar";
 import {
+  ArrowRight,
+  Check,
+  Globe2,
   Hash,
   Lock,
+  LogOut,
   MessageSquare,
   Plus,
+  Search,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -28,15 +34,21 @@ type ChannelSummary = {
   type: "PUBLIC" | "PRIVATE" | "DM" | "GROUP_DM";
   iconEmoji: string | null;
   isDefault?: boolean;
+  isMember?: boolean;
   memberCount?: number;
   messageCount?: number;
   role?: string;
 };
 
+type ChannelVisibility = "PUBLIC" | "PRIVATE";
+
 const formatCount = (count: number | undefined, label: string) => {
   const value = count ?? 0;
   return `${value} ${label}${value === 1 ? "" : "s"}`;
 };
+
+const normalizeChannelName = (channel: ChannelSummary) =>
+  channel.name || channel.slug || "unnamed";
 
 export default function ChannelsPage() {
   const router = useRouter();
@@ -46,7 +58,10 @@ export default function ChannelsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [channelType, setChannelType] = useState<ChannelVisibility>("PUBLIC");
   const [creating, setCreating] = useState(false);
+  const [busyChannelId, setBusyChannelId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   const loadChannels = useCallback(async () => {
     setLoading(true);
@@ -58,10 +73,15 @@ export default function ChannelsPage() {
 
       const data = (await res.json()) as ChannelSummary[];
       setChannels(
-        data.filter(
-          (channel) =>
-            channel.type === "PUBLIC" || channel.type === "PRIVATE",
-        ),
+        data
+          .filter(
+            (channel) =>
+              channel.type === "PUBLIC" || channel.type === "PRIVATE",
+          )
+          .map((channel) => ({
+            ...channel,
+            isMember: Boolean(channel.isMember),
+          })),
       );
     } catch {
       setError("Channels could not load.");
@@ -74,13 +94,48 @@ export default function ChannelsPage() {
     void loadChannels();
   }, [loadChannels]);
 
+  const visibleChannels = useMemo(() => {
+    const trimmedQuery = query.trim().toLowerCase();
+    if (!trimmedQuery) return channels;
+
+    return channels.filter((channel) => {
+      const haystack = [
+        channel.name,
+        channel.slug,
+        channel.description,
+        channel.type === "PRIVATE" ? "private" : "public",
+        channel.isMember ? "joined" : "available",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(trimmedQuery);
+    });
+  }, [channels, query]);
+
   const defaultChannels = useMemo(
-    () => channels.filter((channel) => channel.isDefault),
-    [channels],
+    () => visibleChannels.filter((channel) => channel.isDefault),
+    [visibleChannels],
   );
-  const customChannels = useMemo(
-    () => channels.filter((channel) => !channel.isDefault),
-    [channels],
+  const joinedChannels = useMemo(
+    () =>
+      visibleChannels.filter(
+        (channel) =>
+          channel.isMember && !channel.isDefault && channel.type === "PUBLIC",
+      ),
+    [visibleChannels],
+  );
+  const privateChannels = useMemo(
+    () => visibleChannels.filter((channel) => channel.type === "PRIVATE"),
+    [visibleChannels],
+  );
+  const browseChannels = useMemo(
+    () =>
+      visibleChannels.filter(
+        (channel) => !channel.isMember && channel.type === "PUBLIC",
+      ),
+    [visibleChannels],
   );
 
   const handleCreate = async (e: FormEvent) => {
@@ -93,7 +148,7 @@ export default function ChannelsPage() {
       const res = await fetch(apiUrl("/api/channels"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, description }),
+        body: JSON.stringify({ name, description, type: channelType }),
       });
       if (!res.ok) throw new Error("Failed to create channel");
 
@@ -107,35 +162,122 @@ export default function ChannelsPage() {
     }
   };
 
+  const updateChannelMembership = (
+    channelId: string,
+    isMember: boolean,
+    role?: string,
+  ) => {
+    setChannels((currentChannels) =>
+      currentChannels.map((channel) => {
+        if (channel.id !== channelId) return channel;
+        const wasMember = Boolean(channel.isMember);
+        const memberDelta = isMember && !wasMember ? 1 : !isMember && wasMember ? -1 : 0;
+
+        return {
+          ...channel,
+          isMember,
+          role: isMember ? role || "member" : undefined,
+          memberCount: Math.max((channel.memberCount || 0) + memberDelta, 0),
+        };
+      }),
+    );
+  };
+
+  const handleJoin = async (channel: ChannelSummary) => {
+    if (busyChannelId) return;
+    setBusyChannelId(channel.id);
+    setError(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/channels/${channel.id}/membership`), {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to join channel");
+
+      const data = await res.json();
+      updateChannelMembership(channel.id, true, data.role);
+      router.refresh();
+    } catch {
+      setError(`#${normalizeChannelName(channel)} could not be joined.`);
+    } finally {
+      setBusyChannelId(null);
+    }
+  };
+
+  const handleLeave = async (channel: ChannelSummary) => {
+    if (busyChannelId || channel.isDefault) return;
+    setBusyChannelId(channel.id);
+    setError(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/channels/${channel.id}/membership`), {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to leave channel");
+
+      updateChannelMembership(channel.id, false);
+      router.refresh();
+    } catch {
+      setError(`#${normalizeChannelName(channel)} could not be left.`);
+    } finally {
+      setBusyChannelId(null);
+    }
+  };
+
+  const hasVisibleChannels = visibleChannels.length > 0;
+
   return (
     <>
-      <TopBar title="Channels" type="channel" />
+      <TopBar
+        title="Channels"
+        type="channel"
+        description="Browse workspace channels"
+      />
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto py-8 px-4">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-heading text-xl font-semibold text-text-primary">
-              Your Channels
-            </h2>
+        <div className="mx-auto max-w-4xl px-4 py-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="font-heading text-xl font-semibold text-text-primary">
+                Channel browser
+              </h2>
+              <p className="text-sm text-text-muted">
+                {loading
+                  ? "Loading workspace channels"
+                  : formatCount(channels.length, "workspace channel")}
+              </p>
+            </div>
             <button
+              type="button"
               onClick={() => setShowCreate(!showCreate)}
-              className="btn-primary flex items-center gap-2 text-sm"
+              className="btn-primary inline-flex items-center gap-2 self-start text-sm"
             >
               <Plus size={16} />
               <span>New Channel</span>
             </button>
           </div>
 
+          <div className="mb-5 flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2">
+            <Search size={16} className="shrink-0 text-text-muted" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search channels"
+              className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+            />
+          </div>
+
           {showCreate && (
             <form
               onSubmit={handleCreate}
-              className="bg-bg-surface border border-border rounded-lg p-6 mb-6 space-y-4"
+              className="mb-6 space-y-4 rounded-lg border border-border bg-bg-surface p-5"
             >
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">
-                  Channel Name
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                  Channel name
                 </label>
                 <div className="flex items-center gap-2">
-                  <Hash size={16} className="text-text-muted shrink-0" />
+                  <Hash size={16} className="shrink-0 text-text-muted" />
                   <input
                     type="text"
                     value={name}
@@ -146,10 +288,37 @@ export default function ChannelsPage() {
                   />
                 </div>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                  Visibility
+                </label>
+                <div
+                  className="grid gap-2 sm:grid-cols-2"
+                  role="group"
+                  aria-label="Channel visibility"
+                >
+                  <VisibilityButton
+                    active={channelType === "PUBLIC"}
+                    icon={<Globe2 size={15} />}
+                    title="Public"
+                    subtitle="Open access"
+                    onClick={() => setChannelType("PUBLIC")}
+                  />
+                  <VisibilityButton
+                    active={channelType === "PRIVATE"}
+                    icon={<Lock size={15} />}
+                    title="Private"
+                    subtitle="Invite-only"
+                    onClick={() => setChannelType("PRIVATE")}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
                   Description{" "}
-                  <span className="text-text-muted font-normal">
+                  <span className="font-normal text-text-muted">
                     (optional)
                   </span>
                 </label>
@@ -190,23 +359,45 @@ export default function ChannelsPage() {
             <div className="rounded-lg border border-border bg-bg-surface px-4 py-10 text-center text-sm text-text-muted">
               Loading channels...
             </div>
-          ) : channels.length > 0 ? (
+          ) : hasVisibleChannels ? (
             <div className="space-y-6">
               <ChannelSection
                 title="Default channels"
                 channels={defaultChannels}
+                busyChannelId={busyChannelId}
+                onJoin={handleJoin}
+                onLeave={handleLeave}
               />
-              <ChannelSection title="Custom channels" channels={customChannels} />
+              <ChannelSection
+                title="Your public channels"
+                channels={joinedChannels}
+                busyChannelId={busyChannelId}
+                onJoin={handleJoin}
+                onLeave={handleLeave}
+              />
+              <ChannelSection
+                title="Private channels"
+                channels={privateChannels}
+                busyChannelId={busyChannelId}
+                onJoin={handleJoin}
+                onLeave={handleLeave}
+              />
+              <ChannelSection
+                title="Browse public channels"
+                channels={browseChannels}
+                busyChannelId={busyChannelId}
+                onJoin={handleJoin}
+                onLeave={handleLeave}
+              />
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Users size={48} className="mx-auto text-text-muted mb-3" />
-              <h3 className="font-heading text-lg font-semibold text-text-primary mb-1">
-                Create your first channel
+            <div className="rounded-lg border border-border bg-bg-surface px-6 py-12 text-center">
+              <Users size={42} className="mx-auto mb-3 text-text-muted" />
+              <h3 className="font-heading text-lg font-semibold text-text-primary">
+                No matching channels
               </h3>
-              <p className="text-sm text-text-muted">
-                Channels are where your team communicates. Create one for each
-                team, project, or topic.
+              <p className="mt-1 text-sm text-text-muted">
+                No channels match this search.
               </p>
             </div>
           )}
@@ -216,68 +407,184 @@ export default function ChannelsPage() {
   );
 }
 
+function VisibilityButton({
+  active,
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+        active
+          ? "border-accent bg-accent-muted text-accent"
+          : "border-border bg-bg-base text-text-secondary hover:border-accent/60 hover:text-text-primary"
+      }`}
+      aria-pressed={active}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-current/30">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block truncate text-xs opacity-75">{subtitle}</span>
+      </span>
+      {active && <Check size={15} className="shrink-0" />}
+    </button>
+  );
+}
+
 function ChannelSection({
   title,
   channels,
+  busyChannelId,
+  onJoin,
+  onLeave,
 }: {
   title: string;
   channels: ChannelSummary[];
+  busyChannelId: string | null;
+  onJoin: (channel: ChannelSummary) => void;
+  onLeave: (channel: ChannelSummary) => void;
 }) {
   if (channels.length === 0) return null;
 
   return (
     <section className="space-y-2">
-      <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          {title}
+        </h3>
+        <span className="text-xs text-text-muted">{channels.length}</span>
+      </div>
       <div className="space-y-2">
         {channels.map((channel) => (
-          <ChannelRow key={channel.id} channel={channel} />
+          <ChannelRow
+            key={channel.id}
+            channel={channel}
+            busy={busyChannelId === channel.id}
+            onJoin={onJoin}
+            onLeave={onLeave}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function ChannelRow({ channel }: { channel: ChannelSummary }) {
+function ChannelRow({
+  channel,
+  busy,
+  onJoin,
+  onLeave,
+}: {
+  channel: ChannelSummary;
+  busy: boolean;
+  onJoin: (channel: ChannelSummary) => void;
+  onLeave: (channel: ChannelSummary) => void;
+}) {
   const isPrivate = channel.type === "PRIVATE";
+  const isMember = Boolean(channel.isMember);
+  const channelName = normalizeChannelName(channel);
 
   return (
-    <Link
-      href={`/channels/${channel.id}`}
-      className="group flex items-start gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3 transition-colors hover:border-accent/70 hover:bg-bg-hover"
-    >
-      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-bg-base text-text-muted">
-        {isPrivate ? <Lock size={17} /> : <Hash size={17} />}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-text-primary">
-            {channel.name || "unnamed"}
-          </span>
-          {channel.isDefault && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 text-2xs font-semibold text-accent">
-              <ShieldCheck size={11} />
-              Default
+    <article className="flex flex-col gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3 transition-colors hover:border-accent/60 sm:flex-row sm:items-start">
+      <div className="flex min-w-0 flex-1 gap-3">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-bg-base text-text-muted">
+          {isPrivate ? <Lock size={17} /> : <Hash size={17} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-medium text-text-primary">
+              {channelName}
             </span>
+            {channel.isDefault && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-accent-muted px-2 py-0.5 text-2xs font-semibold text-accent">
+                <ShieldCheck size={11} />
+                Default
+              </span>
+            )}
+            {isPrivate && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-2xs font-semibold text-text-secondary">
+                <Lock size={11} />
+                Private
+              </span>
+            )}
+            {isMember && !channel.isDefault && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-teal/30 bg-teal-muted px-2 py-0.5 text-2xs font-semibold text-teal">
+                <Check size={11} />
+                Joined
+              </span>
+            )}
+          </div>
+          {channel.description && (
+            <p className="mt-0.5 truncate text-sm text-text-muted">
+              {channel.description}
+            </p>
           )}
-        </div>
-        {channel.description && (
-          <p className="mt-0.5 truncate text-sm text-text-muted">
-            {channel.description}
-          </p>
-        )}
-        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-muted">
-          <span className="inline-flex items-center gap-1">
-            <Users size={13} />
-            {formatCount(channel.memberCount, "member")}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <MessageSquare size={13} />
-            {formatCount(channel.messageCount, "message")}
-          </span>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-muted">
+            <span className="inline-flex items-center gap-1">
+              <Users size={13} />
+              {formatCount(channel.memberCount, "member")}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <MessageSquare size={13} />
+              {formatCount(channel.messageCount, "message")}
+            </span>
+            {channel.role && (
+              <span className="capitalize">{channel.role}</span>
+            )}
+          </div>
         </div>
       </div>
-    </Link>
+
+      <div className="flex shrink-0 items-center gap-2 sm:pt-0.5">
+        {isMember ? (
+          <>
+            <Link
+              href={`/channels/${channel.id}`}
+              className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+            >
+              <span>Open</span>
+              <ArrowRight size={14} />
+            </Link>
+            {channel.isDefault ? (
+              <span className="inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-medium text-text-muted">
+                Required
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onLeave(channel)}
+                disabled={busy}
+                className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+              >
+                <LogOut size={14} />
+                <span>{busy ? "Leaving..." : "Leave"}</span>
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onJoin(channel)}
+            disabled={busy || isPrivate}
+            className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+          >
+            <Plus size={14} />
+            <span>{busy ? "Joining..." : isPrivate ? "Invite only" : "Join"}</span>
+          </button>
+        )}
+      </div>
+    </article>
   );
 }

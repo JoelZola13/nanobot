@@ -47,7 +47,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 
 - [x] Mentions view.
 - [x] Saved items / Later view.
-- [ ] Channel browser with join/leave and private channel indicators.
+- [x] Channel browser with join/leave and private channel indicators.
 - [ ] Notification preferences per channel and DM.
 - [ ] File browser for shared attachments.
 - [ ] Search filters by sender, channel, date, and attachment type.

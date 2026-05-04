@@ -2,11 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import {
+  DEFAULT_CHANNELS,
   ensureDefaultChannelsForUser,
-  sortDefaultChannelMemberships,
 } from "@/lib/defaultChannels";
 
-// GET /api/channels — list user's channels
+const DEFAULT_CHANNEL_ORDER = new Map<string, number>(
+  DEFAULT_CHANNELS.map((channel, index) => [channel.slug, index]),
+);
+
+type BrowserChannel = {
+  isDefault: boolean;
+  slug: string | null;
+  updatedAt: Date;
+};
+
+function sortBrowserChannels<T extends BrowserChannel>(channels: T[]) {
+  return [...channels].sort((a, b) => {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+
+    if (a.isDefault && b.isDefault) {
+      const aRank =
+        DEFAULT_CHANNEL_ORDER.get(a.slug || "") ?? Number.MAX_SAFE_INTEGER;
+      const bRank =
+        DEFAULT_CHANNEL_ORDER.get(b.slug || "") ?? Number.MAX_SAFE_INTEGER;
+      if (aRank !== bRank) return aRank - bRank;
+    }
+
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
+}
+
+// GET /api/channels — browse public channels plus joined private channels
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id)
@@ -14,34 +40,45 @@ export async function GET() {
 
   await ensureDefaultChannelsForUser(session.user.id);
 
-  const memberships = await prisma.channelMember.findMany({
-    where: { userId: session.user.id },
+  const channels = await prisma.channel.findMany({
+    where: {
+      isArchived: false,
+      OR: [
+        { type: "PUBLIC" },
+        {
+          type: "PRIVATE",
+          members: { some: { userId: session.user.id } },
+        },
+      ],
+    },
     include: {
-      channel: {
-        include: { _count: { select: { members: true, messages: true } } },
+      _count: { select: { members: true, messages: true } },
+      members: {
+        where: { userId: session.user.id },
+        select: { role: true },
       },
     },
-    orderBy: { channel: { updatedAt: "desc" } },
+    orderBy: { updatedAt: "desc" },
   });
 
   return NextResponse.json(
-    sortDefaultChannelMemberships(memberships)
-      .filter(
-        (m) =>
-          m.channel.type === "PUBLIC" || m.channel.type === "PRIVATE",
-      )
-      .map((m) => ({
-        id: m.channel.id,
-        name: m.channel.name,
-        slug: m.channel.slug,
-        description: m.channel.description,
-        type: m.channel.type,
-        iconEmoji: m.channel.iconEmoji,
-        isDefault: m.channel.isDefault,
-        memberCount: m.channel._count.members,
-        messageCount: m.channel._count.messages,
-        role: m.role,
-      })),
+    sortBrowserChannels(channels).map((channel) => {
+      const membership = channel.members[0];
+
+      return {
+        id: channel.id,
+        name: channel.name,
+        slug: channel.slug,
+        description: channel.description,
+        type: channel.type,
+        iconEmoji: channel.iconEmoji,
+        isDefault: channel.isDefault,
+        isMember: Boolean(membership),
+        memberCount: channel._count.members,
+        messageCount: channel._count.messages,
+        role: membership?.role,
+      };
+    }),
   );
 }
 
@@ -52,7 +89,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, description, type = "PUBLIC" } = body;
+  const { name, description } = body;
+  const type = body.type === "PRIVATE" ? "PRIVATE" : "PUBLIC";
 
   if (!name)
     return NextResponse.json(
