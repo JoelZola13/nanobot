@@ -112,6 +112,7 @@ export default async function DMConversationPage({
         channelId={channelId}
         otherUserId={otherMember?.user.id}
         otherUserName={otherMember?.user.displayName}
+        detailsMemberCount={channel.members.length}
       />
       <ChannelView
         channelId={channelId}

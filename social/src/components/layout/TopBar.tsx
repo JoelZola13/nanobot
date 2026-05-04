@@ -34,6 +34,7 @@ interface TopBarProps {
   description?: string;
   type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved";
   memberCount?: number;
+  detailsMemberCount?: number;
   channelId?: string;
   otherUserId?: string;
   otherUserName?: string;
@@ -45,6 +46,7 @@ export default function TopBar({
   description,
   type = "channel",
   memberCount,
+  detailsMemberCount,
   channelId,
   otherUserId,
   otherUserName,
@@ -67,6 +69,7 @@ export default function TopBar({
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
   const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
+  const resolvedDetailsMemberCount = detailsMemberCount ?? memberCount;
   const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : type === "saved" ? Bookmark : Users;
   const NotificationIcon = notificationLevel === "MUTED" ? BellOff : Bell;
 
@@ -285,10 +288,11 @@ export default function TopBar({
       )}
       {showDetails && canShowDetails && channelId && (
         <ConversationDetailsPanel
+          channelId={channelId}
           title={title}
           description={description}
           type={type === "dm" ? "dm" : "channel"}
-          memberCount={memberCount}
+          memberCount={resolvedDetailsMemberCount}
           onClose={() => setShowDetails(false)}
           onOpenMembers={
             memberCount !== undefined

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Bell,
   FileText,
@@ -11,8 +12,10 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { apiUrl } from "@/lib/apiUrl";
 
 type ConversationDetailsPanelProps = {
+  channelId: string;
   title: string;
   description?: string;
   type: "channel" | "dm";
@@ -29,7 +32,13 @@ const formatMembers = (memberCount?: number) => {
   return `${memberCount} member${memberCount === 1 ? "" : "s"}`;
 };
 
+const formatCount = (count: number | null, singular: string, plural: string) => {
+  if (count === null) return "Loading";
+  return `${count} ${count === 1 ? singular : plural}`;
+};
+
 export default function ConversationDetailsPanel({
+  channelId,
   title,
   description,
   type,
@@ -40,9 +49,35 @@ export default function ConversationDetailsPanel({
   onOpenFiles,
   onOpenNotifications,
 }: ConversationDetailsPanelProps) {
+  const [pinCount, setPinCount] = useState<number | null>(null);
+  const [fileCount, setFileCount] = useState<number | null>(null);
   const isDm = type === "dm";
   const Icon = isDm ? UserRound : Hash;
   const membersLabel = formatMembers(memberCount);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setPinCount(null);
+    setFileCount(null);
+
+    Promise.all([
+      fetch(apiUrl(`/api/channels/${channelId}/pins`))
+        .then((response) => (response.ok ? response.json() : { pins: [] }))
+        .catch(() => ({ pins: [] })),
+      fetch(apiUrl(`/api/channels/${channelId}/files`))
+        .then((response) => (response.ok ? response.json() : { files: [] }))
+        .catch(() => ({ files: [] })),
+    ]).then(([pinsData, filesData]) => {
+      if (cancelled) return;
+      setPinCount(Array.isArray(pinsData.pins) ? pinsData.pins.length : 0);
+      setFileCount(Array.isArray(filesData.files) ? filesData.files.length : 0);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [channelId]);
 
   return (
     <div
@@ -102,6 +137,7 @@ export default function ConversationDetailsPanel({
           <DetailsAction
             icon={Pin}
             label="Pinned messages"
+            meta={formatCount(pinCount, "pin", "pins")}
             testId="conversation-details-pins"
             onClick={onOpenPins}
           />
@@ -110,6 +146,7 @@ export default function ConversationDetailsPanel({
           <DetailsAction
             icon={FileText}
             label="Files"
+            meta={formatCount(fileCount, "file", "files")}
             testId="conversation-details-files"
             onClick={onOpenFiles}
           />
@@ -149,7 +186,14 @@ function DetailsAction({
     >
       <Icon size={15} className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta && <span className="shrink-0 text-2xs text-text-muted">{meta}</span>}
+      {meta && (
+        <span
+          data-testid={`${testId}-count`}
+          className="shrink-0 text-2xs text-text-muted"
+        >
+          {meta}
+        </span>
+      )}
     </button>
   );
 }

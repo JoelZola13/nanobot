@@ -85,6 +85,6 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 ## Phase 9: Conversation Details
 
 - [x] Wire the header details button to a Slack-style conversation details panel.
-- [ ] Add pinned/file/member counts to the details panel.
+- [x] Add pinned/file/member counts to the details panel.
 - [ ] Add channel topic editing from the details panel for channel managers.
 - [ ] Add a shared media preview strip for DMs and channels.
