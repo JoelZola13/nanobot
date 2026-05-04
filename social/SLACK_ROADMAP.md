@@ -33,7 +33,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add richer empty states per channel and DM.
 - [x] Add threaded reply previews beside parent messages.
 - [x] Add message permalink/copy-link actions.
-- [ ] Add slash command scaffolding.
+- [x] Add slash command scaffolding.
 
 ## Phase 3: Team Directory And Onboarding
 
