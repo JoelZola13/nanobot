@@ -4,17 +4,31 @@ import { useEffect, useState } from "react";
 import {
   Bell,
   Check,
+  ExternalLink,
+  File,
   FileText,
   Hash,
   Info,
+  Image,
+  Music,
   Pencil,
   Pin,
   UserRound,
   Users,
+  Video,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
+
+type ChannelFile = {
+  id: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  url: string;
+  href: string;
+};
 
 type ConversationDetailsPanelProps = {
   channelId: string;
@@ -42,6 +56,14 @@ const formatCount = (count: number | null, singular: string, plural: string) => 
   return `${count} ${count === 1 ? singular : plural}`;
 };
 
+const iconForFile = (mimeType: string) => {
+  if (mimeType.startsWith("image/")) return Image;
+  if (mimeType.startsWith("audio/")) return Music;
+  if (mimeType.startsWith("video/")) return Video;
+  if (mimeType.includes("pdf") || mimeType.includes("text")) return FileText;
+  return File;
+};
+
 export default function ConversationDetailsPanel({
   channelId,
   title,
@@ -59,6 +81,7 @@ export default function ConversationDetailsPanel({
 }: ConversationDetailsPanelProps) {
   const [pinCount, setPinCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
+  const [sharedFiles, setSharedFiles] = useState<ChannelFile[] | null>(null);
   const [currentDescription, setCurrentDescription] = useState(description || "");
   const [topicDraft, setTopicDraft] = useState(description || "");
   const [editingTopic, setEditingTopic] = useState(false);
@@ -68,12 +91,14 @@ export default function ConversationDetailsPanel({
   const Icon = isDm ? UserRound : Hash;
   const membersLabel = formatMembers(memberCount);
   const topicText = currentDescription.trim();
+  const sharedPreviewFiles = sharedFiles?.slice(0, 4) || [];
 
   useEffect(() => {
     let cancelled = false;
 
     setPinCount(null);
     setFileCount(null);
+    setSharedFiles(null);
 
     Promise.all([
       fetch(apiUrl(`/api/channels/${channelId}/pins`))
@@ -84,8 +109,10 @@ export default function ConversationDetailsPanel({
         .catch(() => ({ files: [] })),
     ]).then(([pinsData, filesData]) => {
       if (cancelled) return;
+      const files = Array.isArray(filesData.files) ? filesData.files : [];
       setPinCount(Array.isArray(pinsData.pins) ? pinsData.pins.length : 0);
-      setFileCount(Array.isArray(filesData.files) ? filesData.files.length : 0);
+      setFileCount(files.length);
+      setSharedFiles(files);
     });
 
     return () => {
@@ -251,6 +278,47 @@ export default function ConversationDetailsPanel({
         </div>
       )}
 
+      <div
+        data-testid="conversation-details-media-strip"
+        className="border-b border-border px-4 py-3"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold uppercase text-text-muted">
+            Shared media
+          </span>
+          {onOpenFiles && fileCount !== null && fileCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenFiles}
+              className="rounded-md px-1.5 py-1 text-xs font-medium text-text-muted hover:bg-bg-hover hover:text-text-primary"
+            >
+              View all
+            </button>
+          )}
+        </div>
+
+        {sharedFiles === null ? (
+          <div className="grid grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map((index) => (
+              <div
+                key={index}
+                className="aspect-square animate-pulse rounded-lg bg-bg-elevated"
+              />
+            ))}
+          </div>
+        ) : sharedPreviewFiles.length > 0 ? (
+          <div className="grid grid-cols-4 gap-2">
+            {sharedPreviewFiles.map((file) => (
+              <SharedMediaPreview key={file.id} file={file} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-text-muted">
+            Attachments shared here will appear in this strip.
+          </div>
+        )}
+      </div>
+
       <div className="space-y-1 p-2">
         {onOpenMembers && (
           <DetailsAction
@@ -289,6 +357,37 @@ export default function ConversationDetailsPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function SharedMediaPreview({ file }: { file: ChannelFile }) {
+  const Icon = iconForFile(file.mimeType);
+  const isImage = file.mimeType.startsWith("image/");
+
+  return (
+    <a
+      href={file.url}
+      target="_blank"
+      rel="noreferrer"
+      data-testid="conversation-details-media-item"
+      className="group relative flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg-elevated text-text-secondary transition-colors hover:border-accent hover:text-accent"
+      title={file.fileName}
+    >
+      {isImage ? (
+        <img
+          src={file.url}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <Icon size={20} />
+      )}
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-black/60 px-1.5 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="min-w-0 flex-1 truncate">{file.fileName}</span>
+        <ExternalLink size={10} className="shrink-0" />
+      </div>
+    </a>
   );
 }
 
