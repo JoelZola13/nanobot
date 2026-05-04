@@ -1,8 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Street Voices Messages
+
+## Health Check
+
+After the local Docker stack is running, use one command to check the Messages dependencies:
+
+```bash
+npm run health
+```
+
+The check verifies the LibreChat API health route, the Social auth bridge, NextAuth providers, Social page routes, `social-postgres`, and the `/ws-social` Socket.IO proxy.
+
+Useful overrides:
+
+```bash
+SOCIAL_HEALTH_BASE_URL=http://localhost:3180 npm run health
+SOCIAL_POSTGRES_CONTAINER=nanobot-social-postgres npm run health
+SOCIAL_HEALTH_BRIDGE_SECRET=street-voices-social-bridge-2026 npm run health
+```
 
 ## Getting Started
 
-First, run the development server:
+This is a [Next.js](https://nextjs.org) app. For local development, run:
 
 ```bash
 npm run dev
