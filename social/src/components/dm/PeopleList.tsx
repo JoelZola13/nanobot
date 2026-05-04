@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, MapPin, MessageSquare, Search, Sparkles, UserRound } from "lucide-react";
+import { Bot, CheckCircle2, MapPin, MessageSquare, Search, Sparkles, UserPlus, UserRound } from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
 
 interface Person {
@@ -14,8 +14,20 @@ interface Person {
   bio: string | null;
   status: string;
   location: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
   isAgent?: boolean;
 }
+
+const RECENT_TEAMMATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+const isAwaitingFirstSignIn = (person: Person) => !person.isAgent && !person.lastSeenAt && person.status !== "online";
+
+const isRecentlyAdded = (person: Person) => {
+  if (person.isAgent) return false;
+  const createdAt = new Date(person.createdAt).getTime();
+  return Number.isFinite(createdAt) && Date.now() - createdAt <= RECENT_TEAMMATE_WINDOW_MS;
+};
 
 export default function PeopleList({
   people,
@@ -65,6 +77,8 @@ export default function PeopleList({
   const offline = people.filter((p) => p.status !== "online" && matches(p));
   const visibleAgents = agents.filter(matches);
   const visibleCount = online.length + offline.length + visibleAgents.length;
+  const onboardingCount = people.filter(isAwaitingFirstSignIn).length;
+  const recentlyAddedCount = people.filter(isRecentlyAdded).length;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -88,6 +102,30 @@ export default function PeopleList({
             />
           </div>
         </div>
+
+        {onboardingCount > 0 && (
+          <div className="mb-4 border-y border-border bg-bg-surface px-4 py-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-accent">
+                <UserPlus size={17} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="break-words text-sm font-semibold leading-5 text-text-primary">
+                  {onboardingCount} teammate{onboardingCount === 1 ? "" : "s"} waiting on first sign-in
+                </div>
+                <div className="mt-0.5 break-words text-xs leading-5 text-text-muted">
+                  Share LibChatMain + NanobotMain, then have them sign in to LibreChat once. Messages uses that same session.
+                </div>
+              </div>
+              {recentlyAddedCount > 0 && (
+                <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-1 text-2xs font-semibold uppercase text-text-muted">
+                  <CheckCircle2 size={12} className="text-teal" />
+                  {recentlyAddedCount} added recently
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="overflow-hidden rounded-lg border border-border bg-bg-surface">
           {visibleCount === 0 ? (
@@ -184,6 +222,9 @@ function PersonRow({
   isAgent?: boolean;
 }) {
   const isOnline = person.status === "online" || isAgent;
+  const awaitingFirstSignIn = isAwaitingFirstSignIn(person);
+  const recentlyAdded = isRecentlyAdded(person);
+  const statusText = isAgent ? "Active" : awaitingFirstSignIn ? "Needs first sign-in" : isOnline ? "Active" : "Away";
 
   return (
     <div className="group flex items-center gap-3 border-t border-border px-4 py-3 first:border-t-0 hover:bg-bg-hover">
@@ -207,12 +248,19 @@ function PersonRow({
           </span>
           {isAgent ? (
             <span className="badge-teal text-2xs">agent</span>
+          ) : recentlyAdded ? (
+            <span className="rounded-full bg-accent-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-accent">
+              New
+            </span>
           ) : (
+            <span className="truncate text-2xs text-text-muted">@{person.username}</span>
+          )}
+          {!isAgent && recentlyAdded && (
             <span className="truncate text-2xs text-text-muted">@{person.username}</span>
           )}
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
-          <span>{isOnline ? "Active" : "Away"}</span>
+          <span>{statusText}</span>
           {person.location && !isAgent && (
             <>
               <span>/</span>
@@ -229,6 +277,11 @@ function PersonRow({
             </>
           )}
         </div>
+        {awaitingFirstSignIn && (
+          <div className="mt-1 break-words text-2xs leading-4 text-text-muted">
+            LibreChat sign-in unlocks Messages automatically.
+          </div>
+        )}
       </div>
 
       <button

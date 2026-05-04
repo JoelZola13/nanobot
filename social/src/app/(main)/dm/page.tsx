@@ -23,6 +23,8 @@ export default async function DMPage() {
       status: true,
       location: true,
       isAgent: true,
+      lastSeenAt: true,
+      createdAt: true,
     },
     orderBy: [{ status: "asc" }, { displayName: "asc" }],
   });
@@ -38,14 +40,26 @@ export default async function DMPage() {
       status: true,
       location: true,
       isAgent: true,
+      lastSeenAt: true,
+      createdAt: true,
     },
     orderBy: { displayName: "asc" },
+  });
+
+  const serializePerson = (person: (typeof people)[number]) => ({
+    ...person,
+    lastSeenAt: person.lastSeenAt?.toISOString() ?? null,
+    createdAt: person.createdAt.toISOString(),
   });
 
   return (
     <>
       <TopBar title="Messages" type="dm" description="Send direct messages to people and AI agents" />
-      <PeopleList people={people} agents={agents} currentUserId={session.user.id} />
+      <PeopleList
+        people={people.map(serializePerson)}
+        agents={agents.map(serializePerson)}
+        currentUserId={session.user.id}
+      />
     </>
   );
 }
