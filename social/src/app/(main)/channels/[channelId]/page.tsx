@@ -6,6 +6,8 @@ import ChannelView from "@/components/channels/ChannelView";
 import { formatMessageForClient } from "@/lib/messageFormat";
 import { canManageChannel } from "@/lib/channelManagement";
 
+const INITIAL_MESSAGE_LIMIT = 100;
+
 export default async function ChannelPage({
   params,
 }: {
@@ -68,11 +70,15 @@ export default async function ChannelPage({
       },
       _count: { select: { replies: true } },
     },
-    orderBy: { createdAt: "asc" },
-    take: 100,
+    orderBy: { createdAt: "desc" },
+    take: INITIAL_MESSAGE_LIMIT + 1,
   });
 
-  const formatted = messages.map((msg) => formatMessageForClient(msg, session.user!.id));
+  const hasOlderMessages = messages.length > INITIAL_MESSAGE_LIMIT;
+  const visibleMessages = messages.slice(0, INITIAL_MESSAGE_LIMIT).reverse();
+  const formatted = visibleMessages.map((msg) =>
+    formatMessageForClient(msg, session.user!.id),
+  );
 
   return (
     <>
@@ -88,6 +94,9 @@ export default async function ChannelPage({
         channelId={channelId}
         channelName={channel.name || "channel"}
         initialMessages={formatted}
+        initialOldestMessageCursor={
+          hasOlderMessages ? visibleMessages[0]?.id || null : null
+        }
         currentUserId={session.user.id}
         placeholder={`Message #${channel.name || "channel"}`}
         canManageMessages={canManageCurrentChannel}

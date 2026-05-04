@@ -43,7 +43,11 @@ interface MessageListProps {
   emptyState: MessageEmptyState;
   highlightedMessageId?: string | null;
   readReceipts?: Map<string, string>;
+  hasMoreMessages?: boolean;
+  loadingOlder?: boolean;
+  autoScrollKey?: number;
   canModerateMessages?: boolean;
+  onLoadOlder?: () => void;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
   onDelete?: (messageId: string, reason?: string) => void;
@@ -58,7 +62,11 @@ export default function MessageList({
   emptyState,
   highlightedMessageId,
   readReceipts,
+  hasMoreMessages = false,
+  loadingOlder = false,
+  autoScrollKey,
   canModerateMessages = false,
+  onLoadOlder,
   onReaction,
   onEdit,
   onDelete,
@@ -67,11 +75,12 @@ export default function MessageList({
   onOpenThread,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoScrollDependency = autoScrollKey ?? messages.length;
 
   useEffect(() => {
     if (highlightedMessageId) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, highlightedMessageId]);
+  }, [autoScrollDependency, highlightedMessageId]);
 
   if (messages.length === 0) {
     return <EmptyConversation state={emptyState} />;
@@ -99,6 +108,18 @@ export default function MessageList({
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="py-2">
+        {hasMoreMessages && (
+          <div className="flex justify-center px-4 py-3">
+            <button
+              type="button"
+              onClick={onLoadOlder}
+              disabled={loadingOlder}
+              className="rounded-full border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingOlder ? "Loading..." : "Load older messages"}
+            </button>
+          </div>
+        )}
         {messages.map((msg, msgIdx) => {
           const msgDate = format(new Date(msg.createdAt), "MMM d, yyyy");
           const showDateDivider = msgDate !== lastDate;

@@ -17,6 +17,7 @@ interface ChannelViewProps {
   channelId: string;
   channelName: string;
   initialMessages: MessageData[];
+  initialOldestMessageCursor?: string | null;
   currentUserId: string;
   placeholder?: string;
   emptyState: MessageEmptyState;
@@ -59,6 +60,7 @@ export default function ChannelView({
   channelId,
   channelName,
   initialMessages,
+  initialOldestMessageCursor = null,
   currentUserId,
   placeholder,
   emptyState,
@@ -66,6 +68,11 @@ export default function ChannelView({
 }: ChannelViewProps) {
   const [messages, setMessages] = useState<MessageData[]>(initialMessages);
   const [sending, setSending] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [oldestMessageCursor, setOldestMessageCursor] = useState<string | null>(
+    initialOldestMessageCursor,
+  );
+  const [autoScrollKey, setAutoScrollKey] = useState(0);
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
   const [agentActivities, setAgentActivities] = useState<ActivityEvent[]>([]);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -106,6 +113,7 @@ export default function ChannelView({
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+        setAutoScrollKey((current) => current + 1);
         if (msg.author.isAgent) {
           setTimeout(() => {
             setAgentActivities((prev) =>
@@ -236,9 +244,11 @@ export default function ChannelView({
 
   useEffect(() => {
     setMessages(initialMessages);
+    setOldestMessageCursor(initialOldestMessageCursor);
+    setAutoScrollKey((current) => current + 1);
     setAgentActivities([]);
     setOpenThreadId(null);
-  }, [channelId, initialMessages]);
+  }, [channelId, initialMessages, initialOldestMessageCursor]);
 
   useEffect(() => {
     if (!highlightedMessageId || messages.length === 0) return;
@@ -265,6 +275,7 @@ export default function ChannelView({
 
       const msg = await res.json();
       setMessages((prev) => [...prev, msg]);
+      setAutoScrollKey((current) => current + 1);
       socket?.emit("message:send", msg);
       socket?.emit("typing:stop", { channelId, userId: currentUserId });
     } finally {
@@ -306,6 +317,39 @@ export default function ChannelView({
     });
     if (res.ok) {
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    }
+  };
+
+  const handleLoadOlder = async () => {
+    if (!oldestMessageCursor || loadingOlder) return;
+    setLoadingOlder(true);
+
+    try {
+      const params = new URLSearchParams({
+        cursor: oldestMessageCursor,
+        limit: "50",
+      });
+      const res = await fetch(
+        apiUrl(`/api/channels/${channelId}/messages?${params.toString()}`),
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error("Failed to load older messages");
+
+      const data = (await res.json()) as {
+        messages?: MessageData[];
+        nextCursor?: string | null;
+      };
+      const olderMessages = data.messages || [];
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((message) => message.id));
+        const uniqueOlderMessages = olderMessages.filter(
+          (message) => !existingIds.has(message.id),
+        );
+        return [...uniqueOlderMessages, ...prev];
+      });
+      setOldestMessageCursor(data.nextCursor || null);
+    } finally {
+      setLoadingOlder(false);
     }
   };
 
@@ -423,7 +467,11 @@ export default function ChannelView({
           emptyState={emptyState}
           highlightedMessageId={highlightedMessageId}
           readReceipts={readReceipts}
+          hasMoreMessages={Boolean(oldestMessageCursor)}
+          loadingOlder={loadingOlder}
+          autoScrollKey={autoScrollKey}
           canModerateMessages={canManageMessages}
+          onLoadOlder={handleLoadOlder}
           onReaction={handleReaction}
           onEdit={handleEdit}
           onDelete={handleDelete}

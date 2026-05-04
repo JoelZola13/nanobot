@@ -1400,6 +1400,128 @@ describe("Channel members API route", () => {
   });
 });
 
+describe("Channel messages API route", () => {
+  function messageRecord(id, content, createdAt) {
+    return {
+      id,
+      channelId: "channel-1",
+      content,
+      createdAt: new Date(createdAt),
+      isEdited: false,
+      isPinned: false,
+      parentId: null,
+      metadata: null,
+      author: {
+        id: `author-${id}`,
+        username: `author-${id}`,
+        displayName: `Author ${id}`,
+        avatarUrl: null,
+        isAgent: false,
+      },
+      reactions: [],
+      savedItems: [],
+      attachments: [],
+      replies: [],
+      _count: { replies: 0 },
+    };
+  }
+
+  function messagesRouteMocks(prisma) {
+    return {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("current-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/nanobot": { async invokeAgentStreaming() {} },
+      "@/lib/socketServer": { getIO() { return null; } },
+      "@/lib/messageFormat": loadTsModule("src/lib/messageFormat.ts"),
+    };
+  }
+
+  test("returns the latest message window in chronological display order", async () => {
+    let findManyArgs;
+    const prisma = {
+      channelMember: {
+        async findUnique() {
+          return {
+            role: "member",
+            channel: { isArchived: false },
+          };
+        },
+      },
+      message: {
+        async findMany(args) {
+          findManyArgs = args;
+          return [
+            messageRecord("msg-3", "Newest", "2026-05-04T12:00:00.000Z"),
+            messageRecord("msg-2", "Middle", "2026-05-04T11:00:00.000Z"),
+            messageRecord("msg-1", "Oldest extra", "2026-05-04T10:00:00.000Z"),
+          ];
+        },
+      },
+    };
+    const { GET } = loadTsModule(
+      "src/app/api/channels/[id]/messages/route.ts",
+      messagesRouteMocks(prisma),
+    );
+
+    const response = await GET(
+      urlRequest("http://social.test/api/channels/channel-1/messages?limit=2"),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(findManyArgs.where, {
+      channelId: "channel-1",
+      deletedAt: null,
+      parentId: null,
+    });
+    assert.deepEqual(findManyArgs.orderBy, { createdAt: "desc" });
+    assert.equal(findManyArgs.take, 3);
+    assert.equal(body.messages[0].id, "msg-2");
+    assert.equal(body.messages[1].id, "msg-3");
+    assert.equal(body.nextCursor, "msg-2");
+  });
+
+  test("uses the cursor to load older messages", async () => {
+    let findManyArgs;
+    const prisma = {
+      channelMember: {
+        async findUnique() {
+          return {
+            role: "member",
+            channel: { isArchived: false },
+          };
+        },
+      },
+      message: {
+        async findMany(args) {
+          findManyArgs = args;
+          return [
+            messageRecord("msg-1", "Older", "2026-05-04T10:00:00.000Z"),
+          ];
+        },
+      },
+    };
+    const { GET } = loadTsModule(
+      "src/app/api/channels/[id]/messages/route.ts",
+      messagesRouteMocks(prisma),
+    );
+
+    const response = await GET(
+      urlRequest("http://social.test/api/channels/channel-1/messages?cursor=msg-2&limit=2"),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(findManyArgs.cursor, { id: "msg-2" });
+    assert.equal(findManyArgs.skip, 1);
+    assert.deepEqual(body.messages.map((message) => message.id), ["msg-1"]);
+    assert.equal(body.nextCursor, null);
+  });
+});
+
 describe("Message moderation API route", () => {
   function socketMock(emitted) {
     return {

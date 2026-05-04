@@ -74,3 +74,10 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add channel archive and restore controls.
 - [x] Add workspace-level defaults for notification and channel policies.
 - [x] Add lightweight moderation controls for message removal auditability.
+
+## Phase 8: Conversation History
+
+- [x] Open channels and DMs on the latest message window.
+- [x] Add a load-older control for long conversations.
+- [ ] Add jump-to-latest behavior after reading older history.
+- [ ] Add unread dividers inside long conversations.

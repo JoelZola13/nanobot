@@ -5,6 +5,8 @@ import TopBar from "@/components/layout/TopBar";
 import ChannelView from "@/components/channels/ChannelView";
 import { formatMessageForClient } from "@/lib/messageFormat";
 
+const INITIAL_MESSAGE_LIMIT = 50;
+
 export default async function DMConversationPage({
   params,
 }: {
@@ -75,11 +77,15 @@ export default async function DMConversationPage({
       },
       _count: { select: { replies: true } },
     },
-    orderBy: { createdAt: "asc" },
-    take: 50,
+    orderBy: { createdAt: "desc" },
+    take: INITIAL_MESSAGE_LIMIT + 1,
   });
 
-  const formatted = messages.map((msg) => formatMessageForClient(msg, session.user!.id));
+  const hasOlderMessages = messages.length > INITIAL_MESSAGE_LIMIT;
+  const visibleMessages = messages.slice(0, INITIAL_MESSAGE_LIMIT).reverse();
+  const formatted = visibleMessages.map((msg) =>
+    formatMessageForClient(msg, session.user!.id),
+  );
 
   return (
     <>
@@ -95,6 +101,9 @@ export default async function DMConversationPage({
         channelId={channelId}
         channelName={otherName}
         initialMessages={formatted}
+        initialOldestMessageCursor={
+          hasOlderMessages ? visibleMessages[0]?.id || null : null
+        }
         currentUserId={session.user.id}
         placeholder={`Message ${otherName}`}
         emptyState={{

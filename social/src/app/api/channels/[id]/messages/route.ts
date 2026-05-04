@@ -53,16 +53,20 @@ export async function GET(
       },
       _count: { select: { replies: true } },
     },
-    orderBy: { createdAt: "asc" },
-    take: limit,
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  const formatted = messages.map((msg) => formatMessageForClient(msg, session.user!.id));
+  const hasOlderMessages = messages.length > limit;
+  const visibleMessages = messages.slice(0, limit).reverse();
+  const formatted = visibleMessages.map((msg) =>
+    formatMessageForClient(msg, session.user!.id),
+  );
 
   return NextResponse.json({
     messages: formatted,
-    nextCursor: messages.length === limit ? messages[messages.length - 1].id : null,
+    nextCursor: hasOlderMessages ? visibleMessages[0]?.id || null : null,
   });
 }
 
