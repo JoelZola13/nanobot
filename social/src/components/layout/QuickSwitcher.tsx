@@ -75,16 +75,20 @@ type SwitcherItem =
 interface QuickSwitcherProps {
   open: boolean;
   onClose: () => void;
+  mode: QuickSwitcherMode;
   channels: ChannelInfo[];
   dms: DmChannel[];
   userId: string;
 }
+
+export type QuickSwitcherMode = "jump" | "compose";
 
 const normalized = (value: string | null | undefined) => value?.toLowerCase() || "";
 
 export default function QuickSwitcher({
   open,
   onClose,
+  mode,
   channels,
   dms,
   userId,
@@ -99,6 +103,7 @@ export default function QuickSwitcher({
 
   const trimmedQuery = query.trim();
   const lowerQuery = trimmedQuery.toLowerCase();
+  const isComposeMode = mode === "compose";
 
   useEffect(() => {
     if (!open) return;
@@ -304,7 +309,7 @@ export default function QuickSwitcher({
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-[12vh]"
       role="dialog"
       aria-modal="true"
-      aria-label="Quick switcher"
+      aria-label={isComposeMode ? "New message quick switcher" : "Quick switcher"}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
@@ -324,7 +329,7 @@ export default function QuickSwitcher({
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Jump to a channel, DM, or agent"
+            placeholder={isComposeMode ? "Start a DM or open a conversation" : "Jump to a channel, DM, or agent"}
             className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
           />
           <button

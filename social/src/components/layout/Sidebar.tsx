@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bot,
   ChevronDown,
@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { ChannelInfo } from "@/types";
-import QuickSwitcher from "./QuickSwitcher";
+import QuickSwitcher, { type QuickSwitcherMode } from "./QuickSwitcher";
 import { usePresenceStore } from "@/stores/presenceStore";
 import { useUnreadStore } from "@/stores/unreadStore";
 import { apiUrl } from "@/lib/apiUrl";
@@ -37,11 +37,18 @@ type SearchUser = {
 
 const formatUnread = (count: number) => (count > 99 ? "99+" : String(count));
 
+const isEditableShortcutTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select" || target.isContentEditable;
+};
+
 export default function Sidebar({ channels, dms, userId }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showNewDM, setShowNewDM] = useState(false);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  const [quickSwitcherMode, setQuickSwitcherMode] = useState<QuickSwitcherMode>("jump");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -51,6 +58,107 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
   const channelUnreadTotal = channels.reduce((total, ch) => total + (unreadCounts.get(ch.id) || 0), 0);
   const dmUnreadTotal = dms.reduce((total, dm) => total + (unreadCounts.get(dm.id) || 0), 0);
   const agentDmCount = dms.filter((dm) => dm.otherUser?.isAgent).length;
+
+  const destinations = useMemo(
+    () => [
+      ...channels.map((channel) => ({
+        id: channel.id,
+        href: `/channels/${channel.id}`,
+      })),
+      ...dms.map((dm) => ({
+        id: dm.id,
+        href: `/dm/${dm.id}`,
+      })),
+    ],
+    [channels, dms],
+  );
+
+  const openQuickSwitcher = useCallback((mode: QuickSwitcherMode = "jump") => {
+    setQuickSwitcherMode(mode);
+    setShowQuickSwitcher(true);
+  }, []);
+
+  const goToRelativeDestination = useCallback(
+    (direction: 1 | -1) => {
+      if (destinations.length === 0) {
+        router.push("/dm");
+        return;
+      }
+
+      const activeIndex = destinations.findIndex((destination) => destination.href === pathname);
+      const fallbackIndex = direction > 0 ? -1 : 0;
+      const nextIndex = (activeIndex >= 0 ? activeIndex : fallbackIndex) + direction;
+      const destination = destinations[(nextIndex + destinations.length) % destinations.length];
+      router.push(destination.href);
+    },
+    [destinations, pathname, router],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableShortcutTarget(event.target)) return;
+
+      const key = event.key.toLowerCase();
+      const modifierKey = event.metaKey || event.ctrlKey;
+
+      if (modifierKey && !event.altKey && !event.shiftKey && key === "k") {
+        event.preventDefault();
+        openQuickSwitcher("jump");
+        return;
+      }
+
+      if (modifierKey && !event.altKey && !event.shiftKey && key === "n") {
+        event.preventDefault();
+        openQuickSwitcher("compose");
+        return;
+      }
+
+      if (!modifierKey && !event.altKey && !event.shiftKey && key === "/") {
+        event.preventDefault();
+        openQuickSwitcher("jump");
+        return;
+      }
+
+      if (event.altKey && !modifierKey && !event.shiftKey && event.key === "ArrowDown") {
+        event.preventDefault();
+        goToRelativeDestination(1);
+        return;
+      }
+
+      if (event.altKey && !modifierKey && !event.shiftKey && event.key === "ArrowUp") {
+        event.preventDefault();
+        goToRelativeDestination(-1);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [goToRelativeDestination, openQuickSwitcher]);
+
+  useEffect(() => {
+    const handleParentShortcut = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.source !== "librechat" || event.data?.type !== "street-voices-shortcut") return;
+
+      switch (event.data.action) {
+        case "jump":
+          openQuickSwitcher("jump");
+          break;
+        case "compose":
+          openQuickSwitcher("compose");
+          break;
+        case "next":
+          goToRelativeDestination(1);
+          break;
+        case "previous":
+          goToRelativeDestination(-1);
+          break;
+      }
+    };
+
+    window.addEventListener("message", handleParentShortcut);
+    return () => window.removeEventListener("message", handleParentShortcut);
+  }, [goToRelativeDestination, openQuickSwitcher]);
 
   const handleUserSearch = async (q: string) => {
     setSearchQuery(q);
@@ -116,7 +224,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
           </button>
           <button
             type="button"
-            onClick={() => setShowQuickSwitcher(true)}
+            onClick={() => openQuickSwitcher("compose")}
             className="sidebar-icon-button h-9 w-9"
             title="Open quick switcher"
           >
@@ -126,7 +234,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
 
         <button
           type="button"
-          onClick={() => setShowQuickSwitcher(true)}
+          onClick={() => openQuickSwitcher("jump")}
           className="sidebar-surface-button-muted w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
         >
           <Search size={14} />
@@ -310,6 +418,7 @@ export default function Sidebar({ channels, dms, userId }: SidebarProps) {
       <QuickSwitcher
         open={showQuickSwitcher}
         onClose={() => setShowQuickSwitcher(false)}
+        mode={quickSwitcherMode}
         channels={channels}
         dms={dms}
         userId={userId}
