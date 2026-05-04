@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import { headers } from "next/headers";
 import { authOptions } from "./auth";
 import { getString, upsertSocialUserFromIdentity } from "./socialIdentity";
+import { socialLog } from "./telemetry";
 
 type LibreChatBridgeUser = {
   _id?: string;
@@ -48,12 +49,27 @@ function shouldTreatBridgeStatusAsUnavailable(status: number) {
   return status === 403 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
+function getBridgeLogUrl() {
+  try {
+    const url = new URL(LIBRECHAT_AUTH_BRIDGE_URL);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return LIBRECHAT_AUTH_BRIDGE_URL;
+  }
+}
+
 function handleBridgeUnavailable(
   message: string,
   options: AuthOptions,
   status?: number,
 ) {
-  console.error("[AUTH]", message);
+  socialLog("error", "social.auth.bridge_unavailable", {
+    message,
+    status,
+    bridgeUnavailableMode: options.bridgeUnavailable || "ignore",
+    bridgeUrl: getBridgeLogUrl(),
+  });
+
   if (options.bridgeUnavailable === "throw") {
     throw new LibreChatBridgeUnavailableError(message, status);
   }

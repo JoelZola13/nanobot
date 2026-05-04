@@ -9,6 +9,43 @@ const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3182", 10);
 const app = next({ dev });
 const handle = app.getRequestHandler();
+const serviceName = "street-voices-social";
+
+function compactLogFields(fields = {}) {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  );
+}
+
+function socialLog(level, event, fields = {}) {
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    service: serviceName,
+    event,
+    ...compactLogFields(fields),
+  });
+
+  if (level === "error") {
+    console.error(line);
+    return;
+  }
+
+  if (level === "warn") {
+    console.warn(line);
+    return;
+  }
+
+  console.log(line);
+}
+
+function socketLogFields(socket, fields = {}) {
+  return {
+    socketId: socket.id,
+    transport: socket.conn?.transport?.name,
+    ...fields,
+  };
+}
 
 function isLocalRequest(req) {
   return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
@@ -84,6 +121,13 @@ app.prepare().then(() => {
     cors: { origin: "*" },
   });
 
+  io.engine.on("connection_error", (err) => {
+    socialLog("warn", "social.socket.connection_error", {
+      code: err.code,
+      message: err.message,
+    });
+  });
+
   // Track online users: userId -> Set<socketId>
   const onlineUsers = new Map();
   // Track presence status: userId -> "online" | "away"
@@ -106,7 +150,14 @@ app.prepare().then(() => {
 
   io.on("connection", (socket) => {
     const userId = socket.handshake.auth?.userId;
-    if (!userId) return socket.disconnect();
+    if (!userId) {
+      socialLog(
+        "warn",
+        "social.socket.connection_rejected",
+        socketLogFields(socket, { reason: "missing_user_id" }),
+      );
+      return socket.disconnect();
+    }
 
     // Track online status
     if (!onlineUsers.has(userId)) {
@@ -259,17 +310,33 @@ app.prepare().then(() => {
     });
 
     // Disconnect
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
+      let remainingSockets = 0;
+      let wentOffline = false;
+
       if (onlineUsers.has(userId)) {
         onlineUsers.get(userId).delete(socket.id);
-        if (onlineUsers.get(userId).size === 0) {
+        remainingSockets = onlineUsers.get(userId).size;
+        if (remainingSockets === 0) {
           onlineUsers.delete(userId);
           userStatus.delete(userId);
           lastHeartbeat.delete(userId);
           userSockets.delete(userId);
           io.emit("presence:update", { userId, status: "offline" });
+          wentOffline = true;
         }
       }
+
+      socialLog(
+        "info",
+        "social.socket.disconnect",
+        socketLogFields(socket, {
+          userId,
+          reason,
+          remainingSockets,
+          wentOffline,
+        }),
+      );
     });
   });
 

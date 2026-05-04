@@ -21,10 +21,14 @@ const nextServerMock = {
 
 const originalFetch = globalThis.fetch;
 const originalConsoleError = console.error;
+const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   console.error = originalConsoleError;
+  console.log = originalConsoleLog;
+  console.warn = originalConsoleWarn;
   delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
 });
 
@@ -90,6 +94,131 @@ function createUnauthenticatedMocks() {
     "@/lib/prisma": { prisma: {} },
   };
 }
+
+describe("Social structured logs", () => {
+  test("writes stable JSON log entries", () => {
+    const lines = [];
+    console.warn = (line) => lines.push(line);
+    const { socialLog } = loadTsModule("src/lib/telemetry.ts");
+
+    socialLog("warn", "social.auth.bridge_unavailable", {
+      status: 503,
+      omitted: undefined,
+    });
+
+    assert.equal(lines.length, 1);
+    const entry = JSON.parse(lines[0]);
+    assert.equal(entry.level, "warn");
+    assert.equal(entry.service, "street-voices-social");
+    assert.equal(entry.event, "social.auth.bridge_unavailable");
+    assert.equal(entry.status, 503);
+    assert.equal(typeof entry.timestamp, "string");
+    assert.equal(Object.prototype.hasOwnProperty.call(entry, "omitted"), false);
+  });
+});
+
+describe("Unread count hydration", () => {
+  test("counts unread messages after the latest read receipt or join time", async () => {
+    const joinedAtA = new Date("2026-05-01T10:00:00.000Z");
+    const joinedAtB = new Date("2026-05-02T10:00:00.000Z");
+    const readAtA = new Date("2026-05-03T10:00:00.000Z");
+    const countCalls = [];
+    const { getInitialUnreadCountsForUser } = loadTsModule("src/lib/unreadCounts.ts", {
+      "./prisma": {
+        prisma: {
+          readReceipt: {
+            async findMany(args) {
+              assert.deepEqual(args.where, {
+                userId: "user-1",
+                channelId: { in: ["channel-a", "channel-b"] },
+              });
+              return [{ channelId: "channel-a", readAt: readAtA }];
+            },
+          },
+          message: {
+            async count(args) {
+              countCalls.push(args);
+              return args.where.channelId === "channel-a" ? 2 : 0;
+            },
+          },
+        },
+      },
+    });
+
+    const counts = await getInitialUnreadCountsForUser("user-1", [
+      { channelId: "channel-a", joinedAt: joinedAtA },
+      { channelId: "channel-b", joinedAt: joinedAtB },
+    ]);
+
+    assert.deepEqual(counts, { "channel-a": 2 });
+    assert.equal(countCalls.length, 2);
+    assert.deepEqual(countCalls[0].where, {
+      channelId: "channel-a",
+      deletedAt: null,
+      authorId: { not: "user-1" },
+      createdAt: { gt: readAtA },
+    });
+    assert.deepEqual(countCalls[1].where, {
+      channelId: "channel-b",
+      deletedAt: null,
+      authorId: { not: "user-1" },
+      createdAt: { gt: joinedAtB },
+    });
+  });
+});
+
+describe("Message draft storage", () => {
+  function createDraftStorage() {
+    const values = new Map();
+    return {
+      getItem(key) {
+        return values.get(key) ?? null;
+      },
+      setItem(key, value) {
+        values.set(key, value);
+      },
+      removeItem(key) {
+        values.delete(key);
+      },
+    };
+  }
+
+  test("keeps drafts isolated by conversation key", () => {
+    const storage = createDraftStorage();
+    const {
+      readMessageDraft,
+      writeMessageDraft,
+      getMessageDraftStorageKey,
+    } = loadTsModule("src/lib/messageDrafts.ts");
+
+    writeMessageDraft("user-1:channel:general", "hello channel", storage);
+    writeMessageDraft("user-1:channel:dm-1", "hello dm", storage);
+
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "hello channel");
+    assert.equal(readMessageDraft("user-1:channel:dm-1", storage), "hello dm");
+    assert.notEqual(
+      getMessageDraftStorageKey("user-1:channel:general"),
+      getMessageDraftStorageKey("user-1:channel:dm-1"),
+    );
+  });
+
+  test("clears blank and sent drafts", () => {
+    const storage = createDraftStorage();
+    const {
+      clearMessageDraft,
+      readMessageDraft,
+      writeMessageDraft,
+    } = loadTsModule("src/lib/messageDrafts.ts");
+
+    writeMessageDraft("user-1:channel:general", "working draft", storage);
+    writeMessageDraft("user-1:channel:general", "   ", storage);
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "");
+
+    writeMessageDraft("user-1:channel:general", "second draft", storage);
+    clearMessageDraft("user-1:channel:general", storage);
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "");
+  });
+});
 
 describe("DM API route", () => {
   test("rejects unauthenticated DM creation", async () => {
@@ -325,6 +454,7 @@ describe("Social session bridge auth", () => {
 
   function loadSessionModule({ cookie = "", serverSession = null, socialUser = null } = {}) {
     const upsertCalls = [];
+    const telemetryCalls = [];
     const moduleExports = loadTsModule("src/lib/session.ts", {
       "next-auth": {
         async getServerSession() {
@@ -341,6 +471,11 @@ describe("Social session bridge auth", () => {
         },
       },
       "./auth": { authOptions: {} },
+      "./telemetry": {
+        socialLog(level, event, fields) {
+          telemetryCalls.push({ level, event, fields });
+        },
+      },
       "./socialIdentity": {
         getString,
         async upsertSocialUserFromIdentity(identity) {
@@ -350,7 +485,7 @@ describe("Social session bridge auth", () => {
       },
     });
 
-    return { moduleExports, upsertCalls };
+    return { moduleExports, upsertCalls, telemetryCalls };
   }
 
   test("uses an existing NextAuth session before calling the bridge", async () => {
@@ -421,9 +556,8 @@ describe("Social session bridge auth", () => {
 
   test("throws the bridge unavailable error when requested", async () => {
     process.env.LIBRECHAT_AUTH_BRIDGE_URL = "http://bridge.test/session";
-    console.error = () => {};
     globalThis.fetch = async () => new Response("bridge down", { status: 503 });
-    const { moduleExports } = loadSessionModule({ cookie: "refreshToken=bridge-cookie" });
+    const { moduleExports, telemetryCalls } = loadSessionModule({ cookie: "refreshToken=bridge-cookie" });
 
     await assert.rejects(
       () => moduleExports.auth({ bridgeUnavailable: "throw" }),
@@ -432,5 +566,13 @@ describe("Social session bridge auth", () => {
         error?.status === 503 &&
         String(error.message).includes("bridge down"),
     );
+
+    assert.equal(telemetryCalls.length, 1);
+    assert.equal(telemetryCalls[0].level, "error");
+    assert.equal(telemetryCalls[0].event, "social.auth.bridge_unavailable");
+    assert.equal(telemetryCalls[0].fields.status, 503);
+    assert.equal(telemetryCalls[0].fields.bridgeUnavailableMode, "throw");
+    assert.equal(telemetryCalls[0].fields.bridgeUrl, "http://bridge.test/session");
+    assert.match(telemetryCalls[0].fields.message, /bridge down/);
   });
 });

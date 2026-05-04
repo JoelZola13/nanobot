@@ -20,7 +20,7 @@ interface ThreadPanelProps {
 export default function ThreadPanel({
   channelId,
   parentMessage,
-  currentUserId: _currentUserId,
+  currentUserId,
   onReplyCreated,
   onClose,
 }: ThreadPanelProps) {
@@ -67,13 +67,13 @@ export default function ThreadPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, parentId: parentMessage.id }),
       });
-      if (res.ok) {
-        const msg = await res.json();
-        setReplies((prev) => [...prev, msg]);
-        onReplyCreated?.(msg);
-        socket?.emit("message:send", msg);
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-      }
+      if (!res.ok) throw new Error("Failed to send reply");
+
+      const msg = await res.json();
+      setReplies((prev) => [...prev, msg]);
+      onReplyCreated?.(msg);
+      socket?.emit("message:send", msg);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     } finally {
       setSending(false);
     }
@@ -155,6 +155,7 @@ export default function ThreadPanel({
         onSend={handleSendReply}
         disabled={sending}
         placeholder="Reply in thread..."
+        draftId={`${currentUserId}:thread:${channelId}:${parentMessage.id}`}
       />
     </div>
   );

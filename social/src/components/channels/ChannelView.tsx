@@ -259,12 +259,12 @@ export default function ChannelView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      if (res.ok) {
-        const msg = await res.json();
-        setMessages((prev) => [...prev, msg]);
-        socket?.emit("message:send", msg);
-        socket?.emit("typing:stop", { channelId, userId: currentUserId });
-      }
+      if (!res.ok) throw new Error("Failed to send message");
+
+      const msg = await res.json();
+      setMessages((prev) => [...prev, msg]);
+      socket?.emit("message:send", msg);
+      socket?.emit("typing:stop", { channelId, userId: currentUserId });
     } finally {
       setSending(false);
     }
@@ -439,6 +439,7 @@ export default function ChannelView({
           onTyping={handleTyping}
           disabled={sending}
           placeholder={placeholder}
+          draftId={`${currentUserId}:channel:${channelId}`}
           onVoiceSend={handleVoiceSend}
           onFileUpload={handleFileUpload}
         />

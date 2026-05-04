@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { PanelLeftOpen } from "lucide-react";
 import type { ChannelInfo } from "@/types";
+import { useUnreadStore } from "@/stores/unreadStore";
 import Sidebar from "./Sidebar";
 
 type DmChannel = ChannelInfo & {
@@ -21,6 +22,7 @@ interface ResponsiveMessagesShellProps {
   channels: ChannelInfo[];
   dms: DmChannel[];
   userId: string;
+  initialUnreadCounts: Record<string, number>;
   children: ReactNode;
 }
 
@@ -28,10 +30,16 @@ export default function ResponsiveMessagesShell({
   channels,
   dms,
   userId,
+  initialUnreadCounts,
   children,
 }: ResponsiveMessagesShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const hydrateUnreadCounts = useUnreadStore((s) => s.hydrate);
+
+  useEffect(() => {
+    hydrateUnreadCounts(initialUnreadCounts);
+  }, [hydrateUnreadCounts, initialUnreadCounts]);
 
   useEffect(() => {
     setSidebarOpen(false);
