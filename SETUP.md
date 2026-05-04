@@ -416,6 +416,8 @@ Browser → nginx (3180)
 | `LibreChat/docker-compose.override.yml` | All custom service definitions |
 | `.env.nanobot` | Nanobot container environment variables |
 
+Messages uses LibreChat as the source of truth for sign-in. The Social service and LibreChat API must share `LIBRECHAT_AUTH_BRIDGE_SECRET`; generate it with `openssl rand -hex 32` and keep the same value in the secrets bundle for both services.
+
 ### Making Frontend Changes
 
 The frontend is a React app inside `LibreChat/`. Street Voices custom pages are in `LibreChat/client/src/components/streetbot/`.

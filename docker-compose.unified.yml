@@ -106,6 +106,7 @@ services:
       - MEILI_HOST=http://meilisearch:7700
       - RAG_PORT=8000
       - RAG_API_URL=http://rag_api:8000
+      - LIBRECHAT_AUTH_BRIDGE_SECRET=${LIBRECHAT_AUTH_BRIDGE_SECRET:?Set LIBRECHAT_AUTH_BRIDGE_SECRET in your secrets file}
     volumes:
       - type: bind
         source: ./LibreChat/.env
@@ -258,6 +259,8 @@ services:
       - AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
       - AUTH_SECRET=street-voices-social-secret-2026
       - NEXTAUTH_URL=http://localhost:3180/social/api/auth
+      - LIBRECHAT_AUTH_BRIDGE_URL=http://librechat:3180/api/auth/social-session
+      - LIBRECHAT_AUTH_BRIDGE_SECRET=${LIBRECHAT_AUTH_BRIDGE_SECRET:?Set LIBRECHAT_AUTH_BRIDGE_SECRET in your secrets file}
       - NANOBOT_API_URL=http://host.docker.internal:18790/v1
       - NANOBOT_API_KEY=nanobot
     depends_on:

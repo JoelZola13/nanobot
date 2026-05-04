@@ -6,6 +6,16 @@ Use this when validating the teammate install path for `LibChatMain + NanobotMai
 
 Confirm that a teammate can sign in once with LibreChat OAuth and access Messages without a second Social/LobeHub login.
 
+## Secret Prerequisite
+
+LibreChat and Social must share the same internal auth bridge secret:
+
+```bash
+openssl rand -hex 32
+```
+
+Set the generated value as `LIBRECHAT_AUTH_BRIDGE_SECRET` in the teammate secrets bundle. The value must be identical for LibreChat and the Social service.
+
 ## Manual Check
 
 1. Start the local stack.
