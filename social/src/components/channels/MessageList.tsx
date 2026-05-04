@@ -26,6 +26,7 @@ import MarkdownContent from "./MarkdownContent";
 import EmojiPicker from "./EmojiPicker";
 import VoicePlayer from "./VoicePlayer";
 import ProfilePopover from "@/components/users/ProfilePopover";
+import { findFirstUnreadMessageId } from "@/lib/unreadMarker";
 import type { MessageData } from "@/types";
 
 export type MessageEmptyState = {
@@ -48,6 +49,7 @@ interface MessageListProps {
   loadingOlder?: boolean;
   autoScrollKey?: number;
   showJumpToLatest?: boolean;
+  unreadAfter?: string | null;
   canModerateMessages?: boolean;
   onLoadOlder?: () => void;
   onJumpToLatest?: () => void;
@@ -69,6 +71,7 @@ export default function MessageList({
   loadingOlder = false,
   autoScrollKey,
   showJumpToLatest = false,
+  unreadAfter = null,
   canModerateMessages = false,
   onJumpToLatest,
   onLoadOlder,
@@ -109,6 +112,11 @@ export default function MessageList({
 
   let lastAuthor = "";
   let lastDate = "";
+  const firstUnreadMessageId = findFirstUnreadMessageId(
+    messages,
+    currentUserId,
+    unreadAfter,
+  );
 
   return (
     <div className="relative flex-1 overflow-y-auto">
@@ -128,7 +136,8 @@ export default function MessageList({
         {messages.map((msg, msgIdx) => {
           const msgDate = format(new Date(msg.createdAt), "MMM d, yyyy");
           const showDateDivider = msgDate !== lastDate;
-          const isGrouped = msg.author.id === lastAuthor && !showDateDivider;
+          const showUnreadDivider = msg.id === firstUnreadMessageId;
+          const isGrouped = msg.author.id === lastAuthor && !showDateDivider && !showUnreadDivider;
           lastAuthor = msg.author.id;
           lastDate = msgDate;
 
@@ -141,6 +150,7 @@ export default function MessageList({
                   <div className="flex-1 h-px bg-border" />
                 </div>
               )}
+              {showUnreadDivider && <UnreadDivider />}
               <MessageRow
                 msg={msg}
                 isGrouped={isGrouped}
@@ -173,6 +183,22 @@ export default function MessageList({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function UnreadDivider() {
+  return (
+    <div
+      role="separator"
+      aria-label="Unread messages"
+      className="flex items-center gap-3 px-4 py-2"
+    >
+      <div className="h-px flex-1 bg-danger" />
+      <span className="rounded-full bg-danger-muted px-2 py-0.5 text-2xs font-semibold uppercase tracking-wider text-danger">
+        New
+      </span>
+      <div className="h-px flex-1 bg-danger" />
     </div>
   );
 }

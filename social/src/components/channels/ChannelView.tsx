@@ -18,6 +18,7 @@ interface ChannelViewProps {
   channelName: string;
   initialMessages: MessageData[];
   initialOldestMessageCursor?: string | null;
+  initialUnreadAfter?: string | null;
   currentUserId: string;
   placeholder?: string;
   emptyState: MessageEmptyState;
@@ -61,6 +62,7 @@ export default function ChannelView({
   channelName,
   initialMessages,
   initialOldestMessageCursor = null,
+  initialUnreadAfter = null,
   currentUserId,
   placeholder,
   emptyState,
@@ -485,6 +487,7 @@ export default function ChannelView({
           loadingOlder={loadingOlder}
           autoScrollKey={autoScrollKey}
           showJumpToLatest={showJumpToLatest}
+          unreadAfter={initialUnreadAfter}
           canModerateMessages={canManageMessages}
           onLoadOlder={handleLoadOlder}
           onJumpToLatest={handleJumpToLatest}

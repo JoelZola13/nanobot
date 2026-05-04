@@ -213,6 +213,57 @@ describe("Unread count hydration", () => {
   });
 });
 
+describe("Unread message divider marker", () => {
+  test("uses the later of read receipt time and join time", () => {
+    const { resolveUnreadAfter } = loadTsModule("src/lib/unreadMarker.ts");
+
+    assert.equal(
+      resolveUnreadAfter(
+        new Date("2026-05-02T12:00:00.000Z"),
+        new Date("2026-05-01T12:00:00.000Z"),
+      ),
+      "2026-05-02T12:00:00.000Z",
+    );
+    assert.equal(
+      resolveUnreadAfter(
+        new Date("2026-05-01T12:00:00.000Z"),
+        new Date("2026-05-02T12:00:00.000Z"),
+      ),
+      "2026-05-02T12:00:00.000Z",
+    );
+  });
+
+  test("finds the first unread message from another user", () => {
+    const { findFirstUnreadMessageId } = loadTsModule("src/lib/unreadMarker.ts");
+    const messages = [
+      {
+        id: "read-teammate-message",
+        createdAt: "2026-05-02T11:59:00.000Z",
+        author: { id: "teammate" },
+      },
+      {
+        id: "own-new-message",
+        createdAt: "2026-05-02T12:01:00.000Z",
+        author: { id: "current-user" },
+      },
+      {
+        id: "first-unread-message",
+        createdAt: "2026-05-02T12:02:00.000Z",
+        author: { id: "teammate" },
+      },
+    ];
+
+    assert.equal(
+      findFirstUnreadMessageId(
+        messages,
+        "current-user",
+        "2026-05-02T12:00:00.000Z",
+      ),
+      "first-unread-message",
+    );
+  });
+});
+
 describe("Message draft storage", () => {
   function createDraftStorage() {
     const values = new Map();

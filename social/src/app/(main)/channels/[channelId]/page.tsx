@@ -5,6 +5,7 @@ import TopBar from "@/components/layout/TopBar";
 import ChannelView from "@/components/channels/ChannelView";
 import { formatMessageForClient } from "@/lib/messageFormat";
 import { canManageChannel } from "@/lib/channelManagement";
+import { resolveUnreadAfter } from "@/lib/unreadMarker";
 
 const INITIAL_MESSAGE_LIMIT = 100;
 
@@ -32,6 +33,16 @@ export default async function ChannelPage({
   });
   if (!membership) notFound();
   const canManageCurrentChannel = canManageChannel(session.user, membership.role);
+  const readReceipt = await prisma.readReceipt.findUnique({
+    where: {
+      userId_channelId: {
+        userId: session.user.id,
+        channelId,
+      },
+    },
+    select: { readAt: true },
+  });
+  const initialUnreadAfter = resolveUnreadAfter(readReceipt?.readAt, membership.joinedAt);
 
   // Fetch messages
   const messages = await prisma.message.findMany({
@@ -97,6 +108,7 @@ export default async function ChannelPage({
         initialOldestMessageCursor={
           hasOlderMessages ? visibleMessages[0]?.id || null : null
         }
+        initialUnreadAfter={initialUnreadAfter}
         currentUserId={session.user.id}
         placeholder={`Message #${channel.name || "channel"}`}
         canManageMessages={canManageCurrentChannel}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import TopBar from "@/components/layout/TopBar";
 import ChannelView from "@/components/channels/ChannelView";
 import { formatMessageForClient } from "@/lib/messageFormat";
+import { resolveUnreadAfter } from "@/lib/unreadMarker";
 
 const INITIAL_MESSAGE_LIMIT = 50;
 
@@ -35,6 +36,21 @@ export default async function DMConversationPage({
 
   const isMember = channel.members.some((m) => m.userId === session.user!.id);
   if (!isMember) notFound();
+
+  const currentMember = channel.members.find((m) => m.userId === session.user!.id);
+  const readReceipt = await prisma.readReceipt.findUnique({
+    where: {
+      userId_channelId: {
+        userId: session.user.id,
+        channelId,
+      },
+    },
+    select: { readAt: true },
+  });
+  const initialUnreadAfter = resolveUnreadAfter(
+    readReceipt?.readAt,
+    currentMember?.joinedAt,
+  );
 
   // Find the other user in this DM
   const otherMember = channel.members.find((m) => m.userId !== session.user!.id);
@@ -104,6 +120,7 @@ export default async function DMConversationPage({
         initialOldestMessageCursor={
           hasOlderMessages ? visibleMessages[0]?.id || null : null
         }
+        initialUnreadAfter={initialUnreadAfter}
         currentUserId={session.user.id}
         placeholder={`Message ${otherName}`}
         emptyState={{

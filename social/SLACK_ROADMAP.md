@@ -80,4 +80,4 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Open channels and DMs on the latest message window.
 - [x] Add a load-older control for long conversations.
 - [x] Add jump-to-latest behavior after reading older history.
-- [ ] Add unread dividers inside long conversations.
+- [x] Add unread dividers inside long conversations.
