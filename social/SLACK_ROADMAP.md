@@ -64,6 +64,6 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 ## Phase 6: Persistence And Polish
 
 - [x] Hydrate sidebar unread counts from persisted read receipts after reloads.
-- [ ] Add draft persistence per channel and DM.
+- [x] Add draft persistence per channel and DM.
 - [ ] Add browser notifications with a quiet permission prompt.
 - [ ] Add channel creation and edit controls for workspace admins.

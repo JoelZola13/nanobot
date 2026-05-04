@@ -14,6 +14,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import VoiceRecorder from "./VoiceRecorder";
+import {
+  clearMessageDraft,
+  getBrowserMessageDraftStorage,
+  readMessageDraft,
+  writeMessageDraft,
+} from "@/lib/messageDrafts";
 
 type SlashCommand = {
   name: string;
@@ -57,21 +63,23 @@ const SLASH_COMMANDS: SlashCommand[] = [
 interface MessageInputProps {
   channelId: string;
   channelName: string;
-  onSend: (content: string) => void;
+  onSend: (content: string) => void | Promise<void>;
   onTyping?: () => void;
   disabled?: boolean;
   placeholder?: string;
+  draftId?: string;
   onVoiceSend?: (audioBlob: Blob, duration: number) => Promise<void>;
   onFileUpload?: (file: File) => Promise<void>;
 }
 
 export default function MessageInput({
-  channelId: _channelId,
+  channelId,
   channelName,
   onSend,
   onTyping,
   disabled,
   placeholder,
+  draftId,
   onVoiceSend,
   onFileUpload,
 }: MessageInputProps) {
@@ -82,6 +90,8 @@ export default function MessageInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const skipNextDraftSaveRef = useRef(false);
+  const resolvedDraftId = draftId || channelId;
 
   const slashMatch = content.match(/^\/([a-z-]*)$/i);
   const slashQuery = slashMatch?.[1].toLowerCase() ?? null;
@@ -111,6 +121,25 @@ export default function MessageInput({
     textarea.style.height = Math.min(textarea.scrollHeight, 200) + "px";
   }, []);
 
+  useEffect(() => {
+    skipNextDraftSaveRef.current = true;
+    setContent(readMessageDraft(resolvedDraftId, getBrowserMessageDraftStorage()));
+    setSlashMenuDismissed(false);
+  }, [resolvedDraftId]);
+
+  useEffect(() => {
+    resizeTextarea();
+  }, [content, resizeTextarea]);
+
+  useEffect(() => {
+    if (skipNextDraftSaveRef.current) {
+      skipNextDraftSaveRef.current = false;
+      return;
+    }
+
+    writeMessageDraft(resolvedDraftId, content, getBrowserMessageDraftStorage());
+  }, [content, resolvedDraftId]);
+
   const applySlashCommand = useCallback((command: SlashCommand) => {
     setContent(command.insertText);
     setSlashMenuDismissed(false);
@@ -125,7 +154,7 @@ export default function MessageInput({
     }, 0);
   }, [resizeTextarea]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
     if (showSlashCommands) {
@@ -136,10 +165,16 @@ export default function MessageInput({
       return;
     }
     if (slashQuery !== null && !content.includes(" ")) return;
-    onSend(trimmed);
-    setContent("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+
+    try {
+      await onSend(trimmed);
+      clearMessageDraft(resolvedDraftId, getBrowserMessageDraftStorage());
+      setContent("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    } catch {
+      writeMessageDraft(resolvedDraftId, content, getBrowserMessageDraftStorage());
     }
   }, [
     applySlashCommand,
@@ -147,6 +182,7 @@ export default function MessageInput({
     disabled,
     filteredSlashCommands,
     onSend,
+    resolvedDraftId,
     selectedCommandIndex,
     showSlashCommands,
     slashQuery,
@@ -186,7 +222,7 @@ export default function MessageInput({
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      void handleSubmit();
     }
     // Markdown shortcuts
     if ((e.metaKey || e.ctrlKey) && e.key === "b") {
@@ -353,7 +389,7 @@ export default function MessageInput({
           <button
             type="button"
             data-testid="message-send-button"
-            onClick={handleSubmit}
+            onClick={() => void handleSubmit()}
             disabled={!content.trim() || disabled}
             title="Send message"
             aria-label="Send message"

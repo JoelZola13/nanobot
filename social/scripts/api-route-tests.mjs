@@ -167,6 +167,59 @@ describe("Unread count hydration", () => {
   });
 });
 
+describe("Message draft storage", () => {
+  function createDraftStorage() {
+    const values = new Map();
+    return {
+      getItem(key) {
+        return values.get(key) ?? null;
+      },
+      setItem(key, value) {
+        values.set(key, value);
+      },
+      removeItem(key) {
+        values.delete(key);
+      },
+    };
+  }
+
+  test("keeps drafts isolated by conversation key", () => {
+    const storage = createDraftStorage();
+    const {
+      readMessageDraft,
+      writeMessageDraft,
+      getMessageDraftStorageKey,
+    } = loadTsModule("src/lib/messageDrafts.ts");
+
+    writeMessageDraft("user-1:channel:general", "hello channel", storage);
+    writeMessageDraft("user-1:channel:dm-1", "hello dm", storage);
+
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "hello channel");
+    assert.equal(readMessageDraft("user-1:channel:dm-1", storage), "hello dm");
+    assert.notEqual(
+      getMessageDraftStorageKey("user-1:channel:general"),
+      getMessageDraftStorageKey("user-1:channel:dm-1"),
+    );
+  });
+
+  test("clears blank and sent drafts", () => {
+    const storage = createDraftStorage();
+    const {
+      clearMessageDraft,
+      readMessageDraft,
+      writeMessageDraft,
+    } = loadTsModule("src/lib/messageDrafts.ts");
+
+    writeMessageDraft("user-1:channel:general", "working draft", storage);
+    writeMessageDraft("user-1:channel:general", "   ", storage);
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "");
+
+    writeMessageDraft("user-1:channel:general", "second draft", storage);
+    clearMessageDraft("user-1:channel:general", storage);
+    assert.equal(readMessageDraft("user-1:channel:general", storage), "");
+  });
+});
+
 describe("DM API route", () => {
   test("rejects unauthenticated DM creation", async () => {
     const { POST } = loadTsModule("src/app/api/dm/route.ts", createUnauthenticatedMocks());
