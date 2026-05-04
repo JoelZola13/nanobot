@@ -23,6 +23,7 @@ import NotificationPreferencesPanel from "@/components/channels/NotificationPref
 import FilesPanel from "@/components/channels/FilesPanel";
 import ChannelMembersPanel from "@/components/channels/ChannelMembersPanel";
 import RemovedMessagesPanel from "@/components/channels/RemovedMessagesPanel";
+import ConversationDetailsPanel from "@/components/channels/ConversationDetailsPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
 import ProfilePopover from "@/components/users/ProfilePopover";
@@ -55,12 +56,14 @@ export default function TopBar({
   const [showMembers, setShowMembers] = useState(false);
   const [showRemoved, setShowRemoved] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
   const canShowCallControls = type === "dm" && Boolean(otherUserId && channelId);
   const canStartCall = Boolean(socket && otherUserId && channelId);
   const canConfigureNotifications = Boolean(channelId && (type === "channel" || type === "dm"));
   const canShowRemovedMessages = Boolean(channelId && type === "channel" && canManageChannel);
+  const canShowDetails = Boolean(channelId && (type === "channel" || type === "dm"));
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
   const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
@@ -128,6 +131,7 @@ export default function TopBar({
                 setShowFiles(false);
                 setShowRemoved(false);
                 setShowNotifications(false);
+                setShowDetails(false);
               }}
             >
               <Users size={15} />
@@ -164,6 +168,7 @@ export default function TopBar({
                 setShowMembers(false);
                 setShowRemoved(false);
                 setShowNotifications(false);
+                setShowDetails(false);
               }}
             title="Pinned messages"
           >
@@ -178,6 +183,7 @@ export default function TopBar({
                 setShowMembers(false);
                 setShowRemoved(false);
                 setShowNotifications(false);
+                setShowDetails(false);
               }}
               title="Files"
               aria-label="Files"
@@ -194,6 +200,7 @@ export default function TopBar({
                 setShowFiles(false);
                 setShowMembers(false);
                 setShowNotifications(false);
+                setShowDetails(false);
               }}
               title="Removed messages"
               aria-label="Removed messages"
@@ -210,14 +217,29 @@ export default function TopBar({
               setShowMembers(false);
               setShowRemoved(false);
               setShowNotifications(false);
+              setShowDetails(false);
             }}
             title="Search messages"
           >
             <Search size={16} />
           </button>
-          <button className="btn-ghost h-9 w-9 p-0" title="Channel details">
-            <Info size={16} />
-          </button>
+          {canShowDetails && (
+            <button
+              className={`btn-ghost h-9 w-9 p-0 ${showDetails ? "text-accent" : ""}`}
+              onClick={() => {
+                setShowDetails(!showDetails);
+                setShowPins(false);
+                setShowFiles(false);
+                setShowMembers(false);
+                setShowRemoved(false);
+                setShowNotifications(false);
+              }}
+              title={type === "dm" ? "DM details" : "Channel details"}
+              aria-label={type === "dm" ? "DM details" : "Channel details"}
+            >
+              <Info size={16} />
+            </button>
+          )}
           {canConfigureNotifications && channelId && (
             <button
               className={`btn-ghost h-9 w-9 p-0 relative ${showNotifications ? "text-accent" : ""}`}
@@ -227,6 +249,7 @@ export default function TopBar({
                 setShowFiles(false);
                 setShowMembers(false);
                 setShowRemoved(false);
+                setShowDetails(false);
               }}
               title="Notifications"
               aria-label="Notifications"
@@ -258,6 +281,35 @@ export default function TopBar({
         <RemovedMessagesPanel
           channelId={channelId}
           onClose={() => setShowRemoved(false)}
+        />
+      )}
+      {showDetails && canShowDetails && channelId && (
+        <ConversationDetailsPanel
+          title={title}
+          description={description}
+          type={type === "dm" ? "dm" : "channel"}
+          memberCount={memberCount}
+          onClose={() => setShowDetails(false)}
+          onOpenMembers={
+            memberCount !== undefined
+              ? () => {
+                  setShowDetails(false);
+                  setShowMembers(true);
+                }
+              : undefined
+          }
+          onOpenPins={() => {
+            setShowDetails(false);
+            setShowPins(true);
+          }}
+          onOpenFiles={() => {
+            setShowDetails(false);
+            setShowFiles(true);
+          }}
+          onOpenNotifications={() => {
+            setShowDetails(false);
+            setShowNotifications(true);
+          }}
         />
       )}
       {showNotifications && channelId && (
