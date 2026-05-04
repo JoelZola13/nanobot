@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AtSign,
   Bell,
@@ -35,10 +35,12 @@ interface TopBarProps {
   type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved";
   memberCount?: number;
   detailsMemberCount?: number;
+  channelVisibility?: "PUBLIC" | "PRIVATE";
   channelId?: string;
   otherUserId?: string;
   otherUserName?: string;
   canManageChannel?: boolean;
+  canEditChannelTopic?: boolean;
 }
 
 export default function TopBar({
@@ -47,10 +49,12 @@ export default function TopBar({
   type = "channel",
   memberCount,
   detailsMemberCount,
+  channelVisibility = "PUBLIC",
   channelId,
   otherUserId,
   otherUserName,
   canManageChannel = false,
+  canEditChannelTopic = false,
 }: TopBarProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [showPins, setShowPins] = useState(false);
@@ -59,6 +63,7 @@ export default function TopBar({
   const [showRemoved, setShowRemoved] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [currentDescription, setCurrentDescription] = useState(description);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
   const canShowCallControls = type === "dm" && Boolean(otherUserId && channelId);
@@ -66,9 +71,13 @@ export default function TopBar({
   const canConfigureNotifications = Boolean(channelId && (type === "channel" || type === "dm"));
   const canShowRemovedMessages = Boolean(channelId && type === "channel" && canManageChannel);
   const canShowDetails = Boolean(channelId && (type === "channel" || type === "dm"));
-  const isOnline = type === "dm" && description?.toLowerCase() === "online";
-  const isOffline = type === "dm" && description?.toLowerCase() === "offline";
-  const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
+  useEffect(() => {
+    setCurrentDescription(description);
+  }, [description]);
+
+  const isOnline = type === "dm" && currentDescription?.toLowerCase() === "online";
+  const isOffline = type === "dm" && currentDescription?.toLowerCase() === "offline";
+  const subtitle = currentDescription || (memberCount !== undefined ? `${memberCount} members` : undefined);
   const resolvedDetailsMemberCount = detailsMemberCount ?? memberCount;
   const HeaderIcon = type === "channel" ? Hash : type === "mentions" ? AtSign : type === "saved" ? Bookmark : Users;
   const NotificationIcon = notificationLevel === "MUTED" ? BellOff : Bell;
@@ -290,10 +299,13 @@ export default function TopBar({
         <ConversationDetailsPanel
           channelId={channelId}
           title={title}
-          description={description}
+          description={currentDescription}
           type={type === "dm" ? "dm" : "channel"}
+          channelVisibility={channelVisibility}
           memberCount={resolvedDetailsMemberCount}
+          canEditTopic={canEditChannelTopic}
           onClose={() => setShowDetails(false)}
+          onTopicChange={setCurrentDescription}
           onOpenMembers={
             memberCount !== undefined
               ? () => {

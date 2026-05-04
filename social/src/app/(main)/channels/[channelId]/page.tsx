@@ -100,6 +100,8 @@ export default async function ChannelPage({
         memberCount={channel._count.members}
         channelId={channelId}
         canManageChannel={canManageCurrentChannel}
+        canEditChannelTopic={canManageCurrentChannel && !channel.isDefault}
+        channelVisibility={channel.type === "PRIVATE" ? "PRIVATE" : "PUBLIC"}
       />
       <ChannelView
         channelId={channelId}
