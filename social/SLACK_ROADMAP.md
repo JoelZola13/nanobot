@@ -60,3 +60,10 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add API tests for DM creation, channel membership, and Social session bridge.
 - [x] Add production deployment notes for the Social service and websocket routing.
 - [x] Add telemetry or structured logs for auth bridge failures and socket disconnects.
+
+## Phase 6: Persistence And Polish
+
+- [x] Hydrate sidebar unread counts from persisted read receipts after reloads.
+- [ ] Add draft persistence per channel and DM.
+- [ ] Add browser notifications with a quiet permission prompt.
+- [ ] Add channel creation and edit controls for workspace admins.

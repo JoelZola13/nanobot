@@ -117,6 +117,56 @@ describe("Social structured logs", () => {
   });
 });
 
+describe("Unread count hydration", () => {
+  test("counts unread messages after the latest read receipt or join time", async () => {
+    const joinedAtA = new Date("2026-05-01T10:00:00.000Z");
+    const joinedAtB = new Date("2026-05-02T10:00:00.000Z");
+    const readAtA = new Date("2026-05-03T10:00:00.000Z");
+    const countCalls = [];
+    const { getInitialUnreadCountsForUser } = loadTsModule("src/lib/unreadCounts.ts", {
+      "./prisma": {
+        prisma: {
+          readReceipt: {
+            async findMany(args) {
+              assert.deepEqual(args.where, {
+                userId: "user-1",
+                channelId: { in: ["channel-a", "channel-b"] },
+              });
+              return [{ channelId: "channel-a", readAt: readAtA }];
+            },
+          },
+          message: {
+            async count(args) {
+              countCalls.push(args);
+              return args.where.channelId === "channel-a" ? 2 : 0;
+            },
+          },
+        },
+      },
+    });
+
+    const counts = await getInitialUnreadCountsForUser("user-1", [
+      { channelId: "channel-a", joinedAt: joinedAtA },
+      { channelId: "channel-b", joinedAt: joinedAtB },
+    ]);
+
+    assert.deepEqual(counts, { "channel-a": 2 });
+    assert.equal(countCalls.length, 2);
+    assert.deepEqual(countCalls[0].where, {
+      channelId: "channel-a",
+      deletedAt: null,
+      authorId: { not: "user-1" },
+      createdAt: { gt: readAtA },
+    });
+    assert.deepEqual(countCalls[1].where, {
+      channelId: "channel-b",
+      deletedAt: null,
+      authorId: { not: "user-1" },
+      createdAt: { gt: joinedAtB },
+    });
+  });
+});
+
 describe("DM API route", () => {
   test("rejects unauthenticated DM creation", async () => {
     const { POST } = loadTsModule("src/app/api/dm/route.ts", createUnauthenticatedMocks());

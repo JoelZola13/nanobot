@@ -10,6 +10,7 @@ import SocketProvider from "@/components/providers/SocketProvider";
 import CallOverlay from "@/components/calls/CallOverlay";
 import IncomingCallModal from "@/components/calls/IncomingCallModal";
 import { normalizeNotificationLevel } from "@/lib/notificationPreferences";
+import { getInitialUnreadCountsForUser } from "@/lib/unreadCounts";
 
 export default async function MainLayout({
   children,
@@ -94,6 +95,13 @@ export default async function MainLayout({
     "User";
 
   const allChannelIds = memberships.map((m) => m.channel.id);
+  const initialUnreadCounts = await getInitialUnreadCountsForUser(
+    userId,
+    memberships.map((membership) => ({
+      channelId: membership.channel.id,
+      joinedAt: membership.joinedAt,
+    })),
+  );
   const notificationPreferences = Object.fromEntries(
     memberships.map((membership) => [
       membership.channel.id,
@@ -108,7 +116,12 @@ export default async function MainLayout({
       userName={username}
       notificationPreferences={notificationPreferences}
     >
-      <ResponsiveMessagesShell channels={channels} dms={dms} userId={userId}>
+      <ResponsiveMessagesShell
+        channels={channels}
+        dms={dms}
+        userId={userId}
+        initialUnreadCounts={initialUnreadCounts}
+      >
         {children}
       </ResponsiveMessagesShell>
       <CallOverlay />
