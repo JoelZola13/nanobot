@@ -512,6 +512,7 @@ describe("Channel API route", () => {
                 type: args.data.type,
                 iconEmoji: null,
                 isDefault: false,
+                isArchived: false,
                 _count: { members: 1, messages: 0 },
               };
             },
@@ -545,6 +546,7 @@ describe("Channel API route", () => {
       type: "PRIVATE",
       iconEmoji: null,
       isDefault: false,
+      isArchived: false,
       isMember: true,
       memberCount: 1,
       messageCount: 0,
@@ -591,6 +593,7 @@ describe("Channel API route", () => {
                 type: args.data.type,
                 iconEmoji: null,
                 isDefault: false,
+                isArchived: false,
                 members: [{ role: "owner" }],
                 _count: { members: 3, messages: 9 },
               };
@@ -652,6 +655,159 @@ describe("Channel API route", () => {
     assert.equal(response.status, 403);
     assert.deepEqual(await responseJson(response), {
       error: "Workspace admin access required",
+    });
+    assert.equal(updateCalled, false);
+  });
+
+  test("archives custom channels for channel managers", async () => {
+    let updateArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/archive/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("owner-user", "USER"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique({ where }) {
+              assert.deepEqual(where, { id: "channel-1" });
+              return {
+                id: "channel-1",
+                name: "planning",
+                slug: "planning",
+                description: null,
+                type: "PUBLIC",
+                iconEmoji: null,
+                isArchived: false,
+                isDefault: false,
+                members: [{ role: "owner" }],
+                _count: { members: 3, messages: 4 },
+              };
+            },
+            async update(args) {
+              updateArgs = args;
+              return {
+                id: "channel-1",
+                name: "planning",
+                slug: "planning",
+                description: null,
+                type: "PUBLIC",
+                iconEmoji: null,
+                isArchived: args.data.isArchived,
+                isDefault: false,
+                members: [{ role: "owner" }],
+                _count: { members: 3, messages: 4 },
+              };
+            },
+          },
+        },
+      },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ archived: true }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(updateArgs.data, { isArchived: true });
+    assert.equal(body.isArchived, true);
+    assert.equal(body.canManage, true);
+  });
+
+  test("restores archived channels for workspace admins", async () => {
+    let updateArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/archive/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "ADMIN"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique() {
+              return {
+                id: "channel-1",
+                name: "planning",
+                slug: "planning",
+                description: "Planning",
+                type: "PRIVATE",
+                iconEmoji: null,
+                isArchived: true,
+                isDefault: false,
+                members: [],
+                _count: { members: 2, messages: 7 },
+              };
+            },
+            async update(args) {
+              updateArgs = args;
+              return {
+                id: "channel-1",
+                name: "planning",
+                slug: "planning",
+                description: "Planning",
+                type: "PRIVATE",
+                iconEmoji: null,
+                isArchived: args.data.isArchived,
+                isDefault: false,
+                members: [],
+                _count: { members: 2, messages: 7 },
+              };
+            },
+          },
+        },
+      },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ archived: false }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(updateArgs.data, { isArchived: false });
+    assert.equal(body.isArchived, false);
+    assert.equal(body.canCreate, true);
+    assert.equal(body.canManage, true);
+  });
+
+  test("does not archive default channels", async () => {
+    let updateCalled = false;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/archive/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "ADMIN"),
+      "@/lib/prisma": {
+        prisma: {
+          channel: {
+            async findUnique() {
+              return {
+                id: "channel-general",
+                type: "PUBLIC",
+                isDefault: true,
+                members: [{ role: "owner" }],
+                _count: { members: 3, messages: 0 },
+              };
+            },
+            async update() {
+              updateCalled = true;
+            },
+          },
+        },
+      },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ archived: true }),
+      { params: Promise.resolve({ id: "channel-general" }) },
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await responseJson(response), {
+      error: "Default channels cannot be archived",
     });
     assert.equal(updateCalled, false);
   });

@@ -12,6 +12,7 @@ import {
 } from "react";
 import TopBar from "@/components/layout/TopBar";
 import {
+  Archive,
   ArrowRight,
   Check,
   Globe2,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   ShieldCheck,
   Users,
@@ -35,6 +37,7 @@ type ChannelSummary = {
   type: "PUBLIC" | "PRIVATE" | "DM" | "GROUP_DM";
   iconEmoji: string | null;
   isDefault?: boolean;
+  isArchived?: boolean;
   isMember?: boolean;
   memberCount?: number;
   messageCount?: number;
@@ -69,6 +72,8 @@ export default function ChannelsPage() {
   const [editType, setEditType] = useState<ChannelVisibility>("PUBLIC");
   const [updating, setUpdating] = useState(false);
   const [busyChannelId, setBusyChannelId] = useState<string | null>(null);
+  const [archivingChannelId, setArchivingChannelId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
 
   const loadChannels = useCallback(async () => {
@@ -76,7 +81,10 @@ export default function ChannelsPage() {
     setError(null);
 
     try {
-      const res = await fetch(apiUrl("/api/channels"), { cache: "no-store" });
+      const url = showArchived
+        ? "/api/channels?includeArchived=true"
+        : "/api/channels";
+      const res = await fetch(apiUrl(url), { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load channels");
 
       const data = (await res.json()) as ChannelSummary[];
@@ -88,6 +96,7 @@ export default function ChannelsPage() {
           )
           .map((channel) => ({
             ...channel,
+            isArchived: Boolean(channel.isArchived),
             isMember: Boolean(channel.isMember),
           })),
       );
@@ -96,7 +105,7 @@ export default function ChannelsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     void loadChannels();
@@ -112,6 +121,7 @@ export default function ChannelsPage() {
         channel.slug,
         channel.description,
         channel.type === "PRIVATE" ? "private" : "public",
+        channel.isArchived ? "archived" : "active",
         channel.isMember ? "joined" : "available",
       ]
         .filter(Boolean)
@@ -122,30 +132,41 @@ export default function ChannelsPage() {
     });
   }, [channels, query]);
 
-  const defaultChannels = useMemo(
-    () => visibleChannels.filter((channel) => channel.isDefault),
+  const activeChannels = useMemo(
+    () => visibleChannels.filter((channel) => !channel.isArchived),
     [visibleChannels],
+  );
+  const archivedChannels = useMemo(
+    () => visibleChannels.filter((channel) => channel.isArchived),
+    [visibleChannels],
+  );
+  const defaultChannels = useMemo(
+    () => activeChannels.filter((channel) => channel.isDefault),
+    [activeChannels],
   );
   const joinedChannels = useMemo(
     () =>
-      visibleChannels.filter(
+      activeChannels.filter(
         (channel) =>
           channel.isMember && !channel.isDefault && channel.type === "PUBLIC",
       ),
-    [visibleChannels],
+    [activeChannels],
   );
   const privateChannels = useMemo(
-    () => visibleChannels.filter((channel) => channel.type === "PRIVATE"),
-    [visibleChannels],
+    () => activeChannels.filter((channel) => channel.type === "PRIVATE"),
+    [activeChannels],
   );
   const browseChannels = useMemo(
     () =>
-      visibleChannels.filter(
+      activeChannels.filter(
         (channel) => !channel.isMember && channel.type === "PUBLIC",
       ),
-    [visibleChannels],
+    [activeChannels],
   );
   const canCreateChannels = channels.some((channel) => channel.canCreate);
+  const canViewArchivedChannels = channels.some(
+    (channel) => channel.canCreate || channel.canManage,
+  );
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -226,6 +247,73 @@ export default function ChannelsPage() {
     }
   };
 
+  const applyChannelArchiveState = (updatedChannel: ChannelSummary) => {
+    setChannels((currentChannels) => {
+      if (updatedChannel.isArchived && !showArchived) {
+        return currentChannels.filter(
+          (channel) => channel.id !== updatedChannel.id,
+        );
+      }
+
+      const exists = currentChannels.some(
+        (channel) => channel.id === updatedChannel.id,
+      );
+      const normalizedChannel = {
+        ...updatedChannel,
+        isArchived: Boolean(updatedChannel.isArchived),
+        isMember: Boolean(updatedChannel.isMember),
+      };
+
+      if (!exists) return [...currentChannels, normalizedChannel];
+
+      return currentChannels.map((channel) =>
+        channel.id === updatedChannel.id
+          ? { ...channel, ...normalizedChannel }
+          : channel,
+      );
+    });
+  };
+
+  const handleArchiveChange = async (
+    channel: ChannelSummary,
+    archived: boolean,
+  ) => {
+    if (archivingChannelId || channel.isDefault) return;
+    if (
+      archived &&
+      !window.confirm(`Archive #${normalizeChannelName(channel)}?`)
+    ) {
+      return;
+    }
+
+    setArchivingChannelId(channel.id);
+    setError(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/channels/${channel.id}/archive`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      if (!res.ok) throw new Error("Failed to update archive state");
+
+      const updatedChannel = (await res.json()) as ChannelSummary;
+      applyChannelArchiveState(updatedChannel);
+      setEditingChannel((current) =>
+        current?.id === channel.id ? null : current,
+      );
+      router.refresh();
+    } catch {
+      setError(
+        `#${normalizeChannelName(channel)} could not be ${
+          archived ? "archived" : "restored"
+        }.`,
+      );
+    } finally {
+      setArchivingChannelId(null);
+    }
+  };
+
   const updateChannelMembership = (
     channelId: string,
     isMember: boolean,
@@ -288,7 +376,8 @@ export default function ChannelsPage() {
     }
   };
 
-  const hasVisibleChannels = visibleChannels.length > 0;
+  const hasVisibleChannels =
+    activeChannels.length > 0 || archivedChannels.length > 0;
 
   return (
     <>
@@ -325,15 +414,30 @@ export default function ChannelsPage() {
             )}
           </div>
 
-          <div className="mb-5 flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2">
-            <Search size={16} className="shrink-0 text-text-muted" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search channels"
-              className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-            />
+          <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2">
+              <Search size={16} className="shrink-0 text-text-muted" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search channels"
+                className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+              />
+            </div>
+            {canViewArchivedChannels && (
+              <button
+                type="button"
+                onClick={() => setShowArchived((current) => !current)}
+                className={`btn-ghost inline-flex h-10 items-center gap-2 self-start px-3 text-sm ${
+                  showArchived ? "text-accent" : ""
+                }`}
+                aria-pressed={showArchived}
+              >
+                <Archive size={15} />
+                <span>{showArchived ? "Hide archived" : "Show archived"}</span>
+              </button>
+            )}
           </div>
 
           {showCreate && (
@@ -536,6 +640,8 @@ export default function ChannelsPage() {
                 onJoin={handleJoin}
                 onLeave={handleLeave}
                 onEdit={openEditChannel}
+                onArchiveChange={handleArchiveChange}
+                archivingChannelId={archivingChannelId}
               />
               <ChannelSection
                 title="Your public channels"
@@ -544,6 +650,8 @@ export default function ChannelsPage() {
                 onJoin={handleJoin}
                 onLeave={handleLeave}
                 onEdit={openEditChannel}
+                onArchiveChange={handleArchiveChange}
+                archivingChannelId={archivingChannelId}
               />
               <ChannelSection
                 title="Private channels"
@@ -552,6 +660,8 @@ export default function ChannelsPage() {
                 onJoin={handleJoin}
                 onLeave={handleLeave}
                 onEdit={openEditChannel}
+                onArchiveChange={handleArchiveChange}
+                archivingChannelId={archivingChannelId}
               />
               <ChannelSection
                 title="Browse public channels"
@@ -560,7 +670,21 @@ export default function ChannelsPage() {
                 onJoin={handleJoin}
                 onLeave={handleLeave}
                 onEdit={openEditChannel}
+                onArchiveChange={handleArchiveChange}
+                archivingChannelId={archivingChannelId}
               />
+              {showArchived && (
+                <ChannelSection
+                  title="Archived channels"
+                  channels={archivedChannels}
+                  busyChannelId={busyChannelId}
+                  onJoin={handleJoin}
+                  onLeave={handleLeave}
+                  onEdit={openEditChannel}
+                  onArchiveChange={handleArchiveChange}
+                  archivingChannelId={archivingChannelId}
+                />
+              )}
             </div>
           ) : (
             <div className="rounded-lg border border-border bg-bg-surface px-6 py-12 text-center">
@@ -622,6 +746,8 @@ function ChannelSection({
   onJoin,
   onLeave,
   onEdit,
+  onArchiveChange,
+  archivingChannelId,
 }: {
   title: string;
   channels: ChannelSummary[];
@@ -629,6 +755,8 @@ function ChannelSection({
   onJoin: (channel: ChannelSummary) => void;
   onLeave: (channel: ChannelSummary) => void;
   onEdit: (channel: ChannelSummary) => void;
+  onArchiveChange: (channel: ChannelSummary, archived: boolean) => void;
+  archivingChannelId: string | null;
 }) {
   if (channels.length === 0) return null;
 
@@ -646,9 +774,11 @@ function ChannelSection({
             key={channel.id}
             channel={channel}
             busy={busyChannelId === channel.id}
+            archiving={archivingChannelId === channel.id}
             onJoin={onJoin}
             onLeave={onLeave}
             onEdit={onEdit}
+            onArchiveChange={onArchiveChange}
           />
         ))}
       </div>
@@ -659,18 +789,23 @@ function ChannelSection({
 function ChannelRow({
   channel,
   busy,
+  archiving,
   onJoin,
   onLeave,
   onEdit,
+  onArchiveChange,
 }: {
   channel: ChannelSummary;
   busy: boolean;
+  archiving: boolean;
   onJoin: (channel: ChannelSummary) => void;
   onLeave: (channel: ChannelSummary) => void;
   onEdit: (channel: ChannelSummary) => void;
+  onArchiveChange: (channel: ChannelSummary, archived: boolean) => void;
 }) {
   const isPrivate = channel.type === "PRIVATE";
   const isMember = Boolean(channel.isMember);
+  const isArchived = Boolean(channel.isArchived);
   const channelName = normalizeChannelName(channel);
 
   return (
@@ -694,6 +829,12 @@ function ChannelRow({
               <span className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-2xs font-semibold text-text-secondary">
                 <Lock size={11} />
                 Private
+              </span>
+            )}
+            {isArchived && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-elevated px-2 py-0.5 text-2xs font-semibold text-text-secondary">
+                <Archive size={11} />
+                Archived
               </span>
             )}
             {isMember && !channel.isDefault && (
@@ -731,17 +872,44 @@ function ChannelRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:pt-0.5">
-        {isMember ? (
+        {isArchived ? (
           <>
             {channel.canManage && (
               <button
                 type="button"
-                onClick={() => onEdit(channel)}
-                className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                onClick={() => onArchiveChange(channel, false)}
+                disabled={archiving}
+                className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
               >
-                <Pencil size={14} />
-                <span>Edit</span>
+                <RotateCcw size={14} />
+                <span>{archiving ? "Restoring..." : "Restore"}</span>
               </button>
+            )}
+          </>
+        ) : isMember ? (
+          <>
+            {channel.canManage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onEdit(channel)}
+                  className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                >
+                  <Pencil size={14} />
+                  <span>Edit</span>
+                </button>
+                {!channel.isDefault && (
+                  <button
+                    type="button"
+                    onClick={() => onArchiveChange(channel, true)}
+                    disabled={archiving}
+                    className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm text-text-muted hover:text-danger"
+                  >
+                    <Archive size={14} />
+                    <span>{archiving ? "Archiving..." : "Archive"}</span>
+                  </button>
+                )}
+              </>
             )}
             <Link
               href={`/channels/${channel.id}`}
@@ -769,14 +937,27 @@ function ChannelRow({
         ) : (
           <>
             {channel.canManage && (
-              <button
-                type="button"
-                onClick={() => onEdit(channel)}
-                className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
-              >
-                <Pencil size={14} />
-                <span>Edit</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onEdit(channel)}
+                  className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                >
+                  <Pencil size={14} />
+                  <span>Edit</span>
+                </button>
+                {!channel.isDefault && (
+                  <button
+                    type="button"
+                    onClick={() => onArchiveChange(channel, true)}
+                    disabled={archiving}
+                    className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm text-text-muted hover:text-danger"
+                  >
+                    <Archive size={14} />
+                    <span>{archiving ? "Archiving..." : "Archive"}</span>
+                  </button>
+                )}
+              </>
             )}
             <button
               type="button"

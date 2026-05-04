@@ -20,7 +20,7 @@ export default async function ChannelPage({
     where: { id: channelId },
     include: { _count: { select: { members: true } } },
   });
-  if (!channel) notFound();
+  if (!channel || channel.isArchived) notFound();
 
   // Verify membership
   const membership = await prisma.channelMember.findUnique({

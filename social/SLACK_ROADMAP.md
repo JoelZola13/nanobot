@@ -71,6 +71,6 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 ## Phase 7: Workspace Administration
 
 - [x] Add member management for channel admins.
-- [ ] Add channel archive and restore controls.
+- [x] Add channel archive and restore controls.
 - [ ] Add workspace-level defaults for notification and channel policies.
 - [ ] Add lightweight moderation controls for message removal auditability.

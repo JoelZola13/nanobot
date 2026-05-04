@@ -4,9 +4,6 @@ import { prisma } from "@/lib/prisma";
 import {
   canCreateWorkspaceChannels,
   canManageChannel,
-  normalizeChannelDescription,
-  normalizeChannelName,
-  normalizeChannelVisibility,
 } from "@/lib/channelManagement";
 
 export async function PATCH(
@@ -20,6 +17,7 @@ export async function PATCH(
 
   const { id: channelId } = await params;
   const body = await request.json();
+  const archived = body.archived === true;
 
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
@@ -32,20 +30,20 @@ export async function PATCH(
     },
   });
 
-  if (!channel || channel.isArchived) {
+  if (!channel) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
   }
 
   if (channel.type !== "PUBLIC" && channel.type !== "PRIVATE") {
     return NextResponse.json(
-      { error: "Channel cannot be edited" },
+      { error: "Channel cannot be archived" },
       { status: 400 },
     );
   }
 
   if (channel.isDefault) {
     return NextResponse.json(
-      { error: "Default channels cannot be edited" },
+      { error: "Default channels cannot be archived" },
       { status: 400 },
     );
   }
@@ -53,38 +51,14 @@ export async function PATCH(
   const membership = channel.members[0];
   if (!canManageChannel(session.user, membership?.role)) {
     return NextResponse.json(
-      { error: "Workspace admin access required" },
+      { error: "Channel admin access required" },
       { status: 403 },
-    );
-  }
-
-  const name = normalizeChannelName(body.name);
-  if (!name) {
-    return NextResponse.json(
-      { error: "Channel name is required" },
-      { status: 400 },
-    );
-  }
-
-  const existing = await prisma.channel.findUnique({
-    where: { slug: name },
-    select: { id: true },
-  });
-  if (existing && existing.id !== channel.id) {
-    return NextResponse.json(
-      { error: "A channel with that name already exists" },
-      { status: 409 },
     );
   }
 
   const updated = await prisma.channel.update({
     where: { id: channelId },
-    data: {
-      name,
-      slug: name,
-      description: normalizeChannelDescription(body.description),
-      type: normalizeChannelVisibility(body.type),
-    },
+    data: { isArchived: archived },
     include: {
       _count: { select: { members: true, messages: true } },
       members: {
@@ -109,6 +83,8 @@ export async function PATCH(
     messageCount: updated._count.messages,
     role: updatedMembership?.role,
     canCreate: canCreateWorkspaceChannels(session.user),
-    canManage: canManageChannel(session.user, updatedMembership?.role) && !updated.isDefault,
+    canManage:
+      canManageChannel(session.user, updatedMembership?.role) &&
+      !updated.isDefault,
   });
 }

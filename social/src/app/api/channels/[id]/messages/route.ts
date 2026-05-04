@@ -22,9 +22,12 @@ export async function GET(
 
   const membership = await prisma.channelMember.findUnique({
     where: { channelId_userId: { channelId, userId: session.user.id } },
+    include: { channel: { select: { isArchived: true } } },
   });
   if (!membership)
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  if (membership.channel.isArchived)
+    return NextResponse.json({ error: "Channel is archived" }, { status: 403 });
 
   const messages = await prisma.message.findMany({
     where: { channelId, deletedAt: null, parentId: parentId || null },
@@ -81,9 +84,12 @@ export async function POST(
 
   const membership = await prisma.channelMember.findUnique({
     where: { channelId_userId: { channelId, userId: session.user.id } },
+    include: { channel: { select: { isArchived: true } } },
   });
   if (!membership)
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  if (membership.channel.isArchived)
+    return NextResponse.json({ error: "Channel is archived" }, { status: 403 });
 
   const message = await prisma.message.create({
     data: {

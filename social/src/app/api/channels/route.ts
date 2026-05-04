@@ -19,12 +19,14 @@ const DEFAULT_CHANNEL_ORDER = new Map<string, number>(
 
 type BrowserChannel = {
   isDefault: boolean;
+  isArchived: boolean;
   slug: string | null;
   updatedAt: Date;
 };
 
 function sortBrowserChannels<T extends BrowserChannel>(channels: T[]) {
   return [...channels].sort((a, b) => {
+    if (a.isArchived !== b.isArchived) return a.isArchived ? 1 : -1;
     if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
 
     if (a.isDefault && b.isDefault) {
@@ -40,24 +42,39 @@ function sortBrowserChannels<T extends BrowserChannel>(channels: T[]) {
 }
 
 // GET /api/channels — browse public channels plus joined private channels
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await ensureDefaultChannelsForUser(session.user.id);
+  const canCreate = canCreateWorkspaceChannels(session.user);
+  const includeArchived =
+    req.nextUrl.searchParams.get("includeArchived") === "true";
 
   const channels = await prisma.channel.findMany({
-    where: {
-      isArchived: false,
-      OR: [
-        { type: "PUBLIC" },
-        {
-          type: "PRIVATE",
-          members: { some: { userId: session.user.id } },
+    where: includeArchived
+      ? canCreate
+        ? { type: { in: ["PUBLIC", "PRIVATE"] } }
+        : {
+            type: { in: ["PUBLIC", "PRIVATE"] },
+            members: {
+              some: {
+                userId: session.user.id,
+                role: { in: ["owner", "admin"] },
+              },
+            },
+          }
+      : {
+          isArchived: false,
+          OR: [
+            { type: "PUBLIC" },
+            {
+              type: "PRIVATE",
+              members: { some: { userId: session.user.id } },
+            },
+          ],
         },
-      ],
-    },
     include: {
       _count: { select: { members: true, messages: true } },
       members: {
@@ -67,7 +84,6 @@ export async function GET() {
     },
     orderBy: { updatedAt: "desc" },
   });
-  const canCreate = canCreateWorkspaceChannels(session.user);
 
   return NextResponse.json(
     sortBrowserChannels(channels).map((channel) => {
@@ -81,6 +97,7 @@ export async function GET() {
         type: channel.type,
         iconEmoji: channel.iconEmoji,
         isDefault: channel.isDefault,
+        isArchived: channel.isArchived,
         isMember: Boolean(membership),
         memberCount: channel._count.members,
         messageCount: channel._count.messages,
@@ -153,6 +170,7 @@ export async function POST(req: NextRequest) {
       type: channel.type,
       iconEmoji: channel.iconEmoji,
       isDefault: channel.isDefault,
+      isArchived: channel.isArchived,
       isMember: true,
       memberCount: channel._count.members,
       messageCount: channel._count.messages,

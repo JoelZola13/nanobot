@@ -34,7 +34,7 @@ export default async function MainLayout({
 
   // Fetch user's channels and DMs
   const memberships = await prisma.channelMember.findMany({
-    where: { userId },
+    where: { userId, channel: { isArchived: false } },
     include: {
       channel: {
         include: {
