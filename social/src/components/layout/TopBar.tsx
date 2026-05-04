@@ -7,6 +7,7 @@ import {
   BellOff,
   Bookmark,
   ChevronDown,
+  FileText,
   Hash,
   Info,
   Phone,
@@ -18,6 +19,7 @@ import {
 import SearchPanel from "@/components/channels/SearchPanel";
 import PinnedMessagesPanel from "@/components/channels/PinnedMessagesPanel";
 import NotificationPreferencesPanel from "@/components/channels/NotificationPreferencesPanel";
+import FilesPanel from "@/components/channels/FilesPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
 import ProfilePopover from "@/components/users/ProfilePopover";
@@ -44,6 +46,7 @@ export default function TopBar({
 }: TopBarProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
@@ -126,15 +129,35 @@ export default function TopBar({
             className={`btn-ghost h-9 w-9 p-0 ${showPins ? "text-accent" : ""}`}
             onClick={() => {
               setShowPins(!showPins);
+              setShowFiles(false);
               setShowNotifications(false);
             }}
             title="Pinned messages"
           >
             <Pin size={16} />
           </button>
+          {channelId && (type === "channel" || type === "dm") && (
+            <button
+              className={`btn-ghost h-9 w-9 p-0 ${showFiles ? "text-accent" : ""}`}
+              onClick={() => {
+                setShowFiles(!showFiles);
+                setShowPins(false);
+                setShowNotifications(false);
+              }}
+              title="Files"
+              aria-label="Files"
+            >
+              <FileText size={16} />
+            </button>
+          )}
           <button
             className="btn-ghost h-9 w-9 p-0"
-            onClick={() => setShowSearch(true)}
+            onClick={() => {
+              setShowSearch(true);
+              setShowPins(false);
+              setShowFiles(false);
+              setShowNotifications(false);
+            }}
             title="Search messages"
           >
             <Search size={16} />
@@ -148,6 +171,7 @@ export default function TopBar({
               onClick={() => {
                 setShowNotifications(!showNotifications);
                 setShowPins(false);
+                setShowFiles(false);
               }}
               title="Notifications"
               aria-label="Notifications"
@@ -164,6 +188,9 @@ export default function TopBar({
       {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
       {showPins && channelId && (
         <PinnedMessagesPanel channelId={channelId} onClose={() => setShowPins(false)} />
+      )}
+      {showFiles && channelId && (
+        <FilesPanel channelId={channelId} onClose={() => setShowFiles(false)} />
       )}
       {showNotifications && channelId && (
         <NotificationPreferencesPanel
