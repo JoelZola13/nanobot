@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import TopBar from "@/components/layout/TopBar";
 import ChannelView from "@/components/channels/ChannelView";
 import { formatMessageForClient } from "@/lib/messageFormat";
+import { canManageChannel } from "@/lib/channelManagement";
 
 export default async function ChannelPage({
   params,
@@ -28,6 +29,7 @@ export default async function ChannelPage({
     },
   });
   if (!membership) notFound();
+  const canManageCurrentChannel = canManageChannel(session.user, membership.role);
 
   // Fetch messages
   const messages = await prisma.message.findMany({
@@ -80,6 +82,7 @@ export default async function ChannelPage({
         type="channel"
         memberCount={channel._count.members}
         channelId={channelId}
+        canManageChannel={canManageCurrentChannel}
       />
       <ChannelView
         channelId={channelId}

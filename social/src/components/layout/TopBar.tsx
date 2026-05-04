@@ -20,6 +20,7 @@ import SearchPanel from "@/components/channels/SearchPanel";
 import PinnedMessagesPanel from "@/components/channels/PinnedMessagesPanel";
 import NotificationPreferencesPanel from "@/components/channels/NotificationPreferencesPanel";
 import FilesPanel from "@/components/channels/FilesPanel";
+import ChannelMembersPanel from "@/components/channels/ChannelMembersPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
 import ProfilePopover from "@/components/users/ProfilePopover";
@@ -33,6 +34,7 @@ interface TopBarProps {
   channelId?: string;
   otherUserId?: string;
   otherUserName?: string;
+  canManageChannel?: boolean;
 }
 
 export default function TopBar({
@@ -43,10 +45,12 @@ export default function TopBar({
   channelId,
   otherUserId,
   otherUserName,
+  canManageChannel = false,
 }: TopBarProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [showPins, setShowPins] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
@@ -111,7 +115,16 @@ export default function TopBar({
 
         <div className="flex items-center gap-1">
           {memberCount !== undefined && (
-            <button className="btn-ghost h-9 px-2 flex items-center gap-1.5 text-sm" title="Members">
+            <button
+              className={`btn-ghost h-9 px-2 flex items-center gap-1.5 text-sm ${showMembers ? "text-accent" : ""}`}
+              title="Members"
+              onClick={() => {
+                setShowMembers(!showMembers);
+                setShowPins(false);
+                setShowFiles(false);
+                setShowNotifications(false);
+              }}
+            >
               <Users size={15} />
               <span>{memberCount}</span>
             </button>
@@ -140,11 +153,12 @@ export default function TopBar({
           )}
           <button
             className={`btn-ghost h-9 w-9 p-0 ${showPins ? "text-accent" : ""}`}
-            onClick={() => {
-              setShowPins(!showPins);
-              setShowFiles(false);
-              setShowNotifications(false);
-            }}
+              onClick={() => {
+                setShowPins(!showPins);
+                setShowFiles(false);
+                setShowMembers(false);
+                setShowNotifications(false);
+              }}
             title="Pinned messages"
           >
             <Pin size={16} />
@@ -155,6 +169,7 @@ export default function TopBar({
               onClick={() => {
                 setShowFiles(!showFiles);
                 setShowPins(false);
+                setShowMembers(false);
                 setShowNotifications(false);
               }}
               title="Files"
@@ -169,6 +184,7 @@ export default function TopBar({
               setShowSearch(true);
               setShowPins(false);
               setShowFiles(false);
+              setShowMembers(false);
               setShowNotifications(false);
             }}
             title="Search messages"
@@ -185,6 +201,7 @@ export default function TopBar({
                 setShowNotifications(!showNotifications);
                 setShowPins(false);
                 setShowFiles(false);
+                setShowMembers(false);
               }}
               title="Notifications"
               aria-label="Notifications"
@@ -204,6 +221,13 @@ export default function TopBar({
       )}
       {showFiles && channelId && (
         <FilesPanel channelId={channelId} onClose={() => setShowFiles(false)} />
+      )}
+      {showMembers && channelId && (
+        <ChannelMembersPanel
+          channelId={channelId}
+          initialCanManage={canManageChannel}
+          onClose={() => setShowMembers(false)}
+        />
       )}
       {showNotifications && channelId && (
         <NotificationPreferencesPanel

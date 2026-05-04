@@ -424,8 +424,10 @@ describe("Channel management permissions", () => {
     const {
       canCreateWorkspaceChannels,
       canManageChannel,
+      canRemoveChannelMemberRole,
       normalizeChannelDescription,
       normalizeChannelName,
+      normalizeAssignableChannelRole,
       normalizeChannelVisibility,
     } = loadTsModule("src/lib/channelManagement.ts");
 
@@ -434,9 +436,13 @@ describe("Channel management permissions", () => {
     assert.equal(canManageChannel({ role: "USER" }, "owner"), true);
     assert.equal(canManageChannel({ role: "USER" }, "admin"), true);
     assert.equal(canManageChannel({ role: "USER" }, "member"), false);
+    assert.equal(canRemoveChannelMemberRole("owner"), false);
+    assert.equal(canRemoveChannelMemberRole("admin"), true);
     assert.equal(normalizeChannelName(" #Team Updates!! "), "team-updates");
     assert.equal(normalizeChannelDescription("  Planning channel  "), "Planning channel");
     assert.equal(normalizeChannelDescription("   "), null);
+    assert.equal(normalizeAssignableChannelRole("ADMIN"), "admin");
+    assert.equal(normalizeAssignableChannelRole("owner"), "member");
     assert.equal(normalizeChannelVisibility("PRIVATE"), "PRIVATE");
     assert.equal(normalizeChannelVisibility("GROUP_DM"), "PUBLIC");
   });
@@ -776,6 +782,257 @@ describe("Channel membership API route", () => {
     assert.equal(response.status, 400);
     assert.deepEqual(await responseJson(response), {
       error: "Default channels cannot be left",
+    });
+    assert.equal(deleteCalled, false);
+  });
+});
+
+describe("Channel members API route", () => {
+  const memberUser = (id, role, displayName = "Team Member") => ({
+    id: `${id}-membership`,
+    channelId: "channel-1",
+    userId: id,
+    role,
+    joinedAt: new Date("2026-05-04T10:00:00.000Z"),
+    user: {
+      id,
+      username: id,
+      displayName,
+      avatarUrl: null,
+      isAgent: false,
+      status: "offline",
+    },
+  });
+
+  test("lists channel members for channel managers", async () => {
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const prisma = {
+      channel: {
+        async findUnique({ where, select }) {
+          assert.deepEqual(where, { id: "channel-1" });
+          assert.equal(select.members.where.userId, "owner-user");
+          return {
+            id: "channel-1",
+            type: "PRIVATE",
+            isArchived: false,
+            members: [{ role: "owner" }],
+          };
+        },
+      },
+      channelMember: {
+        async findMany({ where }) {
+          assert.deepEqual(where, { channelId: "channel-1" });
+          return [
+            memberUser("member-user", "member", "Member User"),
+            memberUser("owner-user", "owner", "Owner User"),
+          ];
+        },
+      },
+    };
+    const { GET } = loadTsModule("src/app/api/channels/[id]/members/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("owner-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await GET(jsonRequest({}), { params: Promise.resolve({ id: "channel-1" }) });
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.equal(body.canManage, true);
+    assert.equal(body.members[0].role, "owner");
+    assert.equal(body.members[1].role, "member");
+    assert.equal(body.members[0].joinedAt, "2026-05-04T10:00:00.000Z");
+  });
+
+  test("adds teammates to a channel for managers", async () => {
+    let createArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return {
+            id: "channel-1",
+            type: "PRIVATE",
+            isArchived: false,
+            members: [{ role: "admin" }],
+          };
+        },
+      },
+      user: {
+        async findUnique({ where }) {
+          assert.deepEqual(where, { id: "target-user" });
+          return {
+            id: "target-user",
+            username: "target",
+            displayName: "Target User",
+            avatarUrl: null,
+            isAgent: false,
+            status: "offline",
+          };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return null;
+        },
+        async create(args) {
+          createArgs = args;
+          return memberUser(args.data.userId, args.data.role, "Target User");
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/channels/[id]/members/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await POST(
+      jsonRequest({ userId: "target-user", role: "owner" }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 201);
+    assert.deepEqual(createArgs.data, {
+      channelId: "channel-1",
+      userId: "target-user",
+      role: "member",
+    });
+    assert.equal(body.userId, "target-user");
+    assert.equal(body.role, "member");
+  });
+
+  test("blocks regular members from adding teammates", async () => {
+    let userLookupCalled = false;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return {
+            id: "channel-1",
+            type: "PUBLIC",
+            isArchived: false,
+            members: [{ role: "member" }],
+          };
+        },
+      },
+      user: {
+        async findUnique() {
+          userLookupCalled = true;
+        },
+      },
+    };
+    const { POST } = loadTsModule("src/app/api/channels/[id]/members/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("member-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await POST(
+      jsonRequest({ userId: "target-user" }),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Channel admin access required",
+    });
+    assert.equal(userLookupCalled, false);
+  });
+
+  test("updates member roles for channel managers", async () => {
+    let updateArgs;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return {
+            id: "channel-1",
+            type: "PUBLIC",
+            isArchived: false,
+            isDefault: false,
+            members: [{ role: "owner" }],
+          };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return memberUser("target-user", "member", "Target User");
+        },
+        async update(args) {
+          updateArgs = args;
+          return memberUser("target-user", args.data.role, "Target User");
+        },
+      },
+    };
+    const { PATCH } = loadTsModule("src/app/api/channels/[id]/members/[userId]/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("owner-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await PATCH(
+      jsonRequest({ role: "admin" }),
+      { params: Promise.resolve({ id: "channel-1", userId: "target-user" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(updateArgs.where, {
+      channelId_userId: {
+        channelId: "channel-1",
+        userId: "target-user",
+      },
+    });
+    assert.deepEqual(updateArgs.data, { role: "admin" });
+    assert.equal(body.role, "admin");
+  });
+
+  test("does not remove channel owners", async () => {
+    let deleteCalled = false;
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return {
+            id: "channel-1",
+            type: "PUBLIC",
+            isArchived: false,
+            isDefault: false,
+            members: [{ role: "admin" }],
+          };
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return memberUser("owner-user", "owner", "Owner User");
+        },
+        async deleteMany() {
+          deleteCalled = true;
+        },
+      },
+    };
+    const { DELETE } = loadTsModule("src/app/api/channels/[id]/members/[userId]/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("admin-user", "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/channelManagement": channelManagement,
+    });
+
+    const response = await DELETE(
+      jsonRequest({}),
+      { params: Promise.resolve({ id: "channel-1", userId: "owner-user" }) },
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await responseJson(response), {
+      error: "Channel owner cannot be removed",
     });
     assert.equal(deleteCalled, false);
   });

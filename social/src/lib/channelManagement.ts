@@ -3,6 +3,7 @@ type SessionUserWithRole = {
 };
 
 const CHANNEL_MANAGER_ROLES = new Set(["admin", "owner"]);
+const ASSIGNABLE_CHANNEL_ROLES = new Set(["admin", "member"]);
 
 export function isWorkspaceAdminRole(role?: string | null) {
   return role?.toUpperCase() === "ADMIN";
@@ -21,6 +22,16 @@ export function canManageChannel(
   channelRole?: string | null,
 ) {
   return isWorkspaceAdminRole(user?.role) || canManageChannelRole(channelRole);
+}
+
+export function normalizeAssignableChannelRole(value: unknown) {
+  if (typeof value !== "string") return "member";
+  const role = value.trim().toLowerCase();
+  return ASSIGNABLE_CHANNEL_ROLES.has(role) ? role : "member";
+}
+
+export function canRemoveChannelMemberRole(role?: string | null) {
+  return role?.toLowerCase() !== "owner";
 }
 
 export function normalizeChannelName(value: unknown) {

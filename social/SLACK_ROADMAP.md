@@ -67,3 +67,10 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add draft persistence per channel and DM.
 - [x] Add browser notifications with a quiet permission prompt.
 - [x] Add channel creation and edit controls for workspace admins.
+
+## Phase 7: Workspace Administration
+
+- [x] Add member management for channel admins.
+- [ ] Add channel archive and restore controls.
+- [ ] Add workspace-level defaults for notification and channel policies.
+- [ ] Add lightweight moderation controls for message removal auditability.
