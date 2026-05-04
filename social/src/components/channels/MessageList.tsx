@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
+  AlertCircle,
   ArrowDown,
   Bookmark,
   BookmarkCheck,
@@ -299,9 +300,10 @@ function MessageRow({
   const [showMenu, setShowMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [copyNotice, setCopyNotice] = useState<{ status: "copied" | "ready"; permalink: string } | null>(null);
+  const [copyNotice, setCopyNotice] = useState<{ status: "copied" | "blocked"; permalink: string } | null>(null);
   const [editContent, setEditContent] = useState(msg.content);
   const menuRef = useRef<HTMLDivElement>(null);
+  const permalinkInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const saveLabel = msg.isSaved ? "Remove from Later" : "Save for later";
   const canDeleteMessage = isOwn || canModerateMessages;
@@ -323,6 +325,17 @@ function MessageRow({
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (copyNotice?.status !== "blocked") return;
+
+    const timeout = window.setTimeout(() => {
+      permalinkInputRef.current?.focus();
+      permalinkInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [copyNotice]);
 
   const handleSaveEdit = () => {
     if (editContent.trim() && editContent !== msg.content) {
@@ -355,10 +368,14 @@ function MessageRow({
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => setCopyNotice(null), 1800);
     } catch {
-      setCopyNotice({ status: "ready", permalink });
+      setCopyNotice({ status: "blocked", permalink });
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopyNotice(null), 8000);
     }
+  };
+
+  const handleSelectPermalink = () => {
+    permalinkInputRef.current?.focus();
+    permalinkInputRef.current?.select();
   };
 
   const handleDeleteMessage = () => {
@@ -525,14 +542,39 @@ function MessageRow({
             copyNotice.status === "copied" ? (
               <div className="mt-1 text-2xs font-medium text-accent">Link copied</div>
             ) : (
-              <div className="mt-2 max-w-xl rounded-lg border border-border bg-bg-elevated p-2">
-                <div className="mb-1 text-2xs font-medium text-text-muted">Link ready</div>
+              <div
+                data-testid="message-copy-fallback"
+                className="mt-2 max-w-xl rounded-lg border border-accent/40 bg-accent-muted/40 p-3"
+              >
+                <div className="mb-2 flex items-start gap-2 text-xs text-text-secondary">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-accent" />
+                  <div>
+                    <div className="font-semibold text-text-primary">
+                      Clipboard access is blocked
+                    </div>
+                    <div className="mt-0.5 text-text-muted">
+                      Select this permalink and copy it manually.
+                    </div>
+                  </div>
+                </div>
                 <input
+                  ref={permalinkInputRef}
+                  data-testid="message-copy-fallback-input"
                   readOnly
                   value={copyNotice.permalink}
                   onFocus={(event) => event.currentTarget.select()}
                   className="w-full rounded border border-border bg-bg-surface px-2 py-1 text-2xs text-text-secondary outline-none focus:border-accent"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    data-testid="message-copy-fallback-select"
+                    onClick={handleSelectPermalink}
+                    className="rounded-md border border-border bg-bg-surface px-2 py-1 text-2xs font-medium text-text-secondary hover:border-accent hover:text-accent"
+                  >
+                    Select link
+                  </button>
+                </div>
               </div>
             )
           )}
