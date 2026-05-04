@@ -77,8 +77,26 @@ function loadTsModule(relativePath, mocks = {}) {
 
 function jsonRequest(body) {
   return {
+    url: "http://social.test/api",
+    nextUrl: new URL("http://social.test/api"),
     async json() {
       return body;
+    },
+    async text() {
+      return body === undefined ? "" : JSON.stringify(body);
+    },
+  };
+}
+
+function urlRequest(url) {
+  return {
+    url,
+    nextUrl: new URL(url),
+    async json() {
+      return {};
+    },
+    async text() {
+      return "";
     },
   };
 }
@@ -111,6 +129,14 @@ function loadWorkspacePoliciesModule() {
 
   return loadTsModule("src/lib/workspacePolicies.ts", {
     "@/lib/notificationPreferences": notificationPreferences,
+    "@/lib/channelManagement": channelManagement,
+  });
+}
+
+function loadMessageModerationModule() {
+  const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+
+  return loadTsModule("src/lib/messageModeration.ts", {
     "@/lib/channelManagement": channelManagement,
   });
 }
@@ -1371,6 +1397,286 @@ describe("Channel members API route", () => {
       error: "Channel owner cannot be removed",
     });
     assert.equal(deleteCalled, false);
+  });
+});
+
+describe("Message moderation API route", () => {
+  function socketMock(emitted) {
+    return {
+      getIO() {
+        return {
+          to(room) {
+            return {
+              emit(event, payload) {
+                emitted.push({ room, event, payload });
+              },
+            };
+          },
+        };
+      },
+    };
+  }
+
+  function messageRouteMocks({
+    prisma,
+    userId = "current-user",
+    role = "USER",
+    emitted = [],
+  }) {
+    return {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(userId, role),
+      "@/lib/prisma": { prisma },
+      "@/lib/socketServer": socketMock(emitted),
+      "@/lib/messageModeration": loadMessageModerationModule(),
+    };
+  }
+
+  test("records an audit entry when authors remove their own messages", async () => {
+    const emitted = [];
+    let updateArgs;
+    const prisma = {
+      message: {
+        async findUnique() {
+          return {
+            id: "message-1",
+            channelId: "channel-1",
+            authorId: "current-user",
+            deletedAt: null,
+            metadata: { source: "voice" },
+            channel: {
+              isArchived: false,
+              members: [{ role: "member" }],
+            },
+          };
+        },
+        async update(args) {
+          updateArgs = args;
+          return { id: "message-1" };
+        },
+      },
+    };
+    const { DELETE } = loadTsModule(
+      "src/app/api/channels/[id]/messages/[messageId]/route.ts",
+      messageRouteMocks({ prisma, emitted }),
+    );
+
+    const response = await DELETE(
+      jsonRequest({}),
+      { params: Promise.resolve({ id: "channel-1", messageId: "message-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(updateArgs.where, { id: "message-1" });
+    assert.ok(updateArgs.data.deletedAt instanceof Date);
+    assert.equal(updateArgs.data.metadata.source, "voice");
+    assert.equal(updateArgs.data.metadata.deletionAudit.actorId, "current-user");
+    assert.equal(updateArgs.data.metadata.deletionAudit.actorName, "Current User");
+    assert.equal(updateArgs.data.metadata.deletionAudit.mode, "author");
+    assert.equal(updateArgs.data.metadata.deletionAudit.reason, null);
+    assert.equal(body.audit.mode, "author");
+    assert.deepEqual(emitted, [
+      {
+        room: "channel:channel-1",
+        event: "message:delete",
+        payload: {
+          id: "message-1",
+          channelId: "channel-1",
+          deletedById: "current-user",
+          mode: "author",
+        },
+      },
+    ]);
+  });
+
+  test("allows channel managers to remove messages with a reason", async () => {
+    let updateArgs;
+    const prisma = {
+      message: {
+        async findUnique() {
+          return {
+            id: "message-2",
+            channelId: "channel-1",
+            authorId: "author-user",
+            deletedAt: null,
+            metadata: null,
+            channel: {
+              isArchived: false,
+              members: [{ role: "admin" }],
+            },
+          };
+        },
+        async update(args) {
+          updateArgs = args;
+          return { id: "message-2" };
+        },
+      },
+    };
+    const { DELETE } = loadTsModule(
+      "src/app/api/channels/[id]/messages/[messageId]/route.ts",
+      messageRouteMocks({ prisma, userId: "manager-user" }),
+    );
+
+    const response = await DELETE(
+      jsonRequest({ reason: "  Off topic  " }),
+      { params: Promise.resolve({ id: "channel-1", messageId: "message-2" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.equal(updateArgs.data.metadata.deletionAudit.actorId, "manager-user");
+    assert.equal(updateArgs.data.metadata.deletionAudit.mode, "moderator");
+    assert.equal(updateArgs.data.metadata.deletionAudit.reason, "Off topic");
+    assert.equal(body.audit.reason, "Off topic");
+  });
+
+  test("blocks regular members from removing other teammates' messages", async () => {
+    let updateCalled = false;
+    const prisma = {
+      message: {
+        async findUnique() {
+          return {
+            id: "message-3",
+            channelId: "channel-1",
+            authorId: "author-user",
+            deletedAt: null,
+            metadata: null,
+            channel: {
+              isArchived: false,
+              members: [{ role: "member" }],
+            },
+          };
+        },
+        async update() {
+          updateCalled = true;
+        },
+      },
+    };
+    const { DELETE } = loadTsModule(
+      "src/app/api/channels/[id]/messages/[messageId]/route.ts",
+      messageRouteMocks({ prisma, userId: "member-user" }),
+    );
+
+    const response = await DELETE(
+      jsonRequest({ reason: "not allowed" }),
+      { params: Promise.resolve({ id: "channel-1", messageId: "message-3" }) },
+    );
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Channel admin access required",
+    });
+    assert.equal(updateCalled, false);
+  });
+
+  test("lists removed messages for channel managers", async () => {
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    let findManyArgs;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-1", members: [{ role: "owner" }] };
+        },
+      },
+      message: {
+        async findMany(args) {
+          findManyArgs = args;
+          return [
+            {
+              id: "message-4",
+              channelId: "channel-1",
+              content: "Removed content",
+              createdAt: new Date("2026-05-04T10:00:00.000Z"),
+              deletedAt: new Date("2026-05-04T11:00:00.000Z"),
+              metadata: {
+                deletionAudit: {
+                  actorId: "manager-user",
+                  actorName: "Manager User",
+                  mode: "moderator",
+                  reason: "Cleanup",
+                  deletedAt: "2026-05-04T11:00:00.000Z",
+                },
+              },
+              author: {
+                id: "author-user",
+                username: "author",
+                displayName: "Author User",
+                avatarUrl: null,
+                isAgent: false,
+              },
+            },
+          ];
+        },
+      },
+    };
+    const { GET } = loadTsModule(
+      "src/app/api/channels/[id]/messages/deleted/route.ts",
+      {
+        "next/server": nextServerMock,
+        "@/lib/session": createAuthMock("owner-user", "USER"),
+        "@/lib/prisma": { prisma },
+        "@/lib/channelManagement": channelManagement,
+        "@/lib/messageModeration": loadMessageModerationModule(),
+      },
+    );
+
+    const response = await GET(
+      urlRequest("http://social.test/api/channels/channel-1/messages/deleted?limit=2"),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(findManyArgs.where, {
+      channelId: "channel-1",
+      deletedAt: { not: null },
+    });
+    assert.deepEqual(findManyArgs.orderBy, { deletedAt: "desc" });
+    assert.equal(findManyArgs.take, 2);
+    assert.equal(body.deletedMessages[0].id, "message-4");
+    assert.equal(body.deletedMessages[0].removedBy.displayName, "Manager User");
+    assert.equal(body.deletedMessages[0].reason, "Cleanup");
+    assert.equal(body.deletedMessages[0].removalMode, "moderator");
+  });
+
+  test("blocks regular members from the removed-message audit", async () => {
+    const channelManagement = loadTsModule("src/lib/channelManagement.ts");
+    let findManyCalled = false;
+    const prisma = {
+      channel: {
+        async findUnique() {
+          return { id: "channel-1", members: [{ role: "member" }] };
+        },
+      },
+      message: {
+        async findMany() {
+          findManyCalled = true;
+          return [];
+        },
+      },
+    };
+    const { GET } = loadTsModule(
+      "src/app/api/channels/[id]/messages/deleted/route.ts",
+      {
+        "next/server": nextServerMock,
+        "@/lib/session": createAuthMock("member-user", "USER"),
+        "@/lib/prisma": { prisma },
+        "@/lib/channelManagement": channelManagement,
+        "@/lib/messageModeration": loadMessageModerationModule(),
+      },
+    );
+
+    const response = await GET(
+      urlRequest("http://social.test/api/channels/channel-1/messages/deleted"),
+      { params: Promise.resolve({ id: "channel-1" }) },
+    );
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await responseJson(response), {
+      error: "Channel admin access required",
+    });
+    assert.equal(findManyCalled, false);
   });
 });
 

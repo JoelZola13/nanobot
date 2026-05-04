@@ -80,6 +80,13 @@ export interface MessageData {
     type?: "voice";
     duration?: number;
     transcription?: string;
+    deletionAudit?: {
+      actorId: string;
+      actorName: string;
+      mode: "author" | "moderator";
+      reason: string | null;
+      deletedAt: string;
+    };
   };
 }
 

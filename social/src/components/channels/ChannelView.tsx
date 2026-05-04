@@ -20,6 +20,7 @@ interface ChannelViewProps {
   currentUserId: string;
   placeholder?: string;
   emptyState: MessageEmptyState;
+  canManageMessages?: boolean;
 }
 
 const toThreadParticipant = (author: MessageData["author"]) => ({
@@ -61,6 +62,7 @@ export default function ChannelView({
   currentUserId,
   placeholder,
   emptyState,
+  canManageMessages = false,
 }: ChannelViewProps) {
   const [messages, setMessages] = useState<MessageData[]>(initialMessages);
   const [sending, setSending] = useState(false);
@@ -296,9 +298,11 @@ export default function ChannelView({
     }
   };
 
-  const handleDelete = async (messageId: string) => {
+  const handleDelete = async (messageId: string, reason?: string) => {
     const res = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
       method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
     });
     if (res.ok) {
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
@@ -419,6 +423,7 @@ export default function ChannelView({
           emptyState={emptyState}
           highlightedMessageId={highlightedMessageId}
           readReceipts={readReceipts}
+          canModerateMessages={canManageMessages}
           onReaction={handleReaction}
           onEdit={handleEdit}
           onDelete={handleDelete}

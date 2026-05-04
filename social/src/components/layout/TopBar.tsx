@@ -13,6 +13,7 @@ import {
   Phone,
   Pin,
   Search,
+  ShieldAlert,
   Users,
   Video,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import PinnedMessagesPanel from "@/components/channels/PinnedMessagesPanel";
 import NotificationPreferencesPanel from "@/components/channels/NotificationPreferencesPanel";
 import FilesPanel from "@/components/channels/FilesPanel";
 import ChannelMembersPanel from "@/components/channels/ChannelMembersPanel";
+import RemovedMessagesPanel from "@/components/channels/RemovedMessagesPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
 import ProfilePopover from "@/components/users/ProfilePopover";
@@ -51,12 +53,14 @@ export default function TopBar({
   const [showPins, setShowPins] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
   const socket = useSocket();
   const canShowCallControls = type === "dm" && Boolean(otherUserId && channelId);
   const canStartCall = Boolean(socket && otherUserId && channelId);
   const canConfigureNotifications = Boolean(channelId && (type === "channel" || type === "dm"));
+  const canShowRemovedMessages = Boolean(channelId && type === "channel" && canManageChannel);
   const isOnline = type === "dm" && description?.toLowerCase() === "online";
   const isOffline = type === "dm" && description?.toLowerCase() === "offline";
   const subtitle = description || (memberCount !== undefined ? `${memberCount} members` : undefined);
@@ -122,6 +126,7 @@ export default function TopBar({
                 setShowMembers(!showMembers);
                 setShowPins(false);
                 setShowFiles(false);
+                setShowRemoved(false);
                 setShowNotifications(false);
               }}
             >
@@ -157,6 +162,7 @@ export default function TopBar({
                 setShowPins(!showPins);
                 setShowFiles(false);
                 setShowMembers(false);
+                setShowRemoved(false);
                 setShowNotifications(false);
               }}
             title="Pinned messages"
@@ -170,12 +176,29 @@ export default function TopBar({
                 setShowFiles(!showFiles);
                 setShowPins(false);
                 setShowMembers(false);
+                setShowRemoved(false);
                 setShowNotifications(false);
               }}
               title="Files"
               aria-label="Files"
             >
               <FileText size={16} />
+            </button>
+          )}
+          {canShowRemovedMessages && (
+            <button
+              className={`btn-ghost h-9 w-9 p-0 ${showRemoved ? "text-accent" : ""}`}
+              onClick={() => {
+                setShowRemoved(!showRemoved);
+                setShowPins(false);
+                setShowFiles(false);
+                setShowMembers(false);
+                setShowNotifications(false);
+              }}
+              title="Removed messages"
+              aria-label="Removed messages"
+            >
+              <ShieldAlert size={16} />
             </button>
           )}
           <button
@@ -185,6 +208,7 @@ export default function TopBar({
               setShowPins(false);
               setShowFiles(false);
               setShowMembers(false);
+              setShowRemoved(false);
               setShowNotifications(false);
             }}
             title="Search messages"
@@ -202,6 +226,7 @@ export default function TopBar({
                 setShowPins(false);
                 setShowFiles(false);
                 setShowMembers(false);
+                setShowRemoved(false);
               }}
               title="Notifications"
               aria-label="Notifications"
@@ -227,6 +252,12 @@ export default function TopBar({
           channelId={channelId}
           initialCanManage={canManageChannel}
           onClose={() => setShowMembers(false)}
+        />
+      )}
+      {showRemoved && channelId && (
+        <RemovedMessagesPanel
+          channelId={channelId}
+          onClose={() => setShowRemoved(false)}
         />
       )}
       {showNotifications && channelId && (

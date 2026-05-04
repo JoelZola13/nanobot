@@ -43,9 +43,10 @@ interface MessageListProps {
   emptyState: MessageEmptyState;
   highlightedMessageId?: string | null;
   readReceipts?: Map<string, string>;
+  canModerateMessages?: boolean;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
-  onDelete?: (messageId: string) => void;
+  onDelete?: (messageId: string, reason?: string) => void;
   onPin?: (messageId: string, isPinned: boolean) => void;
   onToggleSaved?: (messageId: string, isSaved: boolean) => void;
   onOpenThread?: (messageId: string) => void;
@@ -57,6 +58,7 @@ export default function MessageList({
   emptyState,
   highlightedMessageId,
   readReceipts,
+  canModerateMessages = false,
   onReaction,
   onEdit,
   onDelete,
@@ -120,6 +122,7 @@ export default function MessageList({
                 readByCount={getReadByCount(msgIdx)}
                 channelKind={emptyState.kind}
                 isHighlighted={msg.id === highlightedMessageId}
+                canModerateMessages={canModerateMessages}
                 onReaction={onReaction}
                 onEdit={onEdit}
                 onDelete={onDelete}
@@ -207,6 +210,7 @@ function MessageRow({
   readByCount,
   channelKind,
   isHighlighted,
+  canModerateMessages,
   onReaction,
   onEdit,
   onDelete,
@@ -220,9 +224,10 @@ function MessageRow({
   readByCount: number;
   channelKind: "channel" | "dm";
   isHighlighted: boolean;
+  canModerateMessages: boolean;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
-  onDelete?: (messageId: string) => void;
+  onDelete?: (messageId: string, reason?: string) => void;
   onPin?: (messageId: string, isPinned: boolean) => void;
   onToggleSaved?: (messageId: string, isSaved: boolean) => void;
   onOpenThread?: (messageId: string) => void;
@@ -235,6 +240,7 @@ function MessageRow({
   const menuRef = useRef<HTMLDivElement>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const saveLabel = msg.isSaved ? "Remove from Later" : "Save for later";
+  const canDeleteMessage = isOwn || canModerateMessages;
 
   useEffect(() => {
     if (!showMenu && !showEmojiPicker) return;
@@ -289,6 +295,21 @@ function MessageRow({
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => setCopyNotice(null), 8000);
     }
+  };
+
+  const handleDeleteMessage = () => {
+    if (!canDeleteMessage) return;
+
+    if (isOwn) {
+      onDelete?.(msg.id);
+      setShowMenu(false);
+      return;
+    }
+
+    const reason = window.prompt("Reason for removing this message (optional)");
+    if (reason === null) return;
+    onDelete?.(msg.id, reason.trim() || undefined);
+    setShowMenu(false);
   };
 
   return (
@@ -524,8 +545,8 @@ function MessageRow({
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors">
                 <Link2 size={12} /> Copy link
               </button>
-              {isOwn && (
-                <button onClick={() => { onDelete?.(msg.id); setShowMenu(false); }}
+              {canDeleteMessage && (
+                <button onClick={handleDeleteMessage}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-danger hover:bg-danger-muted transition-colors">
                   <Trash2 size={12} /> Delete message
                 </button>

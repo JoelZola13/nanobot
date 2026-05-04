@@ -90,6 +90,7 @@ export default async function ChannelPage({
         initialMessages={formatted}
         currentUserId={session.user.id}
         placeholder={`Message #${channel.name || "channel"}`}
+        canManageMessages={canManageCurrentChannel}
         emptyState={{
           kind: "channel",
           name: channel.name || "channel",

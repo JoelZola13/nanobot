@@ -73,4 +73,4 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Add member management for channel admins.
 - [x] Add channel archive and restore controls.
 - [x] Add workspace-level defaults for notification and channel policies.
-- [ ] Add lightweight moderation controls for message removal auditability.
+- [x] Add lightweight moderation controls for message removal auditability.
