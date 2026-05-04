@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "areas": [
+    { "key": "street_profile",     "label": "Street Profile",          "description": "Identity spine — directories, profile pages, portfolios, services, resumes, bookings" },
+    { "key": "home",               "label": "Home & Navigation",       "description": "Landing page, top nav, sidebars, feature cards, auth gating" },
+    { "key": "ai",                 "label": "Chat & Nanobot Agents",   "description": "AI conversations, agent tool calls, service referrals, feedback" },
+    { "key": "directory",          "label": "Directory",               "description": "Service directory: search, map, service detail, contact, reviews, claims" },
+    { "key": "gallery",            "label": "Street Gallery",          "description": "Artwork browsing, uploads, favorites, comments, sales, artist dashboards" },
+    { "key": "jobs",               "label": "Job Board",               "description": "Search, applications, resumes, employer listings, applicant tracking" },
+    { "key": "academy",            "label": "Academy & Learning",      "description": "Courses, lessons, quizzes, assignments, certificates, AI tutor" },
+    { "key": "messages",           "label": "Messages & Social",       "description": "DMs, channels, threads, reactions, calls, notifications" },
+    { "key": "groups",             "label": "Groups & Forum",          "description": "Group pages, forum posts and comments" },
+    { "key": "tasks",              "label": "Tasks & Mission Control", "description": "Projects, tasks, automations, templates, milestones" },
+    { "key": "calendar",           "label": "Calendar",                "description": "Events, scheduling, reminders, external calendars" },
+    { "key": "documents",          "label": "Documents",               "description": "Document creation, edit, share, comment, export" },
+    { "key": "case_management",    "label": "Case Management",         "description": "Client case workflows — operational metadata only" },
+    { "key": "news",               "label": "News & Editorial",        "description": "News reading, editorial dashboard, AI generation" },
+    { "key": "social_media",       "label": "Social Media Manager",    "description": "Cross-platform posting, campaigns, inbox" },
+    { "key": "storage",            "label": "Storage",                 "description": "Object storage buckets, sync, alerts" },
+    { "key": "data",               "label": "Database / Data Workspace","description": "Tabular data tables, filters, imports, exports, saved views" },
+    { "key": "grantwriter",        "label": "Grant Writer",            "description": "Grant pipeline, sections, AI assist, exports, submissions" },
+    { "key": "agents",             "label": "Agent Marketplace",       "description": "Agent discovery, status, chat handoff" },
+    { "key": "admin",              "label": "Admin & Role Management", "description": "Claims, roles, feature access" },
+    { "key": "platform",           "label": "Platform Operations",     "description": "Service health, API latency, background jobs, agents, search" },
+    { "key": "auth",               "label": "Auth",                    "description": "Sign up, log in, log out, gating events" }
+  ]
+}
