@@ -103,6 +103,13 @@ export default async function ChannelPage({
         initialMessages={formatted}
         currentUserId={session.user.id}
         placeholder={`Message #${channel.name || "channel"}`}
+        emptyState={{
+          kind: "channel",
+          name: channel.name || "channel",
+          description: channel.description || undefined,
+          isPrivate: channel.type === "PRIVATE",
+          memberCount: channel._count.members,
+        }}
       />
     </>
   );

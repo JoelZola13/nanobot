@@ -2,15 +2,41 @@
 
 import { useRef, useEffect, useState } from "react";
 import { formatDistanceToNow, format } from "date-fns";
-import { Bot, Reply, SmilePlus, MoreHorizontal, Pencil, Trash2, Pin, Check, CheckCheck, X } from "lucide-react";
+import {
+  Bot,
+  Check,
+  CheckCheck,
+  Hash,
+  Lock,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  Reply,
+  SmilePlus,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import MarkdownContent from "./MarkdownContent";
 import EmojiPicker from "./EmojiPicker";
 import VoicePlayer from "./VoicePlayer";
 import type { MessageData } from "@/types";
 
+export type MessageEmptyState = {
+  kind: "channel" | "dm";
+  name: string;
+  description?: string;
+  isPrivate?: boolean;
+  isAgent?: boolean;
+  memberCount?: number;
+  status?: string;
+};
+
 interface MessageListProps {
   messages: MessageData[];
   currentUserId: string;
+  emptyState: MessageEmptyState;
   readReceipts?: Map<string, string>;
   onReaction?: (messageId: string, emoji: string) => void;
   onEdit?: (messageId: string, content: string) => void;
@@ -22,6 +48,7 @@ interface MessageListProps {
 export default function MessageList({
   messages,
   currentUserId,
+  emptyState,
   readReceipts,
   onReaction,
   onEdit,
@@ -36,17 +63,7 @@ export default function MessageList({
   }, [messages.length]);
 
   if (messages.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-3">
-            <span role="img" aria-label="wave">&#128075;</span>
-          </div>
-          <h3 className="font-heading text-lg font-semibold text-text-primary mb-1">No messages yet</h3>
-          <p className="text-sm text-text-muted">Be the first to say something.</p>
-        </div>
-      </div>
-    );
+    return <EmptyConversation state={emptyState} />;
   }
 
   // Build a map of messageId -> index for fast lookup
@@ -102,6 +119,50 @@ export default function MessageList({
           );
         })}
         <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+function EmptyConversation({ state }: { state: MessageEmptyState }) {
+  const isDm = state.kind === "dm";
+  const Icon = isDm ? (state.isAgent ? Bot : MessageSquare) : state.isPrivate ? Lock : Hash;
+  const title = isDm
+    ? state.isAgent
+      ? `Ask ${state.name} for help`
+      : `Start a DM with ${state.name}`
+    : `Start #${state.name}`;
+  const subtitle = isDm
+    ? state.isAgent
+      ? `${state.name} is ready for drafts, research, summaries, and follow-ups.`
+      : `This conversation is just between you and ${state.name}.`
+    : state.description || `${state.name} is ready for team updates, questions, and decisions.`;
+  const detail = isDm
+    ? state.isAgent
+      ? "Send a clear task below and keep the useful output in one place."
+      : "Send the first note below when you are ready."
+    : "Send the first message below to get the channel moving.";
+  const meta = isDm
+    ? state.isAgent
+      ? "AI agent"
+      : state.status === "online"
+        ? "Online teammate"
+        : "Teammate"
+    : `${state.isPrivate ? "Private channel" : "Channel"}${state.memberCount ? ` / ${state.memberCount} member${state.memberCount === 1 ? "" : "s"}` : ""}`;
+
+  return (
+    <div className="flex flex-1 items-center justify-center px-5 py-10">
+      <div className="max-w-md text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-border bg-bg-elevated text-text-primary">
+          <Icon size={24} />
+        </div>
+        <div className="mb-2 flex items-center justify-center gap-2 text-2xs font-semibold uppercase text-text-muted">
+          {state.isAgent && <Sparkles size={12} className="text-teal" />}
+          <span>{meta}</span>
+        </div>
+        <h3 className="mb-2 font-heading text-xl font-semibold text-text-primary">{title}</h3>
+        <p className="text-sm leading-6 text-text-secondary">{subtitle}</p>
+        <p className="mt-2 text-sm text-text-muted">{detail}</p>
       </div>
     </div>
   );

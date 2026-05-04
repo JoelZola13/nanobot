@@ -10,6 +10,7 @@ import { useUnreadStore } from "@/stores/unreadStore";
 import { useReadReceipts } from "@/hooks/useReadReceipts";
 import { apiUrl } from "@/lib/apiUrl";
 import type { MessageData } from "@/types";
+import type { MessageEmptyState } from "./MessageList";
 
 interface ChannelViewProps {
   channelId: string;
@@ -17,6 +18,7 @@ interface ChannelViewProps {
   initialMessages: MessageData[];
   currentUserId: string;
   placeholder?: string;
+  emptyState: MessageEmptyState;
 }
 
 export default function ChannelView({
@@ -25,6 +27,7 @@ export default function ChannelView({
   initialMessages,
   currentUserId,
   placeholder,
+  emptyState,
 }: ChannelViewProps) {
   const [messages, setMessages] = useState<MessageData[]>(initialMessages);
   const [sending, setSending] = useState(false);
@@ -340,6 +343,7 @@ export default function ChannelView({
         <MessageList
           messages={messages}
           currentUserId={currentUserId}
+          emptyState={emptyState}
           readReceipts={readReceipts}
           onReaction={handleReaction}
           onEdit={handleEdit}

@@ -109,6 +109,12 @@ export default async function DMConversationPage({
         initialMessages={formatted}
         currentUserId={session.user.id}
         placeholder={`Message ${otherName}`}
+        emptyState={{
+          kind: "dm",
+          name: otherName,
+          isAgent: Boolean(otherMember?.user.isAgent),
+          status: otherMember?.user.status,
+        }}
       />
     </>
   );
