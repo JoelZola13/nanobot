@@ -3,17 +3,41 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
+import ProfilePopover from "@/components/users/ProfilePopover";
+
+const MENTION_PROFILE_PREFIX = "/profile?username=";
+
+const linkifyMentions = (content: string) =>
+  content.replace(
+    /(^|[\s(])@([A-Za-z0-9_-]{2,32})\b/g,
+    (_match, prefix: string, username: string) =>
+      `${prefix}[@${username}](${MENTION_PROFILE_PREFIX}${encodeURIComponent(username)})`,
+  );
 
 const components: Components = {
   p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   del: ({ children }) => <del className="line-through text-text-muted">{children}</del>,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    if (href?.startsWith(MENTION_PROFILE_PREFIX)) {
+      const username = decodeURIComponent(href.slice(MENTION_PROFILE_PREFIX.length));
+      return (
+        <ProfilePopover
+          username={username}
+          triggerClassName="inline-flex rounded px-0.5 font-semibold text-accent hover:bg-accent-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+        >
+          {children}
+        </ProfilePopover>
+      );
+    }
+
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+        {children}
+      </a>
+    );
+  },
   code: ({ className, children, ...props }) => {
     const isBlock = className?.includes("language-");
     if (isBlock) {
@@ -53,14 +77,16 @@ const components: Components = {
 };
 
 export default function MarkdownContent({ content }: { content: string }) {
+  const renderedContent = linkifyMentions(content);
+
   // Simple messages without markdown syntax — render as plain text for performance
-  if (!/[*_`~#\[\]>|\-\d+\.]/.test(content)) {
+  if (renderedContent === content && !/[*_`~#\[\]>|\-\d+\.]/.test(content)) {
     return <span>{content}</span>;
   }
 
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {content}
+      {renderedContent}
     </ReactMarkdown>
   );
 }

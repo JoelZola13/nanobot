@@ -16,6 +16,7 @@ import SearchPanel from "@/components/channels/SearchPanel";
 import PinnedMessagesPanel from "@/components/channels/PinnedMessagesPanel";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
+import ProfilePopover from "@/components/users/ProfilePopover";
 
 interface TopBarProps {
   title: string;
@@ -50,6 +51,15 @@ export default function TopBar({
     }
   };
 
+  const titleContent = (
+    <>
+      <h2 className="truncate font-heading text-base font-semibold text-text-primary">
+        {title}
+      </h2>
+      <ChevronDown size={14} className="shrink-0 text-text-muted" />
+    </>
+  );
+
   return (
     <>
       <header className="h-14 px-4 flex items-center justify-between border-b border-border bg-bg-surface backdrop-blur-glass shrink-0">
@@ -58,16 +68,22 @@ export default function TopBar({
             {type === "channel" ? <Hash size={17} /> : <Users size={17} />}
           </div>
           <div className="min-w-0">
-            <button
-              type="button"
-              className="flex min-w-0 items-center gap-1.5 rounded-md pr-1 text-left hover:text-accent"
-              title={title}
-            >
-              <h2 className="truncate font-heading text-base font-semibold text-text-primary">
-                {title}
-              </h2>
-              <ChevronDown size={14} className="shrink-0 text-text-muted" />
-            </button>
+            {type === "dm" && otherUserId ? (
+              <ProfilePopover
+                user={{ id: otherUserId, displayName: otherUserName || title }}
+                triggerClassName="flex min-w-0 items-center gap-1.5 rounded-md pr-1 text-left hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+              >
+                {titleContent}
+              </ProfilePopover>
+            ) : (
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-1.5 rounded-md pr-1 text-left hover:text-accent"
+                title={title}
+              >
+                {titleContent}
+              </button>
+            )}
             {subtitle && (
               <div className="flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
                 {type === "dm" && (isOnline || isOffline) && (

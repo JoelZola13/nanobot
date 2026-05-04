@@ -41,7 +41,7 @@ Make Social Messages feel like a lightweight Slack workspace for the team: one s
 - [x] Separate online teammates, offline teammates, and AI agents.
 - [x] Add invite/onboarding copy for newly added teammates.
 - [x] Add admin-managed default channels.
-- [ ] Add profile popovers from DMs and mentions.
+- [x] Add profile popovers from DMs and mentions.
 
 ## Phase 4: Slack Workflows
 

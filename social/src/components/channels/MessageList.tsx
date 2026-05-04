@@ -22,6 +22,7 @@ import {
 import MarkdownContent from "./MarkdownContent";
 import EmojiPicker from "./EmojiPicker";
 import VoicePlayer from "./VoicePlayer";
+import ProfilePopover from "@/components/users/ProfilePopover";
 import type { MessageData } from "@/types";
 
 export type MessageEmptyState = {
@@ -296,17 +297,26 @@ function MessageRow({
             </span>
           </div>
         ) : (
-          <div className={`w-8 h-8 avatar text-xs mt-0.5 ${msg.author.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
-            {msg.author.isAgent ? <Bot size={14} /> : msg.author.displayName[0]?.toUpperCase()}
-          </div>
+          <ProfilePopover
+            user={msg.author}
+            className="mt-0.5 shrink-0"
+            triggerClassName="rounded-full focus:outline-none focus:ring-2 focus:ring-accent/40"
+          >
+            <span className={`w-8 h-8 avatar text-xs ${msg.author.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
+              {msg.author.isAgent ? <Bot size={14} /> : msg.author.displayName[0]?.toUpperCase()}
+            </span>
+          </ProfilePopover>
         )}
 
         <div className="flex-1 min-w-0">
           {!isGrouped && (
             <div className="flex items-baseline gap-2 mb-0.5">
-              <span className={`font-medium text-sm ${msg.author.isAgent ? "text-teal" : "text-text-primary"}`}>
+              <ProfilePopover
+                user={msg.author}
+                triggerClassName={`rounded-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/40 ${msg.author.isAgent ? "text-teal" : "text-text-primary"}`}
+              >
                 {msg.author.displayName}
-              </span>
+              </ProfilePopover>
               {msg.author.isAgent && <span className="badge-teal">agent</span>}
               <span className="text-2xs text-text-muted">
                 {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
@@ -544,25 +554,31 @@ function ThreadParticipantAvatar({
   participant,
 }: {
   participant: {
+    id: string;
     displayName: string;
     avatarUrl: string | null;
     isAgent: boolean;
   };
 }) {
   return (
-    <div
-      className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-bg text-2xs font-semibold ${
-        participant.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"
-      }`}
-      title={participant.displayName}
+    <ProfilePopover
+      user={participant}
+      triggerClassName="rounded-full focus:outline-none focus:ring-2 focus:ring-accent/40"
     >
-      {participant.avatarUrl ? (
-        <img src={participant.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
-      ) : participant.isAgent ? (
-        <Bot size={12} />
-      ) : (
-        participant.displayName[0]?.toUpperCase()
-      )}
-    </div>
+      <span
+        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-bg text-2xs font-semibold ${
+          participant.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"
+        }`}
+        title={participant.displayName}
+      >
+        {participant.avatarUrl ? (
+          <img src={participant.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+        ) : participant.isAgent ? (
+          <Bot size={12} />
+        ) : (
+          participant.displayName[0]?.toUpperCase()
+        )}
+      </span>
+    </ProfilePopover>
   );
 }

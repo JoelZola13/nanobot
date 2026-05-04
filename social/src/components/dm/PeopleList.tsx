@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, CheckCircle2, MapPin, MessageSquare, Search, Sparkles, UserPlus, UserRound } from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
+import ProfilePopover from "@/components/users/ProfilePopover";
 
 interface Person {
   id: string;
@@ -228,61 +229,67 @@ function PersonRow({
 
   return (
     <div className="group flex items-center gap-3 border-t border-border px-4 py-3 first:border-t-0 hover:bg-bg-hover">
-      <div className="relative shrink-0">
-        <div className={`h-10 w-10 avatar text-sm ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
-          {person.avatarUrl ? (
-            <img src={person.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
-          ) : isAgent ? (
-            <Bot size={18} />
-          ) : (
-            person.displayName[0]?.toUpperCase()
-          )}
-        </div>
-        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg ${isOnline ? "bg-teal" : "bg-border"}`} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={`truncate text-sm font-semibold ${isAgent ? "text-teal" : "text-text-primary"}`}>
-            {person.displayName}
+      <ProfilePopover
+        user={person}
+        className="min-w-0 flex-1"
+        triggerClassName="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus:outline-none focus:ring-2 focus:ring-accent/40"
+      >
+        <span className="relative shrink-0">
+          <span className={`h-10 w-10 avatar text-sm ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
+            {person.avatarUrl ? (
+              <img src={person.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+            ) : isAgent ? (
+              <Bot size={18} />
+            ) : (
+              person.displayName[0]?.toUpperCase()
+            )}
           </span>
-          {isAgent ? (
-            <span className="badge-teal text-2xs">agent</span>
-          ) : recentlyAdded ? (
-            <span className="rounded-full bg-accent-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-accent">
-              New
+          <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg ${isOnline ? "bg-teal" : "bg-border"}`} />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={`truncate text-sm font-semibold ${isAgent ? "text-teal" : "text-text-primary"}`}>
+              {person.displayName}
             </span>
-          ) : (
-            <span className="truncate text-2xs text-text-muted">@{person.username}</span>
-          )}
-          {!isAgent && recentlyAdded && (
-            <span className="truncate text-2xs text-text-muted">@{person.username}</span>
-          )}
-        </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
-          <span>{statusText}</span>
-          {person.location && !isAgent && (
-            <>
-              <span>/</span>
-              <span className="inline-flex min-w-0 items-center gap-1 truncate">
-                <MapPin size={11} className="shrink-0" />
-                <span className="truncate">{person.location}</span>
+            {isAgent ? (
+              <span className="badge-teal text-2xs">agent</span>
+            ) : recentlyAdded ? (
+              <span className="rounded-full bg-accent-muted px-1.5 py-0.5 text-2xs font-semibold uppercase text-accent">
+                New
               </span>
-            </>
+            ) : (
+              <span className="truncate text-2xs text-text-muted">@{person.username}</span>
+            )}
+            {!isAgent && recentlyAdded && (
+              <span className="truncate text-2xs text-text-muted">@{person.username}</span>
+            )}
+          </span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-text-muted">
+            <span>{statusText}</span>
+            {person.location && !isAgent && (
+              <>
+                <span>/</span>
+                <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                  <MapPin size={11} className="shrink-0" />
+                  <span className="truncate">{person.location}</span>
+                </span>
+              </>
+            )}
+            {person.bio && (
+              <>
+                <span>/</span>
+                <span className="truncate">{person.bio}</span>
+              </>
+            )}
+          </span>
+          {awaitingFirstSignIn && (
+            <span className="mt-1 block break-words text-2xs leading-4 text-text-muted">
+              LibreChat sign-in unlocks Messages automatically.
+            </span>
           )}
-          {person.bio && (
-            <>
-              <span>/</span>
-              <span className="truncate">{person.bio}</span>
-            </>
-          )}
-        </div>
-        {awaitingFirstSignIn && (
-          <div className="mt-1 break-words text-2xs leading-4 text-text-muted">
-            LibreChat sign-in unlocks Messages automatically.
-          </div>
-        )}
-      </div>
+        </span>
+      </ProfilePopover>
 
       <button
         onClick={() => onMessage(person.id)}
