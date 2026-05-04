@@ -1,17 +1,13 @@
 import NextAuth from "next-auth";
 import type { NextAuthOptions } from "next-auth";
-import pg from "pg";
+import {
+  findSocialUserByCasdoorId,
+  getString,
+  upsertSocialUserFromIdentity,
+} from "./socialIdentity";
 
 // Strip /api/auth from NEXTAUTH_URL to get the site base URL for redirect_uri
 const siteUrl = (process.env.NEXTAUTH_URL || "http://localhost:3180/social/api/auth").replace(/\/api\/auth$/, "");
-
-const DB_URL =
-  process.env.DATABASE_URL ||
-  "postgresql://lobehub:lobehub_password@localhost:5433/social";
-
-// Use pg directly for auth callbacks — Prisma's WASM query engine has DNS
-// resolution issues inside Docker containers with the adapter-pg setup.
-const authPool = new pg.Pool({ connectionString: DB_URL, max: 3 });
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -60,47 +56,70 @@ export const authOptions: NextAuthOptions = {
         const email = user.email || "";
         const avatarUrl = (user.image as string) || null;
 
-        await authPool.query(
-          `INSERT INTO users (id, casdoor_id, username, display_name, email, avatar_url, created_at, updated_at)
-           VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
-           ON CONFLICT (casdoor_id) DO UPDATE SET
-             display_name = EXCLUDED.display_name,
-             email = EXCLUDED.email,
-             avatar_url = EXCLUDED.avatar_url,
-             updated_at = NOW()`,
-          [casdoorId, username, displayName, email, avatarUrl],
-        );
+        await upsertSocialUserFromIdentity({
+          casdoorId,
+          username,
+          displayName,
+          email,
+          avatarUrl,
+        });
       } catch (e) {
         console.error("[AUTH] DB upsert failed:", (e as Error).message);
       }
       return true;
     },
     async jwt({ token, profile }) {
+      const tokenRecord = token as Record<string, unknown>;
+      const casdoorId =
+        getString(profile?.sub) ||
+        getString(tokenRecord.casdoorId) ||
+        getString(token.sub);
+
+      if (casdoorId) tokenRecord.casdoorId = casdoorId;
+
       if (profile) {
-        token.casdoorId = profile.sub;
-        token.username =
+        tokenRecord.username =
           ((profile as Record<string, unknown>).preferred_username as string) ||
           (profile.name as string) ||
           "";
-        try {
-          const result = await authPool.query(
-            `SELECT id FROM users WHERE casdoor_id = $1`,
-            [profile.sub],
-          );
-          if (result.rows[0]) token.userId = result.rows[0].id;
-        } catch (e) {
-          console.error("[AUTH] DB lookup failed:", (e as Error).message);
+      }
+
+      if (!getString(tokenRecord.userId)) {
+        const socialUser = await findSocialUserByCasdoorId(casdoorId);
+        if (socialUser) {
+          tokenRecord.userId = socialUser.id;
+          if (!getString(tokenRecord.username) && socialUser.username) {
+            tokenRecord.username = socialUser.username;
+          }
         }
       }
+
       return token;
     },
     async session({ session, token }) {
-      if (token.userId) {
-        (session.user as Record<string, unknown>).id = token.userId as string;
+      const tokenRecord = token as Record<string, unknown>;
+      const casdoorId =
+        getString(tokenRecord.casdoorId) || getString(token.sub);
+      let userId = getString(tokenRecord.userId);
+      let username = getString(tokenRecord.username);
+
+      if (!userId) {
+        const socialUser = await findSocialUserByCasdoorId(casdoorId);
+        if (socialUser) {
+          userId = socialUser.id;
+          username ||= socialUser.username || undefined;
+        }
       }
-      if (token.username) {
-        (session.user as Record<string, unknown>).username =
-          token.username as string;
+
+      const sessionUser = session.user as Record<string, unknown>;
+      if (userId) {
+        sessionUser.id = userId;
+      }
+      if (casdoorId) {
+        sessionUser.casdoorId = casdoorId;
+      }
+      if (username) {
+        sessionUser.username = username;
       }
       return session;
     },

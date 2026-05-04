@@ -8,6 +8,7 @@ export function getSocket(userId?: string): Socket {
   if (!socket) {
     socket = io({
       path: "/ws-social",
+      addTrailingSlash: false,
       auth: { userId },
       autoConnect: false,
     });

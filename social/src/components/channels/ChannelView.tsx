@@ -16,6 +16,7 @@ interface ChannelViewProps {
   channelName: string;
   initialMessages: MessageData[];
   currentUserId: string;
+  placeholder?: string;
 }
 
 export default function ChannelView({
@@ -23,6 +24,7 @@ export default function ChannelView({
   channelName,
   initialMessages,
   currentUserId,
+  placeholder,
 }: ChannelViewProps) {
   const [messages, setMessages] = useState<MessageData[]>(initialMessages);
   const [sending, setSending] = useState(false);
@@ -357,6 +359,7 @@ export default function ChannelView({
           onSend={handleSend}
           onTyping={handleTyping}
           disabled={sending}
+          placeholder={placeholder}
           onVoiceSend={handleVoiceSend}
           onFileUpload={handleFileUpload}
         />

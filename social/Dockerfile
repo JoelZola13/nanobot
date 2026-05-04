@@ -20,12 +20,13 @@ RUN npx prisma generate
 # Build Next.js — env vars must be set at build time for App Router
 # (Next.js App Router route handlers only see build-time env values)
 ARG NEXTAUTH_URL=http://localhost:3180/social/api/auth
+ARG DATABASE_URL=postgresql://social:social_password@social-postgres:5432/social
 ENV NEXTAUTH_URL=${NEXTAUTH_URL}
 ENV AUTH_CASDOOR_ISSUER=http://localhost:8380
 ENV AUTH_CASDOOR_ID=social-app
 ENV AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
 ENV AUTH_SECRET=street-voices-social-secret-2026
-ENV DATABASE_URL=postgresql://lobehub:lobehub_password@localhost:5433/social
+ENV DATABASE_URL=${DATABASE_URL}
 RUN npm run build
 
 # Production
@@ -36,7 +37,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3182
 # These must also be set in the runner stage for Prisma and other runtime code
-ENV DATABASE_URL=postgresql://lobehub:lobehub_password@localhost:5433/social
+ARG DATABASE_URL=postgresql://social:social_password@social-postgres:5432/social
+ENV DATABASE_URL=${DATABASE_URL}
 ENV NEXTAUTH_URL=http://localhost:3180/social/api/auth
 ENV AUTH_CASDOOR_ISSUER=http://localhost:8380
 ENV AUTH_CASDOOR_ID=social-app
@@ -57,4 +59,3 @@ COPY --from=base /app/src/generated ./src/generated
 CMD ["node", "server.mjs"]
 
 EXPOSE 3182
-EXPOSE 3183

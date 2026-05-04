@@ -108,6 +108,7 @@ export default async function DMConversationPage({
         channelName={otherName}
         initialMessages={formatted}
         currentUserId={session.user.id}
+        placeholder={`Message ${otherName}`}
       />
     </>
   );

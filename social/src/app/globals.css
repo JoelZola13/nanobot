@@ -6,7 +6,9 @@
 
 @layer base {
   /* ── Light mode (default) — Street Voices branding ── */
-  :root {
+  :root,
+  .light {
+    color-scheme: light;
     --sv-bg: #f7f8fc;
     --sv-bg-surface: rgba(255, 255, 255, 0.7);
     --sv-bg-elevated: rgba(255, 255, 255, 0.85);
@@ -22,11 +24,20 @@
     --sv-glass-surface: rgba(255, 255, 255, 0.55);
     --sv-glass-border: rgba(255, 255, 255, 0.7);
     --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
-    --sv-sidebar-bg: rgba(255, 255, 255, 0.6);
+    --sv-sidebar-bg: #f7f7fa;
+    --sv-sidebar-elevated: rgba(17, 24, 39, 0.055);
+    --sv-sidebar-hover: rgba(17, 24, 39, 0.075);
+    --sv-sidebar-active: rgba(255, 179, 0, 0.24);
+    --sv-sidebar-text: rgba(26, 28, 36, 0.88);
+    --sv-sidebar-muted: rgba(75, 77, 89, 0.68);
+    --sv-sidebar-border: rgba(17, 24, 39, 0.10);
+    --sv-sidebar-hover-text: #1a1c24;
+    --sv-sidebar-active-text: #1a1c24;
   }
 
   /* ── Dark mode — Street Voices branding ── */
   .dark {
+    color-scheme: dark;
     --sv-bg: #1f2027;
     --sv-bg-surface: rgba(42, 44, 54, 0.55);
     --sv-bg-elevated: rgba(52, 54, 64, 0.6);
@@ -42,7 +53,15 @@
     --sv-glass-surface: rgba(255, 255, 255, 0.04);
     --sv-glass-border: rgba(255, 255, 255, 0.08);
     --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.2);
-    --sv-sidebar-bg: rgba(20, 21, 29, 0.85);
+    --sv-sidebar-bg: #19131f;
+    --sv-sidebar-elevated: rgba(255, 255, 255, 0.07);
+    --sv-sidebar-hover: rgba(255, 255, 255, 0.10);
+    --sv-sidebar-active: rgba(255, 214, 0, 0.18);
+    --sv-sidebar-text: rgba(255, 255, 255, 0.86);
+    --sv-sidebar-muted: rgba(255, 255, 255, 0.52);
+    --sv-sidebar-border: rgba(255, 255, 255, 0.10);
+    --sv-sidebar-hover-text: #fff;
+    --sv-sidebar-active-text: #fff;
   }
 
   * {
@@ -51,6 +70,24 @@
 
   body {
     @apply bg-bg text-text-primary font-body antialiased;
+  }
+
+  body:has(#sv-standalone-sidebar) #sv-standalone-sidebar {
+    display: flex !important;
+  }
+
+  body:has(#sv-standalone-sidebar) aside[aria-label="Messages workspace"] {
+    display: flex !important;
+  }
+
+  body:has(#sv-standalone-sidebar) .flex.h-screen.overflow-hidden {
+    margin-left: 260px !important;
+    width: calc(100vw - 260px) !important;
+  }
+
+  body:has(#sv-standalone-sidebar.sv-collapsed) .flex.h-screen.overflow-hidden {
+    margin-left: 56px !important;
+    width: calc(100vw - 56px) !important;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -127,17 +164,50 @@
   }
 
   .sidebar-item {
-    @apply flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm
-           text-text-secondary hover:text-text-primary
+    @apply flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm
            transition-all duration-150 cursor-pointer;
+    color: var(--sv-sidebar-text);
   }
   .sidebar-item:hover {
-    background: var(--sv-bg-hover);
+    background: var(--sv-sidebar-hover);
+    color: var(--sv-sidebar-hover-text);
   }
 
   .sidebar-item.active {
     @apply text-accent;
-    background: var(--sv-accent-muted);
+    background: var(--sv-sidebar-active);
+    color: var(--sv-sidebar-active-text);
+  }
+
+  .sidebar-section-label {
+    @apply text-2xs font-semibold uppercase;
+    color: var(--sv-sidebar-muted);
+    letter-spacing: 0.08em;
+  }
+
+  .sidebar-icon-button {
+    @apply inline-flex items-center justify-center rounded-md transition-colors;
+    color: var(--sv-sidebar-muted);
+  }
+
+  .sidebar-icon-button:hover {
+    background: var(--sv-sidebar-hover);
+    color: var(--sv-sidebar-hover-text);
+  }
+
+  .sidebar-surface-button {
+    color: var(--sv-sidebar-text);
+  }
+
+  .sidebar-surface-button-muted {
+    background: var(--sv-sidebar-elevated);
+    color: var(--sv-sidebar-muted);
+  }
+
+  .sidebar-surface-button:hover,
+  .sidebar-surface-button-muted:hover {
+    background: var(--sv-sidebar-hover);
+    color: var(--sv-sidebar-hover-text);
   }
 
   .avatar {

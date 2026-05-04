@@ -4,13 +4,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  Hash,
-  MessageSquare,
-  Users,
   Bot,
-  Settings,
+  ChevronDown,
+  Hash,
+  Lock,
+  MessageSquare,
+  PencilLine,
   Plus,
   Search,
+  Sparkles,
+  Users,
   X,
 } from "lucide-react";
 import type { ChannelInfo } from "@/types";
@@ -21,36 +24,43 @@ import { apiUrl } from "@/lib/apiUrl";
 interface SidebarProps {
   channels: ChannelInfo[];
   dms: (ChannelInfo & { otherUser?: { id: string; displayName: string; avatarUrl: string | null; isAgent: boolean; status: string } | null })[];
-  username: string;
   userId: string;
 }
 
-export default function Sidebar({ channels, dms, username, userId }: SidebarProps) {
+type SearchUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  isAgent: boolean;
+};
+
+const formatUnread = (count: number) => (count > 99 ? "99+" : String(count));
+
+export default function Sidebar({ channels, dms, userId }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showNewDM, setShowNewDM] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ id: string; username: string; displayName: string; isAgent: boolean }[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
   const presenceStatuses = usePresenceStore((s) => s.statuses);
   const unreadCounts = useUnreadStore((s) => s.counts);
 
-  // Hide sidebar when embedded in an iframe (profile page) or when standalone sidebar is present
-  const isEmbed = typeof window !== 'undefined' && (
-    window.location.search.includes('embed=true') ||
-    document.getElementById('sv-standalone-sidebar')
-  );
-  if (isEmbed) return null;
+  const channelUnreadTotal = channels.reduce((total, ch) => total + (unreadCounts.get(ch.id) || 0), 0);
+  const dmUnreadTotal = dms.reduce((total, dm) => total + (unreadCounts.get(dm.id) || 0), 0);
+  const agentDmCount = dms.filter((dm) => dm.otherUser?.isAgent).length;
 
   const handleUserSearch = async (q: string) => {
     setSearchQuery(q);
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
     setSearching(true);
     try {
       const res = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(q)}`));
       if (res.ok) {
         const data = await res.json();
-        // Filter out self
         setSearchResults(data.filter((u: { id: string }) => u.id !== userId));
       }
     } finally {
@@ -75,70 +85,118 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
   };
 
   return (
-    <aside className="w-64 h-screen glass-soft border-r border-border flex flex-col shrink-0">
-      {/* Brand */}
-      <div className="h-14 px-4 flex items-center border-b border-border">
-        <h1 className="font-heading font-bold text-lg tracking-tight">
-          <span className="text-accent">SV</span>
-          <span className="text-text-primary ml-1">Social</span>
-        </h1>
-      </div>
+    <aside
+      aria-label="Messages workspace"
+      className="w-[280px] h-screen flex flex-col shrink-0"
+      style={{
+        background: "var(--sv-sidebar-bg)",
+        borderRight: "1px solid var(--sv-sidebar-border)",
+        color: "var(--sv-sidebar-text)",
+      }}
+    >
+      <div className="px-3 pt-3 pb-2 space-y-2" style={{ borderBottom: "1px solid var(--sv-sidebar-border)" }}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="sidebar-surface-button min-w-0 flex-1 flex items-center gap-2 rounded-md px-2 py-2 text-left transition-colors"
+            title="Workspace"
+          >
+            <div className="w-8 h-8 rounded-md bg-accent text-[#1a1c24] font-heading text-sm font-bold flex items-center justify-center shrink-0">
+              SV
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold leading-5">Street Voices</div>
+              <div className="truncate text-2xs" style={{ color: "var(--sv-sidebar-muted)" }}>
+                Messages workspace
+              </div>
+            </div>
+            <ChevronDown size={14} className="shrink-0" style={{ color: "var(--sv-sidebar-muted)" }} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNewDM(true)}
+            className="sidebar-icon-button h-9 w-9"
+            title="New message"
+          >
+            <PencilLine size={16} />
+          </button>
+        </div>
 
-      {/* Search */}
-      <div className="px-3 py-2">
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-bg-elevated text-text-muted text-sm hover:bg-bg-hover transition-colors">
+        <button
+          type="button"
+          onClick={() => setShowNewDM(true)}
+          className="sidebar-surface-button-muted w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
+        >
           <Search size={14} />
-          <span>Search...</span>
-          <kbd className="ml-auto text-2xs bg-bg px-1.5 py-0.5 rounded border border-border">
+          <span className="truncate">Jump to or start a DM</span>
+          <kbd
+            className="ml-auto rounded border px-1.5 py-0.5 text-2xs"
+            style={{ borderColor: "var(--sv-sidebar-border)", color: "var(--sv-sidebar-muted)" }}
+          >
             /
           </kbd>
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-1 space-y-4">
-        {/* Main Links */}
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
         <div className="space-y-0.5">
           <Link
             href="/dm"
-            className={`sidebar-item ${pathname.startsWith("/dm") ? "active" : ""}`}
+            className={`sidebar-item ${pathname === "/dm" ? "active" : ""}`}
           >
-            <MessageSquare size={16} />
-            <span>Messages</span>
-            {dms.some((d) => (d.unreadCount || 0) > 0) && (
-              <span className="ml-auto w-2 h-2 rounded-full bg-accent" />
+            <MessageSquare size={16} className="shrink-0" />
+            <span>Direct messages</span>
+            {dmUnreadTotal > 0 && (
+              <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]">
+                {formatUnread(dmUnreadTotal)}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/channels"
+            className={`sidebar-item ${pathname === "/channels" ? "active" : ""}`}
+          >
+            <Users size={16} className="shrink-0" />
+            <span>Channel browser</span>
+            {channelUnreadTotal > 0 && (
+              <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]">
+                {formatUnread(channelUnreadTotal)}
+              </span>
             )}
           </Link>
         </div>
 
-        {/* Channels */}
         <div>
-          <div className="flex items-center justify-between px-3 mb-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">
-              Channels
-            </span>
-            <Link href="/channels" className="text-text-muted hover:text-text-primary transition-colors">
+          <div className="mb-1 flex items-center justify-between px-3">
+            <span className="sidebar-section-label">Channels</span>
+            <Link href="/channels" className="sidebar-icon-button h-6 w-6" title="Add channel">
               <Plus size={14} />
             </Link>
           </div>
           <div className="space-y-0.5">
+            {channels.length === 0 && (
+              <div className="px-3 py-1.5 text-xs" style={{ color: "var(--sv-sidebar-muted)" }}>
+                No channels yet
+              </div>
+            )}
             {channels.map((ch) => {
               const unread = unreadCounts.get(ch.id) || 0;
+              const active = pathname === `/channels/${ch.id}`;
               return (
                 <Link
                   key={ch.id}
                   href={`/channels/${ch.id}`}
-                  className={`sidebar-item ${pathname === `/channels/${ch.id}` ? "active" : ""}`}
+                  className={`sidebar-item ${active ? "active" : ""}`}
                 >
                   {ch.type === "PRIVATE" ? (
-                    <Users size={14} className="shrink-0" />
+                    <Lock size={14} className="shrink-0" />
                   ) : (
                     <Hash size={14} className="shrink-0" />
                   )}
-                  <span className={`truncate ${unread > 0 ? "font-semibold text-text-primary" : ""}`}>{ch.name || "unnamed"}</span>
+                  <span className={`truncate ${unread > 0 ? "font-semibold" : ""}`}>{ch.name || "unnamed"}</span>
                   {unread > 0 && (
-                    <span className="ml-auto text-2xs bg-accent text-white px-1.5 py-0.5 rounded-full font-medium">
-                      {unread}
+                    <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]">
+                      {formatUnread(unread)}
                     </span>
                   )}
                 </Link>
@@ -147,47 +205,51 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
           </div>
         </div>
 
-        {/* DMs */}
         <div>
-          <div className="flex items-center justify-between px-3 mb-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">
-              Direct Messages
-            </span>
+          <div className="mb-1 flex items-center justify-between px-3">
+            <span className="sidebar-section-label">People</span>
             <button
+              type="button"
               onClick={() => setShowNewDM(!showNewDM)}
-              className="text-text-muted hover:text-text-primary transition-colors"
+              className="sidebar-icon-button h-6 w-6"
+              title={showNewDM ? "Close new message" : "New message"}
             >
               {showNewDM ? <X size={14} /> : <Plus size={14} />}
             </button>
           </div>
 
-          {/* New DM search */}
           {showNewDM && (
-            <div className="px-2 mb-2">
+            <div className="mb-2 px-2">
               <input
                 type="text"
-                placeholder="Find a person..."
+                placeholder="Find people or agents"
                 value={searchQuery}
                 onChange={(e) => handleUserSearch(e.target.value)}
-                className="input-field text-xs py-1.5"
+                className="w-full rounded-md border px-2.5 py-1.5 text-xs outline-none transition-colors"
+                style={{
+                  background: "var(--sv-sidebar-elevated)",
+                  borderColor: "var(--sv-sidebar-border)",
+                  color: "var(--sv-sidebar-text)",
+                }}
                 autoFocus
               />
               {searching && (
-                <div className="text-2xs text-text-muted px-2 py-1">Searching...</div>
+                <div className="px-2 py-1 text-2xs" style={{ color: "var(--sv-sidebar-muted)" }}>
+                  Searching...
+                </div>
               )}
               {searchResults.length > 0 && (
                 <div className="mt-1 space-y-0.5">
                   {searchResults.map((user) => (
                     <button
                       key={user.id}
+                      type="button"
                       onClick={() => startDM(user.id)}
                       className="w-full sidebar-item text-left"
                     >
-                      <div className={`w-5 h-5 avatar text-2xs ${user.isAgent ? "bg-teal-muted text-teal" : ""}`}>
-                        {user.isAgent ? <Bot size={10} /> : user.displayName[0]?.toUpperCase()}
-                      </div>
+                      <Avatar label={user.displayName} isAgent={user.isAgent} size="sm" />
                       <span className="truncate">{user.displayName}</span>
-                      {user.isAgent && <span className="badge-teal text-2xs ml-auto">agent</span>}
+                      {user.isAgent && <span className="badge-teal ml-auto text-2xs">agent</span>}
                     </button>
                   ))}
                 </div>
@@ -196,31 +258,33 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
           )}
 
           <div className="space-y-0.5">
+            {dms.length === 0 && (
+              <div className="px-3 py-1.5 text-xs" style={{ color: "var(--sv-sidebar-muted)" }}>
+                Start a direct message
+              </div>
+            )}
             {dms.map((dm) => {
               const otherUserId = dm.otherUser?.id;
-              const presence = otherUserId ? presenceStatuses.get(otherUserId) : undefined;
+              const presence = dm.otherUser?.isAgent ? "online" : otherUserId ? presenceStatuses.get(otherUserId) : undefined;
               const dmUnread = unreadCounts.get(dm.id) || 0;
+              const active = pathname === `/dm/${dm.id}`;
               return (
                 <Link
                   key={dm.id}
                   href={`/dm/${dm.id}`}
-                  className={`sidebar-item ${pathname === `/dm/${dm.id}` ? "active" : ""}`}
+                  className={`sidebar-item ${active ? "active" : ""}`}
                 >
-                  <div className="relative">
-                    <div className={`w-5 h-5 avatar text-2xs ${dm.otherUser?.isAgent ? "bg-teal-muted text-teal" : ""}`}>
-                      {dm.otherUser?.isAgent ? <Bot size={10} /> : dm.name?.[0]?.toUpperCase() || "?"}
-                    </div>
-                    {(presence === "online" || dm.otherUser?.isAgent) && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-teal border border-bg-surface" />
-                    )}
-                    {presence === "away" && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400 border border-bg-surface" />
-                    )}
-                  </div>
-                  <span className={`truncate ${dmUnread > 0 ? "font-semibold text-text-primary" : ""}`}>{dm.name}</span>
+                  <Avatar
+                    label={dm.name || "?"}
+                    src={dm.otherUser?.avatarUrl}
+                    isAgent={dm.otherUser?.isAgent}
+                    presence={presence}
+                    size="sm"
+                  />
+                  <span className={`truncate ${dmUnread > 0 ? "font-semibold" : ""}`}>{dm.name}</span>
                   {dmUnread > 0 && (
-                    <span className="ml-auto text-2xs bg-accent text-white px-1.5 py-0.5 rounded-full font-medium">
-                      {dmUnread}
+                    <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-2xs font-semibold text-[#1a1c24]">
+                      {formatUnread(dmUnread)}
                     </span>
                   )}
                 </Link>
@@ -229,45 +293,57 @@ export default function Sidebar({ channels, dms, username, userId }: SidebarProp
           </div>
         </div>
 
-        {/* Agents */}
         <div>
-          <div className="flex items-center px-3 mb-1">
-            <span className="text-2xs font-semibold uppercase tracking-wider text-text-muted">
-              AI Agents
-            </span>
+          <div className="mb-1 flex items-center px-3">
+            <span className="sidebar-section-label">AI agents</span>
           </div>
-          <Link
-            href="/channels"
-            className={`sidebar-item ${pathname === "/channels" ? "active" : ""}`}
-          >
-            <Bot size={16} />
-            <span>Browse Agents</span>
-            <span className="badge-teal ml-auto">37</span>
+          <Link href="/dm" className="sidebar-item">
+            <Sparkles size={16} className="shrink-0 text-teal" />
+            <span>Browse agents</span>
+            {agentDmCount > 0 && <span className="badge-teal ml-auto">{agentDmCount}</span>}
           </Link>
         </div>
       </nav>
 
-      {/* User footer */}
-      <div className="h-14 px-3 flex items-center gap-2 border-t border-border">
-        <div className="w-8 h-8 avatar text-xs bg-accent-muted text-accent">
-          {username?.[0]?.toUpperCase() || "?"}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium truncate text-text-primary">
-            {username}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-teal" />
-            <span className="text-2xs text-text-muted">Online</span>
-          </div>
-        </div>
-        <Link
-          href="/profile/settings"
-          className="text-text-muted hover:text-text-primary transition-colors"
-        >
-          <Settings size={16} />
-        </Link>
-      </div>
     </aside>
+  );
+}
+
+function Avatar({
+  label,
+  src,
+  isAgent = false,
+  presence,
+  size = "md",
+}: {
+  label: string;
+  src?: string | null;
+  isAgent?: boolean;
+  presence?: string;
+  size?: "sm" | "md";
+}) {
+  const boxSize = size === "sm" ? "h-5 w-5 text-2xs" : "h-9 w-9 text-sm";
+  const presenceSize = size === "sm" ? "h-2 w-2" : "h-2.5 w-2.5";
+  const isOnline = presence === "online" || isAgent;
+  const isAway = presence === "away";
+
+  return (
+    <div className="relative shrink-0">
+      <div className={`${boxSize} avatar ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
+        {src ? (
+          <img src={src} alt="" className="h-full w-full rounded-full object-cover" />
+        ) : isAgent ? (
+          <Bot size={size === "sm" ? 10 : 16} />
+        ) : (
+          label[0]?.toUpperCase()
+        )}
+      </div>
+      {(isOnline || isAway) && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 rounded-full border ${presenceSize} ${isAway ? "bg-yellow-400" : "bg-teal"}`}
+          style={{ borderColor: "var(--sv-sidebar-bg)" }}
+        />
+      )}
+    </div>
   );
 }

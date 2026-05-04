@@ -80,7 +80,7 @@ export default async function MainLayout({
   return (
     <SocketProvider userId={userId} channelIds={allChannelIds} userName={username}>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar channels={channels} dms={dms} username={username} userId={userId} />
+        <Sidebar channels={channels} dms={dms} userId={userId} />
         <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
       </div>
       <CallOverlay />

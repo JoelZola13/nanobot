@@ -14,6 +14,27 @@ export async function POST(req: NextRequest) {
 
   const currentUserId = session.user.id;
 
+  const [currentUser, otherUser] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { displayName: true, username: true },
+    }),
+  ]);
+
+  if (!currentUser) {
+    return NextResponse.json(
+      { error: "Current user not found in Messages" },
+      { status: 409 },
+    );
+  }
+
+  if (!otherUser)
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+
   // Check if DM already exists between these two users
   const existingDM = await prisma.channel.findFirst({
     where: {
@@ -29,15 +50,6 @@ export async function POST(req: NextRequest) {
   if (existingDM) {
     return NextResponse.json({ channelId: existingDM.id });
   }
-
-  // Get the other user's display name for the channel
-  const otherUser = await prisma.user.findUnique({
-    where: { id: otherUserId },
-    select: { displayName: true, username: true },
-  });
-
-  if (!otherUser)
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   // Create new DM channel
   const channel = await prisma.channel.create({

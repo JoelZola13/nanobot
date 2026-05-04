@@ -102,6 +102,7 @@ export default async function ChannelPage({
         channelName={channel.name || "channel"}
         initialMessages={formatted}
         currentUserId={session.user.id}
+        placeholder={`Message #${channel.name || "channel"}`}
       />
     </>
   );

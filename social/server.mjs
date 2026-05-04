@@ -10,14 +10,76 @@ const port = parseInt(process.env.PORT || "3182", 10);
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
+function isLocalRequest(req) {
+  return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(
+    req.socket.remoteAddress || "",
+  );
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) {
+        reject(new Error("Payload too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => resolve(JSON.parse(body || "{}")));
+    req.on("error", reject);
+  });
+}
+
+async function handleBroadcast(req, res, io) {
+  if (req.method !== "POST") {
+    res.statusCode = 405;
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  if (!isLocalRequest(req)) {
+    res.statusCode = 403;
+    res.end("Forbidden");
+    return;
+  }
+
+  if (!io) {
+    res.statusCode = 503;
+    res.end("Socket server not ready");
+    return;
+  }
+
+  try {
+    const { room, event, data } = await readJsonBody(req);
+    if (typeof room !== "string" || typeof event !== "string") {
+      res.statusCode = 400;
+      res.end("Invalid broadcast payload");
+      return;
+    }
+
+    io.to(room).emit(event, data);
+    res.statusCode = 204;
+    res.end();
+  } catch (err) {
+    res.statusCode = err.message === "Payload too large" ? 413 : 400;
+    res.end(err.message || "Invalid request");
+  }
+}
+
 app.prepare().then(() => {
+  let io;
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
+    if (parsedUrl.pathname === "/broadcast") {
+      handleBroadcast(req, res, io);
+      return;
+    }
     handle(req, res, parsedUrl);
   });
 
-  const io = new SocketIO(httpServer, {
-    path: "/api/socketio",
+  io = new SocketIO(httpServer, {
+    path: "/ws-social",
     addTrailingSlash: false,
     cors: { origin: "*" },
   });
@@ -259,7 +321,7 @@ app.prepare().then(() => {
   });
 
   // ── PostgreSQL connections ──────────────────────────────────────
-  const pgConnStr = process.env.DATABASE_URL || "postgresql://lobehub:lobehub_password@localhost:5433/social";
+  const pgConnStr = process.env.DATABASE_URL || "postgresql://social:social_password@social-postgres:5432/social";
   // Pool for writes (notifications, etc.)
   const pgPool = new pg.Pool({ connectionString: pgConnStr, max: 3 });
   pgPool.on("error", (err) => console.error("[PG-Pool] Error:", err.message));
@@ -299,6 +361,6 @@ app.prepare().then(() => {
 
   httpServer.listen(port, () => {
     console.log(`> Street Voices Social ready on http://localhost:${port}`);
-    console.log(`> Socket.IO listening on /api/socketio`);
+    console.log(`> Socket.IO listening on /ws-social`);
   });
 });

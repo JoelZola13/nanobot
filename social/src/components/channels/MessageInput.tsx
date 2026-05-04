@@ -110,6 +110,8 @@ export default function MessageInput({
     );
   }
 
+  const composerPlaceholder = placeholder || `Message ${channelName}`;
+
   return (
     <div className="px-4 pb-4 pt-2">
       <input
@@ -119,37 +121,37 @@ export default function MessageInput({
         onChange={handleFileChange}
         accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.csv,.xlsx"
       />
-      <div className="bg-bg-surface border border-border rounded-xl overflow-hidden focus-within:border-accent transition-colors">
+      <div className="overflow-hidden rounded-lg border border-border bg-bg-surface shadow-sm transition-colors focus-within:border-accent">
         <textarea
           ref={textareaRef}
           value={content}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder || `Message #${channelName}`}
+          placeholder={composerPlaceholder}
           rows={1}
           disabled={disabled}
-          className="w-full bg-transparent px-4 pt-3 pb-1 text-sm text-text-primary placeholder-text-muted resize-none focus:outline-none"
+          className="w-full resize-none bg-transparent px-3 pt-3 pb-2 text-sm text-text-primary placeholder-text-muted focus:outline-none"
         />
-        <div className="flex items-center justify-between px-3 pb-2">
+        <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
           <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
               title="Attach file"
             >
               <Paperclip size={16} />
             </button>
             <button
               type="button"
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
               title="Mention someone"
             >
               <AtSign size={16} />
             </button>
             <button
               type="button"
-              className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
               title="Add emoji"
             >
               <Smile size={16} />
@@ -157,7 +159,7 @@ export default function MessageInput({
             <button
               type="button"
               onClick={() => setRecording(true)}
-              className="p-1.5 rounded-lg text-text-muted hover:text-accent hover:bg-bg-hover transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-hover hover:text-accent"
               title="Record voice message"
             >
               <Mic size={16} />
@@ -166,7 +168,7 @@ export default function MessageInput({
           <button
             onClick={handleSubmit}
             disabled={!content.trim() || disabled}
-            className={`p-2 rounded-lg transition-all ${
+            className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
               content.trim()
                 ? "bg-accent text-white hover:bg-accent-hover"
                 : "bg-bg-elevated text-text-muted"
