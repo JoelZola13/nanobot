@@ -50,6 +50,17 @@ async function uniqueUsername(baseUsername: string): Promise<string> {
   return `${base}-${Date.now().toString(36)}`;
 }
 
+async function findSocialUserByCasdoorIdOrEmail(casdoorId: string, email: string) {
+  const result = await identityPool.query<SocialUserIdentity>(
+    `SELECT id, username, display_name AS "displayName", email, avatar_url AS "avatarUrl"
+     FROM users
+     WHERE casdoor_id = $1 OR email = $2
+     LIMIT 1`,
+    [casdoorId, email],
+  );
+  return result.rows[0] || null;
+}
+
 export async function findSocialUserByCasdoorId(
   casdoorId: unknown,
 ): Promise<SocialUserIdentity | null> {
@@ -82,15 +93,9 @@ export async function upsertSocialUserFromIdentity(
   const avatarUrl = getString(identity.avatarUrl) || null;
 
   try {
-    const existing = await identityPool.query<SocialUserIdentity>(
-      `SELECT id, username, display_name AS "displayName", email, avatar_url AS "avatarUrl"
-       FROM users
-       WHERE casdoor_id = $1 OR email = $2
-       LIMIT 1`,
-      [casdoorId, email],
-    );
+    const existing = await findSocialUserByCasdoorIdOrEmail(casdoorId, email);
 
-    if (existing.rows[0]) {
+    if (existing) {
       const updated = await identityPool.query<SocialUserIdentity>(
         `UPDATE users
          SET casdoor_id = $2,
@@ -100,9 +105,9 @@ export async function upsertSocialUserFromIdentity(
              updated_at = NOW()
          WHERE id = $1
          RETURNING id, username, display_name AS "displayName", email, avatar_url AS "avatarUrl"`,
-        [existing.rows[0].id, casdoorId, displayName, email, avatarUrl],
+        [existing.id, casdoorId, displayName, email, avatarUrl],
       );
-      return updated.rows[0] || existing.rows[0];
+      return updated.rows[0] || existing;
     }
 
     const username = await uniqueUsername(
@@ -111,11 +116,24 @@ export async function upsertSocialUserFromIdentity(
     const inserted = await identityPool.query<SocialUserIdentity>(
       `INSERT INTO users (id, casdoor_id, username, display_name, email, avatar_url, created_at, updated_at)
        VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (casdoor_id) DO UPDATE
+       SET display_name = EXCLUDED.display_name,
+           email = EXCLUDED.email,
+           avatar_url = EXCLUDED.avatar_url,
+           updated_at = NOW()
        RETURNING id, username, display_name AS "displayName", email, avatar_url AS "avatarUrl"`,
       [casdoorId, username, displayName, email, avatarUrl],
     );
     return inserted.rows[0] || null;
   } catch (e) {
+    if ((e as { code?: string }).code === "23505") {
+      try {
+        return await findSocialUserByCasdoorIdOrEmail(casdoorId, email);
+      } catch (lookupError) {
+        console.error("[AUTH] DB upsert fallback failed:", (lookupError as Error).message);
+      }
+    }
+
     console.error("[AUTH] DB upsert failed:", (e as Error).message);
     return null;
   }

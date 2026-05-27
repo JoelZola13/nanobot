@@ -31,6 +31,10 @@ const DEFAULT_CHANNEL_ORDER = new Map<string, number>(
   DEFAULT_CHANNELS.map((channel, index) => [channel.slug, index]),
 );
 
+function isUniqueConstraintError(error: unknown) {
+  return (error as { code?: string }).code === "P2002";
+}
+
 export function sortDefaultChannelMemberships<T extends SortableChannelMembership>(
   memberships: T[],
 ) {
@@ -54,44 +58,65 @@ export function sortDefaultChannelMemberships<T extends SortableChannelMembershi
 }
 
 export async function ensureDefaultChannelsForUser(userId: string) {
-  return Promise.all(
-    DEFAULT_CHANNELS.map(async (defaultChannel) => {
-      const channel = await prisma.channel.upsert({
-        where: { slug: defaultChannel.slug },
-        update: {
-          name: defaultChannel.name,
-          description: defaultChannel.description,
-          type: "PUBLIC",
-          isArchived: false,
-          isDefault: true,
-        },
-        create: {
-          name: defaultChannel.name,
-          slug: defaultChannel.slug,
-          description: defaultChannel.description,
-          type: "PUBLIC",
-          isDefault: true,
-          createdById: userId,
-        },
-      });
+  const channels = [];
 
-      await prisma.channelMember.upsert({
-        where: {
-          channelId_userId: {
-            channelId: channel.id,
-            userId,
-          },
-        },
-        update: {},
-        create: {
+  for (const defaultChannel of DEFAULT_CHANNELS) {
+    const channel = await prisma.channel.upsert({
+      where: { slug: defaultChannel.slug },
+      update: {
+        name: defaultChannel.name,
+        description: defaultChannel.description,
+        type: "PUBLIC",
+        isArchived: false,
+        isDefault: true,
+      },
+      create: {
+        name: defaultChannel.name,
+        slug: defaultChannel.slug,
+        description: defaultChannel.description,
+        type: "PUBLIC",
+        isDefault: true,
+        createdById: userId,
+      },
+    });
+
+    const existingMember = await prisma.channelMember.findUnique({
+      where: {
+        channelId_userId: {
           channelId: channel.id,
           userId,
-          role: "member",
-          ...getDefaultMembershipPreferences(),
         },
-      });
+      },
+    });
 
-      return channel;
-    }),
-  );
+    if (!existingMember) {
+      try {
+        await prisma.channelMember.create({
+          data: {
+            channelId: channel.id,
+            userId,
+            role: "member",
+            ...getDefaultMembershipPreferences(),
+          },
+        });
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) {
+          throw error;
+        }
+
+        await prisma.channelMember.findUnique({
+          where: {
+            channelId_userId: {
+              channelId: channel.id,
+              userId,
+            },
+          },
+        });
+      }
+    }
+
+    channels.push(channel);
+  }
+
+  return channels;
 }
