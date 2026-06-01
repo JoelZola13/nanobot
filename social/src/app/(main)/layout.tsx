@@ -11,6 +11,11 @@ import CallOverlay from "@/components/calls/CallOverlay";
 import IncomingCallModal from "@/components/calls/IncomingCallModal";
 import { normalizeNotificationLevel } from "@/lib/notificationPreferences";
 import { getInitialUnreadCountsForUser } from "@/lib/unreadCounts";
+import {
+  canCreateWorkspaceChannels,
+  canManageChannel,
+} from "@/lib/channelManagement";
+import { getActivityUnreadCountForUser } from "@/lib/activity";
 
 export default async function MainLayout({
   children,
@@ -30,6 +35,7 @@ export default async function MainLayout({
   if (!session?.user) redirect("/login");
 
   const userId = session.user.id;
+  const canCreateChannels = canCreateWorkspaceChannels(session.user);
   await ensureDefaultChannelsForUser(userId);
 
   // Fetch user's channels and DMs
@@ -69,6 +75,8 @@ export default async function MainLayout({
       isDefault: m.channel.isDefault,
       memberCount: m.channel._count.members,
       role: m.role,
+      canCreate: canCreateChannels,
+      canManage: canManageChannel(session.user, m.role) && !m.channel.isDefault,
     }));
 
   const dms = sortedMemberships
@@ -102,6 +110,7 @@ export default async function MainLayout({
       joinedAt: membership.joinedAt,
     })),
   );
+  const activityUnreadCount = await getActivityUnreadCountForUser(userId);
   const notificationPreferences = Object.fromEntries(
     memberships.map((membership) => [
       membership.channel.id,
@@ -140,6 +149,7 @@ export default async function MainLayout({
         dms={dms}
         userId={userId}
         initialUnreadCounts={initialUnreadCounts}
+        activityUnreadCount={activityUnreadCount}
       >
         {children}
       </ResponsiveMessagesShell>

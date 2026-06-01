@@ -5,6 +5,7 @@
 dist/
 build/
 docs/*
+!docs/messages-no-dead-controls-checklist.md
 !docs/academy/
 docs/academy/*
 !docs/academy/street-voices-academy-lms-upgrade-notes.md

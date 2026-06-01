@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/session";
-import { canCreateWorkspaceChannels } from "@/lib/channelManagement";
+import { isWorkspaceAdminRole } from "@/lib/channelManagement";
 import { getWorkspacePolicies } from "@/lib/workspacePolicies";
 
 export async function GET() {
@@ -11,6 +11,6 @@ export async function GET() {
 
   return NextResponse.json({
     ...getWorkspacePolicies(),
-    canManage: canCreateWorkspaceChannels(session.user),
+    canManage: isWorkspaceAdminRole(session.user.role),
   });
 }

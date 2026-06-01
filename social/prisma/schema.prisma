@@ -37,6 +37,7 @@ model User {
   receivedRequests Connection[]  @relation("receivedRequests")
   readReceipts     ReadReceipt[]
   savedItems       SavedItem[]
+  activityReadState ActivityReadState?
 
   @@map("users")
 }
@@ -170,6 +171,17 @@ model SavedItem {
   @@unique([userId, messageId])
   @@index([userId, createdAt])
   @@map("saved_items")
+}
+
+model ActivityReadState {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  readAt    DateTime @default(now()) @map("read_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activity_read_states")
 }
 
 // ─── Feed (social posts) ──────────────────────────────────────────

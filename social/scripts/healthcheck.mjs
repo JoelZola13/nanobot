@@ -6,8 +6,12 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_BRIDGE_SECRET = "street-voices-social-bridge-2026";
-const BASE_URL = (process.env.SOCIAL_HEALTH_BASE_URL || "http://localhost:3180").replace(/\/$/, "");
-const POSTGRES_CONTAINER = process.env.SOCIAL_POSTGRES_CONTAINER || "nanobot-social-postgres";
+const BASE_URL = (
+  process.env.SOCIAL_HEALTH_BASE_URL || "http://localhost:3180"
+).replace(/\/$/, "");
+const SOCIAL_CONTAINER = process.env.SOCIAL_CONTAINER || "nanobot-social";
+const POSTGRES_CONTAINER =
+  process.env.SOCIAL_POSTGRES_CONTAINER || "nanobot-social-postgres";
 const BRIDGE_SECRET =
   process.env.SOCIAL_HEALTH_BRIDGE_SECRET ||
   process.env.LIBRECHAT_AUTH_BRIDGE_SECRET ||
@@ -76,7 +80,9 @@ addCheck("LibreChat auth bridge", async () => {
   });
 
   if (response.status === 401) {
-    return pass("bridge route reachable, secret accepted, no user cookie present");
+    return pass(
+      "bridge route reachable, secret accepted, no user cookie present",
+    );
   }
 
   if (response.ok) {
@@ -99,7 +105,10 @@ addCheck("Social auth providers", async () => {
     return pass("NextAuth casdoor provider is available");
   }
 
-  return fail("NextAuth providers loaded, but casdoor is missing", JSON.stringify(providers));
+  return fail(
+    "NextAuth providers loaded, but casdoor is missing",
+    JSON.stringify(providers),
+  );
 });
 
 addCheck("Social routes", async () => {
@@ -116,13 +125,40 @@ addCheck("Social routes", async () => {
     }
 
     if (!contentType.includes("text/html")) {
-      return fail(`GET ${url} returned ${contentType || "unknown content type"}`);
+      return fail(
+        `GET ${url} returned ${contentType || "unknown content type"}`,
+      );
     }
 
     results.push(`${route} ${response.status}`);
   }
 
   return pass(results.join(", "));
+});
+
+addCheck("Social setup diagnostics", async () => {
+  const url = await getUrl("/social/api/setup/diagnostics");
+  const response = await fetchWithTimeout(url);
+  const diagnostics = await response.json().catch(() => null);
+
+  if (!diagnostics || !Array.isArray(diagnostics.checks)) {
+    return fail(
+      `GET ${url} did not return diagnostics`,
+      JSON.stringify(diagnostics),
+    );
+  }
+
+  const failed = diagnostics.checks.filter((check) => check.status === "error");
+  if (response.ok && failed.length === 0) {
+    return pass(
+      `diagnostics ${diagnostics.status}: ${diagnostics.checks.length} checks`,
+    );
+  }
+
+  return fail(
+    `diagnostics ${diagnostics.status || response.status}`,
+    failed.map((check) => `${check.label}: ${check.summary}`).join("\n"),
+  );
 });
 
 addCheck("Social database", async () => {
@@ -154,7 +190,10 @@ addCheck("Social database", async () => {
       return pass(`${POSTGRES_CONTAINER} reachable, core tables present`);
     }
 
-    return fail(`${POSTGRES_CONTAINER} reachable, core tables missing`, stdout.trim());
+    return fail(
+      `${POSTGRES_CONTAINER} reachable, core tables missing`,
+      stdout.trim(),
+    );
   } catch (error) {
     return fail(
       `${POSTGRES_CONTAINER} is not healthy or docker is unavailable`,
@@ -163,8 +202,44 @@ addCheck("Social database", async () => {
   }
 });
 
+addCheck("Social file storage", async () => {
+  try {
+    const { stdout } = await dockerExec([
+      "exec",
+      SOCIAL_CONTAINER,
+      "node",
+      "--input-type=module",
+      "-e",
+      `
+        import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
+        const endpoint = process.env.S3_ENDPOINT || "http://localhost:8333";
+        const client = new S3Client({
+          region: "us-east-1",
+          endpoint,
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID || "lobehub",
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "lobehub_s3_secret",
+          },
+        });
+        await client.send(new ListBucketsCommand({}));
+        console.log(endpoint);
+      `,
+    ]);
+
+    return pass(`${SOCIAL_CONTAINER} can reach S3 endpoint ${stdout.trim()}`);
+  } catch (error) {
+    return fail(
+      `${SOCIAL_CONTAINER} cannot reach its S3/RustFS endpoint`,
+      error.stderr || error.message,
+    );
+  }
+});
+
 addCheck("Social socket route", async () => {
-  const url = await getUrl(`/ws-social/?EIO=4&transport=polling&t=${Date.now()}`);
+  const url = await getUrl(
+    `/ws-social/?EIO=4&transport=polling&t=${Date.now()}`,
+  );
   const response = await fetchWithTimeout(url);
   const body = await readText(response);
 
@@ -172,7 +247,10 @@ addCheck("Social socket route", async () => {
     return pass("Socket.IO polling handshake succeeded on /ws-social");
   }
 
-  return fail(`Socket.IO handshake returned ${response.status}`, body.slice(0, 300));
+  return fail(
+    `Socket.IO handshake returned ${response.status}`,
+    body.slice(0, 300),
+  );
 });
 
 async function main() {
@@ -198,7 +276,9 @@ async function main() {
   const nameWidth = Math.max(...results.map((result) => result.name.length));
   for (const result of results) {
     const status = result.ok ? "OK" : "FAIL";
-    console.log(`${status.padEnd(4)} ${result.name.padEnd(nameWidth)}  ${result.summary}`);
+    console.log(
+      `${status.padEnd(4)} ${result.name.padEnd(nameWidth)}  ${result.summary}`,
+    );
     if (!result.ok && result.details) {
       console.log(`     ${String(result.details).replace(/\n/g, "\n     ")}`);
     }
@@ -208,7 +288,9 @@ async function main() {
   console.log("");
 
   if (failed.length > 0) {
-    console.log(`${failed.length} health check${failed.length === 1 ? "" : "s"} failed.`);
+    console.log(
+      `${failed.length} health check${failed.length === 1 ? "" : "s"} failed.`,
+    );
     process.exitCode = 1;
     return;
   }

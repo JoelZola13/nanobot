@@ -3,7 +3,10 @@
 import { Phone, PhoneOff, Video } from "lucide-react";
 import { useCallStore } from "@/stores/callStore";
 import { useSocket } from "@/components/providers/SocketProvider";
-import { acceptCall, rejectOrEndCall } from "@/components/providers/SocketProvider";
+import {
+  acceptCall,
+  rejectOrEndCall,
+} from "@/components/providers/SocketProvider";
 
 export default function IncomingCallModal() {
   const incomingCall = useCallStore((s) => s.incomingCall);
@@ -33,6 +36,9 @@ export default function IncomingCallModal() {
           <button
             onClick={() => rejectOrEndCall(socket)}
             className="w-14 h-14 rounded-full bg-danger flex items-center justify-center text-white hover:bg-danger/90 transition-colors shadow-lg"
+            type="button"
+            title="Decline call"
+            aria-label="Decline call"
           >
             <PhoneOff size={24} />
           </button>
@@ -41,6 +47,9 @@ export default function IncomingCallModal() {
           <button
             onClick={() => acceptCall(socket)}
             className="w-14 h-14 rounded-full bg-teal flex items-center justify-center text-white hover:bg-teal/90 transition-colors shadow-lg"
+            type="button"
+            title={isVideo ? "Accept video call" : "Accept voice call"}
+            aria-label={isVideo ? "Accept video call" : "Accept voice call"}
           >
             {isVideo ? <Video size={24} /> : <Phone size={24} />}
           </button>

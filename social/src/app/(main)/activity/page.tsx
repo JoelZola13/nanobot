@@ -20,8 +20,8 @@ export default async function ActivityPage() {
       <ActivityView
         username={activity.username}
         items={activity.items}
-        mentionCount={activity.mentionCount}
-        savedCount={activity.savedCount}
+        counts={activity.counts}
+        unreadCounts={activity.unreadCounts}
       />
     </>
   );

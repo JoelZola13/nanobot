@@ -32,14 +32,19 @@ const toThreadParticipant = (author: MessageData["author"]) => ({
   isAgent: author.isAgent,
 });
 
-const addThreadReplyPreview = (message: MessageData, reply: MessageData): MessageData => {
+const addThreadReplyPreview = (
+  message: MessageData,
+  reply: MessageData,
+): MessageData => {
   if (message.threadPreview?.latestReply.id === reply.id) return message;
 
   const replyParticipant = toThreadParticipant(reply.author);
   const existingParticipants = message.threadPreview?.participants || [];
   const participants = [
     replyParticipant,
-    ...existingParticipants.filter((participant) => participant.id !== replyParticipant.id),
+    ...existingParticipants.filter(
+      (participant) => participant.id !== replyParticipant.id,
+    ),
   ].slice(0, 3);
 
   return {
@@ -56,6 +61,13 @@ const addThreadReplyPreview = (message: MessageData, reply: MessageData): Messag
     },
   };
 };
+
+async function apiErrorMessage(res: Response, fallback: string) {
+  const data = (await res.json().catch(() => null)) as {
+    error?: string;
+  } | null;
+  return data?.error || fallback;
+}
 
 export default function ChannelView({
   channelId,
@@ -74,13 +86,18 @@ export default function ChannelView({
   const [oldestMessageCursor, setOldestMessageCursor] = useState<string | null>(
     initialOldestMessageCursor,
   );
+  const [olderLoadError, setOlderLoadError] = useState<string | null>(null);
   const [autoScrollKey, setAutoScrollKey] = useState(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
+  const [typingUsers, setTypingUsers] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [agentActivities, setAgentActivities] = useState<ActivityEvent[]>([]);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   // Read receipts: map of userId -> messageId they've read up to
-  const [readReceipts, setReadReceipts] = useState<Map<string, string>>(new Map());
+  const [readReceipts, setReadReceipts] = useState<Map<string, string>>(
+    new Map(),
+  );
   const searchParams = useSearchParams();
   const highlightedMessageId = searchParams.get("message");
   const socket = useSocket();
@@ -88,7 +105,8 @@ export default function ChannelView({
   const clearUnread = useUnreadStore((s) => s.clear);
 
   // Auto-send read receipts when viewing messages
-  const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  const lastMessageId =
+    messages.length > 0 ? messages[messages.length - 1].id : null;
   useReadReceipts(channelId, lastMessageId, currentUserId);
 
   // Mark this channel as active + clear unreads on mount/channel change
@@ -99,6 +117,72 @@ export default function ChannelView({
   }, [channelId, setActiveChannel, clearUnread]);
 
   useEffect(() => {
+    setOlderLoadError(null);
+  }, [channelId]);
+
+  const patchMessageMetadata = useCallback(
+    (messageId: string, patch: NonNullable<MessageData["metadata"]>) => {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                metadata: {
+                  ...message.metadata,
+                  ...patch,
+                },
+              }
+            : message,
+        ),
+      );
+    },
+    [],
+  );
+
+  const requestVoiceTranscription = useCallback(
+    async (messageId: string, audioUrl: string) => {
+      patchMessageMetadata(messageId, {
+        transcriptionStatus: "pending",
+        transcriptionError: undefined,
+      });
+
+      try {
+        const res = await fetch(apiUrl("/api/voice/transcribe"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId, audioUrl }),
+        });
+
+        if (!res.ok) {
+          throw new Error(
+            await apiErrorMessage(
+              res,
+              "Voice transcription could not be generated.",
+            ),
+          );
+        }
+
+        const data = (await res.json()) as { transcription?: string };
+        const transcription = data.transcription?.trim();
+        patchMessageMetadata(messageId, {
+          transcription: transcription || undefined,
+          transcriptionStatus: "complete",
+          transcriptionError: undefined,
+        });
+      } catch (error) {
+        patchMessageMetadata(messageId, {
+          transcriptionStatus: "failed",
+          transcriptionError:
+            error instanceof Error
+              ? error.message
+              : "Voice transcription could not be generated.",
+        });
+      }
+    },
+    [patchMessageMetadata],
+  );
+
+  useEffect(() => {
     if (!socket) return;
 
     socket.emit("join:channel", channelId);
@@ -107,7 +191,11 @@ export default function ChannelView({
       if (msg.channelId === channelId) {
         if (msg.parentId) {
           setMessages((prev) =>
-            prev.map((message) => (message.id === msg.parentId ? addThreadReplyPreview(message, msg) : message)),
+            prev.map((message) =>
+              message.id === msg.parentId
+                ? addThreadReplyPreview(message, msg)
+                : message,
+            ),
           );
           return;
         }
@@ -121,7 +209,7 @@ export default function ChannelView({
         if (msg.author.isAgent) {
           setTimeout(() => {
             setAgentActivities((prev) =>
-              prev.filter((a) => a.agent.id !== msg.author.id)
+              prev.filter((a) => a.agent.id !== msg.author.id),
             );
           }, 3000);
         }
@@ -133,15 +221,31 @@ export default function ChannelView({
       }
     };
 
-    const handleTypingStart = ({ channelId: cid, user }: { channelId: string; user: { id: string; name: string } }) => {
+    const handleTypingStart = ({
+      channelId: cid,
+      user,
+    }: {
+      channelId: string;
+      user: { id: string; name: string };
+    }) => {
       if (cid === channelId && user.id !== currentUserId) {
         setTypingUsers((prev) => new Map(prev).set(user.id, user.name));
       }
     };
 
-    const handleTypingStop = ({ channelId: cid, userId }: { channelId: string; userId: string }) => {
+    const handleTypingStop = ({
+      channelId: cid,
+      userId,
+    }: {
+      channelId: string;
+      userId: string;
+    }) => {
       if (cid === channelId) {
-        setTypingUsers((prev) => { const next = new Map(prev); next.delete(userId); return next; });
+        setTypingUsers((prev) => {
+          const next = new Map(prev);
+          next.delete(userId);
+          return next;
+        });
       }
     };
 
@@ -151,7 +255,9 @@ export default function ChannelView({
           if (event.type === "done" || event.type === "error") {
             // Auto-clear after 3 seconds
             setTimeout(() => {
-              setAgentActivities((p) => p.filter((a) => a.agent.id !== event.agent.id));
+              setAgentActivities((p) =>
+                p.filter((a) => a.agent.id !== event.agent.id),
+              );
             }, 3000);
             const filtered = prev.filter((a) => a.agent.id !== event.agent.id);
             return [...filtered, event];
@@ -164,43 +270,94 @@ export default function ChannelView({
       }
     };
 
-    const handleMessageEdit = ({ id, content, isEdited }: { id: string; channelId: string; content: string; isEdited: boolean }) => {
-      setMessages((prev) => prev.map((m) => m.id === id ? { ...m, content, isEdited } : m));
+    const handleMessageEdit = ({
+      id,
+      content,
+      isEdited,
+    }: {
+      id: string;
+      channelId: string;
+      content: string;
+      isEdited: boolean;
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, content, isEdited } : m)),
+      );
     };
 
     const handleMessageDelete = ({ id }: { id: string }) => {
       setMessages((prev) => prev.filter((m) => m.id !== id));
     };
 
-    const handleReactionUpdate = ({ messageId, reactions }: { messageId: string; channelId: string; reactions: { emoji: string; count: number; users: string[] }[] }) => {
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== messageId) return m;
-        return {
-          ...m,
-          reactions: reactions.map((r) => ({
-            emoji: r.emoji,
-            count: r.count,
-            userReacted: r.users.includes(currentUserId),
-          })),
-        };
-      }));
-    };
-
-    const handleMessagePin = ({ messageId, isPinned }: { messageId: string; channelId: string; isPinned: boolean }) => {
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, isPinned } : m));
-    };
-
-    const handleTranscription = ({ messageId, transcription }: { messageId: string; channelId: string; transcription: string }) => {
+    const handleReactionUpdate = ({
+      messageId,
+      reactions,
+    }: {
+      messageId: string;
+      channelId: string;
+      reactions: { emoji: string; count: number; users: string[] }[];
+    }) => {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? { ...m, metadata: { ...m.metadata, transcription } }
-            : m
-        )
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          return {
+            ...m,
+            reactions: reactions.map((r) => ({
+              emoji: r.emoji,
+              count: r.count,
+              userReacted: r.users.includes(currentUserId),
+            })),
+          };
+        }),
       );
     };
 
-    const handleReadUpdate = ({ userId: uid, messageId }: { channelId: string; userId: string; messageId: string }) => {
+    const handleMessagePin = ({
+      messageId,
+      isPinned,
+    }: {
+      messageId: string;
+      channelId: string;
+      isPinned: boolean;
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, isPinned } : m)),
+      );
+    };
+
+    const handleTranscription = ({
+      messageId,
+      transcription,
+    }: {
+      messageId: string;
+      channelId: string;
+      transcription: string;
+    }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                metadata: {
+                  ...m.metadata,
+                  transcription,
+                  transcriptionStatus: "complete",
+                  transcriptionError: undefined,
+                },
+              }
+            : m,
+        ),
+      );
+    };
+
+    const handleReadUpdate = ({
+      userId: uid,
+      messageId,
+    }: {
+      channelId: string;
+      userId: string;
+      messageId: string;
+    }) => {
       if (uid !== currentUserId) {
         setReadReceipts((prev) => new Map(prev).set(uid, messageId));
       }
@@ -208,7 +365,7 @@ export default function ChannelView({
 
     // Fetch initial read receipts
     fetch(apiUrl(`/api/channels/${channelId}/read`))
-      .then((r) => r.ok ? r.json() : [])
+      .then((r) => (r.ok ? r.json() : []))
       .then((receipts: { userId: string; messageId: string }[]) => {
         const map = new Map<string, string>();
         for (const r of receipts) {
@@ -259,10 +416,12 @@ export default function ChannelView({
     if (!highlightedMessageId || messages.length === 0) return;
 
     const timeout = window.setTimeout(() => {
-      document.getElementById(`message-${highlightedMessageId}`)?.scrollIntoView({
-        block: "center",
-        behavior: "smooth",
-      });
+      document
+        .getElementById(`message-${highlightedMessageId}`)
+        ?.scrollIntoView({
+          block: "center",
+          behavior: "smooth",
+        });
     }, 150);
 
     return () => window.clearTimeout(timeout);
@@ -276,7 +435,11 @@ export default function ChannelView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        throw new Error(
+          await apiErrorMessage(res, "Message could not be sent."),
+        );
+      }
 
       const msg = await res.json();
       setMessages((prev) => [...prev, msg]);
@@ -297,38 +460,83 @@ export default function ChannelView({
   }, [socket, channelId, currentUserId]);
 
   const handleReaction = async (messageId: string, emoji: string) => {
-    await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ emoji }),
-    });
+    const res = await fetch(
+      apiUrl(`/api/channels/${channelId}/messages/${messageId}/reactions`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Reaction could not be updated."),
+      );
+    }
+
+    const data = (await res.json().catch(() => null)) as {
+      reactions?: { emoji: string; count: number; users: string[] }[];
+    } | null;
+    if (data?.reactions) {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                reactions: data.reactions!.map((reaction) => ({
+                  emoji: reaction.emoji,
+                  count: reaction.count,
+                  userReacted: reaction.users.includes(currentUserId),
+                })),
+              }
+            : message,
+        ),
+      );
+    }
   };
 
   const handleEdit = async (messageId: string, content: string) => {
-    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    if (res.ok) {
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, content, isEdited: true } : m));
+    const res = await fetch(
+      apiUrl(`/api/channels/${channelId}/messages/${messageId}`),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Message could not be edited."),
+      );
     }
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, content, isEdited: true } : m,
+      ),
+    );
   };
 
   const handleDelete = async (messageId: string, reason?: string) => {
-    const res = await fetch(apiUrl(`/api/channels/${channelId}/messages/${messageId}`), {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
-    });
-    if (res.ok) {
-      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    const res = await fetch(
+      apiUrl(`/api/channels/${channelId}/messages/${messageId}`),
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Message could not be deleted."),
+      );
     }
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
   };
 
   const handleLoadOlder = async () => {
     if (!oldestMessageCursor || loadingOlder) return;
     setLoadingOlder(true);
+    setOlderLoadError(null);
 
     try {
       const params = new URLSearchParams({
@@ -339,7 +547,11 @@ export default function ChannelView({
         apiUrl(`/api/channels/${channelId}/messages?${params.toString()}`),
         { cache: "no-store" },
       );
-      if (!res.ok) throw new Error("Failed to load older messages");
+      if (!res.ok) {
+        throw new Error(
+          await apiErrorMessage(res, "Older messages could not be loaded."),
+        );
+      }
 
       const data = (await res.json()) as {
         messages?: MessageData[];
@@ -355,6 +567,12 @@ export default function ChannelView({
       });
       if (olderMessages.length > 0) setShowJumpToLatest(true);
       setOldestMessageCursor(data.nextCursor || null);
+    } catch (error) {
+      setOlderLoadError(
+        error instanceof Error
+          ? error.message
+          : "Older messages could not be loaded.",
+      );
     } finally {
       setLoadingOlder(false);
     }
@@ -371,9 +589,21 @@ export default function ChannelView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId }),
     });
-    if (res.ok) {
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, isPinned: !isPinned } : m));
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Message pin could not be updated."),
+      );
     }
+    const data = (await res.json().catch(() => null)) as {
+      isPinned?: boolean;
+    } | null;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, isPinned: data?.isPinned ?? !isPinned }
+          : m,
+      ),
+    );
   };
 
   const handleToggleSaved = async (messageId: string, isSaved: boolean) => {
@@ -382,28 +612,81 @@ export default function ChannelView({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId }),
     });
-    if (res.ok) {
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, isSaved: !isSaved } : m));
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Saved state could not be updated."),
+      );
     }
+    const data = (await res.json().catch(() => null)) as {
+      saved?: boolean;
+    } | null;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, isSaved: data?.saved ?? !isSaved } : m,
+      ),
+    );
   };
 
   const handleOpenThread = (messageId: string) => {
     setOpenThreadId(messageId);
   };
 
+  const handleEmailReply = async (messageId: string, content: string) => {
+    const res = await fetch(apiUrl(`/api/email-import/${messageId}/reply`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Email reply could not be sent."),
+      );
+    }
+
+    const data = (await res.json()) as { message?: MessageData };
+    if (!data.message) throw new Error("Email reply could not be recorded.");
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? addThreadReplyPreview(message, data.message!)
+          : message,
+      ),
+    );
+    socket?.emit("message:send", data.message);
+    return data.message;
+  };
+
   const handleReplyCreated = (reply: MessageData) => {
     if (!reply.parentId) return;
     setMessages((prev) =>
-      prev.map((message) => (message.id === reply.parentId ? addThreadReplyPreview(message, reply) : message)),
+      prev.map((message) =>
+        message.id === reply.parentId
+          ? addThreadReplyPreview(message, reply)
+          : message,
+      ),
     );
   };
 
   const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+    const audioMimeType = audioBlob.type || "audio/webm";
+    const audioExtension = audioMimeType.includes("wav")
+      ? "wav"
+      : audioMimeType.includes("mp4")
+        ? "m4a"
+        : "webm";
     // Upload audio to S3
     const formData = new FormData();
-    formData.append("file", audioBlob, "voice-message.webm");
-    const uploadRes = await fetch(apiUrl("/api/upload"), { method: "POST", body: formData });
-    if (!uploadRes.ok) return;
+    formData.append("file", audioBlob, `voice-message.${audioExtension}`);
+    const uploadRes = await fetch(apiUrl("/api/upload"), {
+      method: "POST",
+      body: formData,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(
+        await apiErrorMessage(uploadRes, "Voice message could not upload."),
+      );
+    }
     const { s3Key, url, fileName, fileSize, mimeType } = await uploadRes.json();
 
     // Send message with audio attachment + voice metadata
@@ -416,41 +699,40 @@ export default function ChannelView({
         metadata: { type: "voice", duration },
       }),
     });
-    if (res.ok) {
-      const msg = await res.json();
-      setMessages((prev) => [...prev, msg]);
-      setAutoScrollKey((current) => current + 1);
-      setShowJumpToLatest(false);
-      socket?.emit("message:send", msg);
-
-      // Auto-transcribe in the background
-      console.log("[VOICE] Triggering transcription for message:", msg.id, "audioUrl:", url);
-      fetch(apiUrl("/api/voice/transcribe"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messageId: msg.id, audioUrl: url }),
-      })
-        .then((r) => r.ok ? r.json() : null)
-        .then((data) => {
-          if (data?.transcription) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === msg.id
-                  ? { ...m, metadata: { ...m.metadata, transcription: data.transcription } }
-                  : m
-              )
-            );
-          }
-        })
-        .catch((err) => console.error("[VOICE] Transcription request failed:", err));
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "Voice message could not be sent."),
+      );
     }
+    const msg = await res.json();
+    const messageWithTranscriptionState: MessageData = {
+      ...msg,
+      metadata: {
+        ...msg.metadata,
+        transcriptionStatus: "pending",
+        transcriptionError: undefined,
+      },
+    };
+    setMessages((prev) => [...prev, messageWithTranscriptionState]);
+    setAutoScrollKey((current) => current + 1);
+    setShowJumpToLatest(false);
+    socket?.emit("message:send", messageWithTranscriptionState);
+
+    void requestVoiceTranscription(msg.id, url);
   };
 
   const handleFileUpload = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const uploadRes = await fetch(apiUrl("/api/upload"), { method: "POST", body: formData });
-    if (!uploadRes.ok) return;
+    const uploadRes = await fetch(apiUrl("/api/upload"), {
+      method: "POST",
+      body: formData,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(
+        await apiErrorMessage(uploadRes, "File could not upload."),
+      );
+    }
     const { s3Key, url, fileName, fileSize, mimeType } = await uploadRes.json();
 
     const res = await fetch(apiUrl(`/api/channels/${channelId}/messages`), {
@@ -461,18 +743,23 @@ export default function ChannelView({
         attachments: [{ s3Key, url, fileName, fileSize, mimeType }],
       }),
     });
-    if (res.ok) {
-      const msg = await res.json();
-      setMessages((prev) => [...prev, msg]);
-      setAutoScrollKey((current) => current + 1);
-      setShowJumpToLatest(false);
-      socket?.emit("message:send", msg);
+    if (!res.ok) {
+      throw new Error(
+        await apiErrorMessage(res, "File message could not be sent."),
+      );
     }
+    const msg = await res.json();
+    setMessages((prev) => [...prev, msg]);
+    setAutoScrollKey((current) => current + 1);
+    setShowJumpToLatest(false);
+    socket?.emit("message:send", msg);
   };
 
   const typingNames = Array.from(typingUsers.values()).filter(Boolean);
 
-  const threadParent = openThreadId ? messages.find((m) => m.id === openThreadId) : null;
+  const threadParent = openThreadId
+    ? messages.find((m) => m.id === openThreadId)
+    : null;
 
   return (
     <div className="relative flex flex-1 min-h-0">
@@ -485,11 +772,13 @@ export default function ChannelView({
           readReceipts={readReceipts}
           hasMoreMessages={Boolean(oldestMessageCursor)}
           loadingOlder={loadingOlder}
+          olderLoadError={olderLoadError}
           autoScrollKey={autoScrollKey}
           showJumpToLatest={showJumpToLatest}
           unreadAfter={initialUnreadAfter}
           canModerateMessages={canManageMessages}
           onLoadOlder={handleLoadOlder}
+          onDismissOlderLoadError={() => setOlderLoadError(null)}
           onJumpToLatest={handleJumpToLatest}
           onReaction={handleReaction}
           onEdit={handleEdit}
@@ -497,11 +786,16 @@ export default function ChannelView({
           onPin={handlePin}
           onToggleSaved={handleToggleSaved}
           onOpenThread={handleOpenThread}
+          onEmailReply={handleEmailReply}
+          onRetryVoiceTranscription={(messageId, audioUrl) =>
+            void requestVoiceTranscription(messageId, audioUrl)
+          }
         />
         <AgentActivity activities={agentActivities} />
         {typingNames.length > 0 && (
           <div className="px-4 py-1 text-2xs text-text-muted animate-pulse">
-            {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing...
+            {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"}{" "}
+            typing...
           </div>
         )}
         <MessageInput

@@ -1,0 +1,234 @@
+.nanobot-email-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin: 0 0 0 8px;
+  border: 1px solid #0f172a;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #ffffff;
+  cursor: pointer;
+  font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 5px 9px;
+  vertical-align: middle;
+}
+
+.nanobot-email-action:hover {
+  background: #1e293b;
+}
+
+.nanobot-email-action:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.nanobot-email-action__icon {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.nanobot-email-action-working {
+  background: #334155;
+  border-color: #334155;
+}
+
+.nanobot-email-action-sent {
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
+.nanobot-email-action-error {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.nanobot-email-action-row {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.nanobot-email-action-row .nanobot-email-action {
+  margin-left: 0;
+}
+
+.nanobot-email-notice {
+  display: block;
+  width: fit-content;
+  max-width: min(420px, 100%);
+  margin: 8px 0 4px 8px;
+  border-radius: 6px;
+  font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 7px 9px;
+}
+
+.nanobot-email-notice--success {
+  background: #ccfbf1;
+  color: #115e59;
+}
+
+.nanobot-email-notice--error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.nanobot-email-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.38);
+  padding: 20px;
+}
+
+.nanobot-email-dialog {
+  width: min(440px, 100%);
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.28);
+  color: #0f172a;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 16px;
+}
+
+.nanobot-email-dialog__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.nanobot-email-dialog__summary {
+  overflow: hidden;
+  margin-top: 4px;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nanobot-email-dialog__field {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.nanobot-email-dialog__field input,
+.nanobot-email-dialog__field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #0f172a;
+  font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 8px 9px;
+}
+
+.nanobot-email-dialog__field input:focus,
+.nanobot-email-dialog__field select:focus {
+  border-color: #2563eb;
+  outline: 2px solid rgba(37, 99, 235, 0.18);
+}
+
+.nanobot-email-dialog__selected {
+  margin-top: 10px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 8px 9px;
+}
+
+.nanobot-email-dialog__results {
+  max-height: 190px;
+  overflow: auto;
+  margin-top: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.nanobot-email-dialog__result {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  padding: 9px;
+  text-align: left;
+}
+
+.nanobot-email-dialog__result:last-child {
+  border-bottom: 0;
+}
+
+.nanobot-email-dialog__result:hover,
+.nanobot-email-dialog__result:focus {
+  background: #eff6ff;
+  outline: none;
+}
+
+.nanobot-email-dialog__result span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.nanobot-email-dialog__status {
+  min-height: 18px;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.nanobot-email-dialog__status--error {
+  color: #b91c1c;
+  font-weight: 650;
+}
+
+.nanobot-email-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.nanobot-email-dialog__cancel,
+.nanobot-email-dialog__send {
+  border-radius: 6px;
+  cursor: pointer;
+  font: 700 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 8px 11px;
+}
+
+.nanobot-email-dialog__cancel {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.nanobot-email-dialog__send {
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.nanobot-email-dialog__cancel:disabled,
+.nanobot-email-dialog__send:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

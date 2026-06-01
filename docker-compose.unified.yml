@@ -72,9 +72,10 @@ services:
     container_name: sv-rustfs
     ports:
       - "8333:8333"
-    command: 'server -s3 -dir=/data'
+    command: 'server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data'
     volumes:
       - seaweedfs_data:/data
+      - ./deploy/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     restart: unless-stopped
     networks:
       - streetvoices
@@ -84,6 +85,7 @@ services:
   librechat:
     image: ghcr.io/danny-avila/librechat-dev:latest
     container_name: sv-librechat
+    user: root
     ports:
       - "3180:3180"
     depends_on:
@@ -124,6 +126,9 @@ services:
         source: ./LibreChat/client/public/unified-nav.js
         target: /app/client/dist/unified-nav.js
       - type: bind
+        source: ./LibreChat/client/public/home-topnav.js
+        target: /app/client/dist/home-topnav.js
+      - type: bind
         source: ./LibreChat/client/public/mission-control.js
         target: /app/client/dist/mission-control.js
       - type: bind
@@ -135,6 +140,21 @@ services:
       - type: bind
         source: ./LibreChat/client/public/html2canvas.min.js
         target: /app/client/dist/html2canvas.min.js
+      - type: bind
+        source: ./LibreChat/client/public/sp-dropdown.js
+        target: /app/client/dist/sp-dropdown.js
+      - type: bind
+        source: ./LibreChat/client/public/assets/streetbot-icon-home-dark-animated.svg
+        target: /app/client/dist/assets/streetbot-icon-home-dark-animated.svg
+      - type: bind
+        source: ./LibreChat/client/public/assets/streetbot-icon-home-light-animated.svg
+        target: /app/client/dist/assets/streetbot-icon-home-light-animated.svg
+      - type: bind
+        source: ./LibreChat/client/public/assets/streetbot-text-home-dark-soft.svg
+        target: /app/client/dist/assets/streetbot-text-home-dark-soft.svg
+      - type: bind
+        source: ./LibreChat/client/public/assets/streetbot-text-light.svg
+        target: /app/client/dist/assets/streetbot-text-light.svg
       - type: bind
         source: ./LibreChat/client/public/fonts/CocogooseCompressed-Regular.ttf
         target: /app/client/dist/fonts/CocogooseCompressed-Regular.ttf
@@ -263,9 +283,18 @@ services:
       - LIBRECHAT_AUTH_BRIDGE_SECRET=${LIBRECHAT_AUTH_BRIDGE_SECRET:?Set LIBRECHAT_AUTH_BRIDGE_SECRET in your secrets file}
       - NANOBOT_API_URL=http://host.docker.internal:18790/v1
       - NANOBOT_API_KEY=nanobot
+      - S3_ENDPOINT=http://rustfs:8333
+      - S3_PUBLIC_ENDPOINT=/social/api/files
+      - S3_BUCKET=social
+      - S3_ACCESS_KEY_ID=lobehub
+      - S3_SECRET_ACCESS_KEY=lobehub_s3_secret
+    volumes:
+      - ${HOME}/.nanobot:/root/.nanobot:ro
     depends_on:
       postgresql:
         condition: service_healthy
+      rustfs:
+        condition: service_started
       casdoor:
         condition: service_started
     extra_hosts:

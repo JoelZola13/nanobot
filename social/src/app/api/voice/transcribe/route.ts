@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { invokeAgentStreaming } from "@/lib/nanobot";
-import { getFromS3, S3_BUCKET } from "@/lib/s3";
+import { getFromS3, s3KeyFromUrl } from "@/lib/s3";
 import { getIO } from "@/lib/socketServer";
 
 // POST /api/voice/transcribe — transcribe a voice message via Groq Whisper
@@ -13,53 +13,77 @@ export async function POST(request: Request) {
   }
 
   const { messageId, audioUrl } = await request.json();
-  console.log("[TRANSCRIBE] Request received:", { messageId, audioUrl: audioUrl?.substring(0, 80) });
+  console.log("[TRANSCRIBE] Request received:", {
+    messageId,
+    audioUrl: audioUrl?.substring(0, 80),
+  });
   if (!messageId || !audioUrl) {
     console.log("[TRANSCRIBE] Missing params:", { messageId, audioUrl });
-    return NextResponse.json({ error: "messageId and audioUrl required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "messageId and audioUrl required" },
+      { status: 400 },
+    );
   }
 
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) {
     console.log("[TRANSCRIBE] GROQ_API_KEY not configured!");
-    return NextResponse.json({ error: "GROQ_API_KEY not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "GROQ_API_KEY not configured" },
+      { status: 500 },
+    );
   }
 
   try {
-    // Download the audio file from S3 using authenticated S3 client
+    // Download the audio file from S3 using authenticated S3 client.
     console.log("[TRANSCRIBE] Fetching audio from S3...");
-    // Extract S3 key from the URL: http://localhost:8333/social/uploads/... -> uploads/...
-    const s3Key = audioUrl.replace(new RegExp(`^https?://[^/]+/${S3_BUCKET}/`), "");
+    const s3Key = s3KeyFromUrl(audioUrl);
     console.log("[TRANSCRIBE] S3 key:", s3Key);
     let audioBuffer: Uint8Array;
     try {
       const buf = await getFromS3(s3Key);
       audioBuffer = new Uint8Array(buf);
-      console.log("[TRANSCRIBE] Audio downloaded from S3, size:", audioBuffer.byteLength);
+      console.log(
+        "[TRANSCRIBE] Audio downloaded from S3, size:",
+        audioBuffer.byteLength,
+      );
     } catch (s3Err) {
       console.error("[TRANSCRIBE] S3 download failed:", s3Err);
-      return NextResponse.json({ error: "Failed to fetch audio from S3" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to fetch audio from S3" },
+        { status: 500 },
+      );
     }
 
     // Send to Groq Whisper API
     const formData = new FormData();
-    formData.append("file", new Blob([audioBuffer] as BlobPart[], { type: "audio/webm" }), "voice.webm");
+    formData.append(
+      "file",
+      new Blob([audioBuffer] as BlobPart[], { type: "audio/webm" }),
+      "voice.webm",
+    );
     formData.append("model", "whisper-large-v3");
     formData.append("language", "en");
     formData.append("response_format", "json");
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqKey}`,
+    const groqRes = await fetch(
+      "https://api.groq.com/openai/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: formData,
       },
-      body: formData,
-    });
+    );
 
     if (!groqRes.ok) {
       const errText = await groqRes.text();
       console.error("Groq transcription error:", errText);
-      return NextResponse.json({ error: "Transcription failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Transcription failed" },
+        { status: 500 },
+      );
     }
 
     const { text } = await groqRes.json();
@@ -69,12 +93,15 @@ export async function POST(request: Request) {
     }
 
     // Update message metadata with transcription
-    const message = await prisma.message.findUnique({ where: { id: messageId } });
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+    });
     if (!message) {
       return NextResponse.json({ error: "Message not found" }, { status: 404 });
     }
 
-    const existingMetadata = (message.metadata as Record<string, unknown>) || {};
+    const existingMetadata =
+      (message.metadata as Record<string, unknown>) || {};
     await prisma.message.update({
       where: { id: messageId },
       data: {
@@ -94,43 +121,76 @@ export async function POST(request: Request) {
     }
 
     // After transcription, trigger agent responses if applicable
-    triggerAgentsForVoice(message.channelId, message.authorId, text.trim()).catch((err) =>
-      console.error("Agent trigger after transcription failed:", err)
+    triggerAgentsForVoice(
+      message.channelId,
+      message.authorId,
+      text.trim(),
+    ).catch((err) =>
+      console.error("Agent trigger after transcription failed:", err),
     );
 
     return NextResponse.json({ transcription: text.trim() });
   } catch (err) {
     console.error("Transcription error:", err);
-    return NextResponse.json({ error: "Transcription failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Transcription failed" },
+      { status: 500 },
+    );
   }
 }
 
-
-async function triggerAgentsForVoice(channelId: string, authorId: string, transcription: string) {
+async function triggerAgentsForVoice(
+  channelId: string,
+  authorId: string,
+  transcription: string,
+) {
   const channel = await prisma.channel.findUnique({
     where: { id: channelId },
     include: {
       members: {
         include: {
-          user: { select: { id: true, username: true, displayName: true, avatarUrl: true, isAgent: true, agentModel: true } },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              isAgent: true,
+              agentModel: true,
+            },
+          },
         },
       },
     },
   });
   if (!channel) return;
 
-  const agentsToRespond: { id: string; username: string; displayName: string; avatarUrl: string | null; isAgent: boolean; agentModel: string | null }[] = [];
+  const agentsToRespond: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    isAgent: boolean;
+    agentModel: string | null;
+  }[] = [];
 
   if (channel.type === "DM") {
-    const agentMember = channel.members.find((m) => m.user.isAgent && m.userId !== authorId);
+    const agentMember = channel.members.find(
+      (m) => m.user.isAgent && m.userId !== authorId,
+    );
     if (agentMember) agentsToRespond.push(agentMember.user);
   } else {
     // Check for @mentions in the transcription
     const mentionPattern = /@([\w-]+)/g;
     let match;
     while ((match = mentionPattern.exec(transcription)) !== null) {
-      const agentMember = channel.members.find((m) => m.user.isAgent && m.user.username === match![1]);
-      if (agentMember && !agentsToRespond.some((a) => a.id === agentMember.user.id)) {
+      const agentMember = channel.members.find(
+        (m) => m.user.isAgent && m.user.username === match![1],
+      );
+      if (
+        agentMember &&
+        !agentsToRespond.some((a) => a.id === agentMember.user.id)
+      ) {
         agentsToRespond.push(agentMember.user);
       }
     }
@@ -160,13 +220,17 @@ async function triggerAgentsForVoice(channelId: string, authorId: string, transc
     }
 
     if (m.attachments.length > 0 && meta?.type !== "voice") {
-      const fileList = m.attachments.map((a) => `${a.fileName} (${a.mimeType})`).join(", ");
+      const fileList = m.attachments
+        .map((a) => `${a.fileName} (${a.mimeType})`)
+        .join(", ");
       msgText += `\n[Attached files: ${fileList}]`;
     }
 
     return {
       role: (m.author.isAgent ? "assistant" : "user") as "user" | "assistant",
-      content: m.author.isAgent ? msgText : `[${m.author.displayName}]: ${msgText}`,
+      content: m.author.isAgent
+        ? msgText
+        : `[${m.author.displayName}]: ${msgText}`,
     };
   });
 
@@ -177,7 +241,11 @@ async function triggerAgentsForVoice(channelId: string, authorId: string, transc
 
     io?.to(`channel:${channelId}`).emit("agent:activity", {
       channelId,
-      agent: { id: agent.id, displayName: agent.displayName, username: agent.username },
+      agent: {
+        id: agent.id,
+        displayName: agent.displayName,
+        username: agent.username,
+      },
       type: "thinking",
       text: `${agent.displayName} is thinking...`,
     });
@@ -201,7 +269,11 @@ async function triggerAgentsForVoice(channelId: string, authorId: string, transc
 
           io?.to(`channel:${channelId}`).emit("agent:activity", {
             channelId,
-            agent: { id: agent.id, displayName: agent.displayName, username: agent.username },
+            agent: {
+              id: agent.id,
+              displayName: agent.displayName,
+              username: agent.username,
+            },
             type: activityType,
             text: pText,
             delegatedTo,
@@ -213,7 +285,11 @@ async function triggerAgentsForVoice(channelId: string, authorId: string, transc
       if (!reply?.trim()) {
         io?.to(`channel:${channelId}`).emit("agent:activity", {
           channelId,
-          agent: { id: agent.id, displayName: agent.displayName, username: agent.username },
+          agent: {
+            id: agent.id,
+            displayName: agent.displayName,
+            username: agent.username,
+          },
           type: "done",
           text: "Finished (no response)",
           toolsUsed,
@@ -224,32 +300,61 @@ async function triggerAgentsForVoice(channelId: string, authorId: string, transc
       const agentMessage = await prisma.message.create({
         data: { channelId, authorId: agent.id, content: reply.trim() },
         include: {
-          author: { select: { id: true, username: true, displayName: true, avatarUrl: true, isAgent: true } },
+          author: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              isAgent: true,
+            },
+          },
         },
       });
 
-      await prisma.channel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
+      await prisma.channel.update({
+        where: { id: channelId },
+        data: { updatedAt: new Date() },
+      });
 
       io?.to(`channel:${channelId}`).emit("message:new", {
-        id: agentMessage.id, channelId: agentMessage.channelId, content: agentMessage.content,
-        createdAt: agentMessage.createdAt.toISOString(), isEdited: agentMessage.isEdited,
-        isPinned: agentMessage.isPinned, parentId: agentMessage.parentId,
+        id: agentMessage.id,
+        channelId: agentMessage.channelId,
+        content: agentMessage.content,
+        createdAt: agentMessage.createdAt.toISOString(),
+        isEdited: agentMessage.isEdited,
+        isPinned: agentMessage.isPinned,
+        parentId: agentMessage.parentId,
         metadata: agentMessage.metadata || undefined,
-        replyCount: 0, author: agentMessage.author, reactions: [], attachments: [],
+        replyCount: 0,
+        author: agentMessage.author,
+        reactions: [],
+        attachments: [],
       });
 
       io?.to(`channel:${channelId}`).emit("agent:activity", {
         channelId,
-        agent: { id: agent.id, displayName: agent.displayName, username: agent.username },
+        agent: {
+          id: agent.id,
+          displayName: agent.displayName,
+          username: agent.username,
+        },
         type: "done",
         text: "Response delivered",
         toolsUsed,
       });
     } catch (err) {
-      console.error(`Agent ${agent.username} error after voice transcription:`, err);
+      console.error(
+        `Agent ${agent.username} error after voice transcription:`,
+        err,
+      );
       io?.to(`channel:${channelId}`).emit("agent:activity", {
         channelId,
-        agent: { id: agent.id, displayName: agent.displayName, username: agent.username },
+        agent: {
+          id: agent.id,
+          displayName: agent.displayName,
+          username: agent.username,
+        },
         type: "error",
         text: `Error: ${err instanceof Error ? err.message : "Unknown error"}`,
       });

@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Users,
   Video,
+  X,
 } from "lucide-react";
 import SearchPanel from "@/components/channels/SearchPanel";
 import PinnedMessagesPanel from "@/components/channels/PinnedMessagesPanel";
@@ -24,7 +25,10 @@ import FilesPanel from "@/components/channels/FilesPanel";
 import ChannelMembersPanel from "@/components/channels/ChannelMembersPanel";
 import RemovedMessagesPanel from "@/components/channels/RemovedMessagesPanel";
 import ConversationDetailsPanel from "@/components/channels/ConversationDetailsPanel";
-import { useSocket } from "@/components/providers/SocketProvider";
+import {
+  useNotificationPreferences,
+  useSocket,
+} from "@/components/providers/SocketProvider";
 import { initiateCall } from "@/components/providers/SocketProvider";
 import ProfilePopover from "@/components/users/ProfilePopover";
 import type { NotificationLevel } from "@/lib/notificationPreferences";
@@ -32,7 +36,14 @@ import type { NotificationLevel } from "@/lib/notificationPreferences";
 interface TopBarProps {
   title: string;
   description?: string;
-  type?: "channel" | "dm" | "feed" | "profile" | "mentions" | "saved" | "activity";
+  type?:
+    | "channel"
+    | "dm"
+    | "feed"
+    | "profile"
+    | "mentions"
+    | "saved"
+    | "activity";
   memberCount?: number;
   detailsMemberCount?: number;
   channelVisibility?: "PUBLIC" | "PRIVATE";
@@ -64,20 +75,44 @@ export default function TopBar({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [currentDescription, setCurrentDescription] = useState(description);
-  const [notificationLevel, setNotificationLevel] = useState<NotificationLevel | null>(null);
+  const [notificationLevel, setNotificationLevel] =
+    useState<NotificationLevel | null>(null);
+  const [callStarting, setCallStarting] = useState<"audio" | "video" | null>(
+    null,
+  );
+  const [callError, setCallError] = useState<string | null>(null);
   const socket = useSocket();
-  const canShowCallControls = type === "dm" && Boolean(otherUserId && channelId);
+  const { preferences, setPreference } = useNotificationPreferences();
+  const canShowCallControls =
+    type === "dm" && Boolean(otherUserId && channelId);
   const canStartCall = Boolean(socket && otherUserId && channelId);
-  const canConfigureNotifications = Boolean(channelId && (type === "channel" || type === "dm"));
-  const canShowRemovedMessages = Boolean(channelId && type === "channel" && canManageChannel);
-  const canShowDetails = Boolean(channelId && (type === "channel" || type === "dm"));
+  const canConfigureNotifications = Boolean(
+    channelId && (type === "channel" || type === "dm"),
+  );
+  const canShowRemovedMessages = Boolean(
+    channelId && type === "channel" && canManageChannel,
+  );
+  const canShowDetails = Boolean(
+    channelId && (type === "channel" || type === "dm"),
+  );
+  const canShowPins = Boolean(
+    channelId && (type === "channel" || type === "dm"),
+  );
   useEffect(() => {
     setCurrentDescription(description);
   }, [description]);
+  useEffect(() => {
+    setCallError(null);
+    setCallStarting(null);
+  }, [channelId]);
 
-  const isOnline = type === "dm" && currentDescription?.toLowerCase() === "online";
-  const isOffline = type === "dm" && currentDescription?.toLowerCase() === "offline";
-  const subtitle = currentDescription || (memberCount !== undefined ? `${memberCount} members` : undefined);
+  const isOnline =
+    type === "dm" && currentDescription?.toLowerCase() === "online";
+  const isOffline =
+    type === "dm" && currentDescription?.toLowerCase() === "offline";
+  const subtitle =
+    currentDescription ||
+    (memberCount !== undefined ? `${memberCount} members` : undefined);
   const resolvedDetailsMemberCount = detailsMemberCount ?? memberCount;
   const HeaderIcon =
     type === "channel"
@@ -89,11 +124,57 @@ export default function TopBar({
           : type === "activity"
             ? Bell
             : Users;
-  const NotificationIcon = notificationLevel === "MUTED" ? BellOff : Bell;
+  const resolvedNotificationLevel = channelId
+    ? (preferences[channelId] ?? notificationLevel)
+    : notificationLevel;
+  const NotificationIcon =
+    resolvedNotificationLevel === "MUTED" ? BellOff : Bell;
 
-  const handleCall = (callType: "audio" | "video") => {
-    if (canStartCall && socket && otherUserId && channelId) {
-      initiateCall(socket, otherUserId, otherUserName || title, callType, channelId);
+  const callStartErrorMessage = (
+    error: unknown,
+    callType: "audio" | "video",
+  ) => {
+    if (
+      error instanceof DOMException &&
+      ["NotAllowedError", "PermissionDeniedError"].includes(error.name)
+    ) {
+      return callType === "video"
+        ? "Camera and microphone permission is required to start a video call."
+        : "Microphone permission is required to start a voice call.";
+    }
+
+    if (
+      error instanceof DOMException &&
+      ["NotFoundError", "DevicesNotFoundError"].includes(error.name)
+    ) {
+      return callType === "video"
+        ? "No camera or microphone was found for this video call."
+        : "No microphone was found for this voice call.";
+    }
+
+    return "Could not start the call. Check your browser permissions and try again.";
+  };
+
+  const handleCall = async (callType: "audio" | "video") => {
+    if (!socket || !otherUserId || !channelId) {
+      setCallError("Calls are still connecting. Try again in a moment.");
+      return;
+    }
+
+    setCallError(null);
+    setCallStarting(callType);
+    try {
+      await initiateCall(
+        socket,
+        otherUserId,
+        otherUserName || title,
+        callType,
+        channelId,
+      );
+    } catch (error) {
+      setCallError(callStartErrorMessage(error, callType));
+    } finally {
+      setCallStarting(null);
     }
   };
 
@@ -102,7 +183,9 @@ export default function TopBar({
       <h2 className="truncate font-heading text-base font-semibold text-text-primary">
         {title}
       </h2>
-      <ChevronDown size={14} className="shrink-0 text-text-muted" />
+      {(type === "dm" || canShowDetails) && (
+        <ChevronDown size={14} className="shrink-0 text-text-muted" />
+      )}
     </>
   );
 
@@ -121,19 +204,41 @@ export default function TopBar({
               >
                 {titleContent}
               </ProfilePopover>
-            ) : (
+            ) : canShowDetails ? (
               <button
                 type="button"
+                onClick={() => {
+                  setShowDetails(!showDetails);
+                  setShowPins(false);
+                  setShowFiles(false);
+                  setShowMembers(false);
+                  setShowRemoved(false);
+                  setShowNotifications(false);
+                }}
                 className="flex min-w-0 items-center gap-1.5 rounded-md pr-1 text-left hover:text-accent"
                 title={title}
+                aria-label={
+                  type === "dm"
+                    ? "Open DM profile details"
+                    : "Open conversation details from header"
+                }
               >
                 {titleContent}
               </button>
+            ) : (
+              <div
+                className="flex min-w-0 items-center gap-1.5 rounded-md pr-1 text-left"
+                title={title}
+              >
+                {titleContent}
+              </div>
             )}
             {subtitle && (
               <div className="flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
                 {type === "dm" && (isOnline || isOffline) && (
-                  <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-teal" : "bg-border"}`} />
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-teal" : "bg-border"}`}
+                  />
                 )}
                 <span className="truncate">{subtitle}</span>
               </div>
@@ -144,8 +249,10 @@ export default function TopBar({
         <div className="flex items-center gap-1">
           {memberCount !== undefined && (
             <button
+              type="button"
               className={`btn-ghost h-9 px-2 flex items-center gap-1.5 text-sm ${showMembers ? "text-accent" : ""}`}
               title="Members"
+              aria-label={`Members, ${memberCount}`}
               onClick={() => {
                 setShowMembers(!showMembers);
                 setShowPins(false);
@@ -162,27 +269,51 @@ export default function TopBar({
           {canShowCallControls && (
             <>
               <button
+                type="button"
                 className="btn-ghost h-9 w-9 p-0 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Voice call"
-                aria-label="Voice call"
-                disabled={!canStartCall}
-                onClick={() => handleCall("audio")}
+                title={
+                  callStarting === "audio"
+                    ? "Starting voice call"
+                    : canStartCall
+                      ? "Voice call"
+                      : "Calls are connecting"
+                }
+                aria-label={
+                  callStarting === "audio"
+                    ? "Starting voice call"
+                    : "Voice call"
+                }
+                disabled={!canStartCall || callStarting !== null}
+                onClick={() => void handleCall("audio")}
               >
                 <Phone size={16} />
               </button>
               <button
+                type="button"
                 className="btn-ghost h-9 w-9 p-0 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Video call"
-                aria-label="Video call"
-                disabled={!canStartCall}
-                onClick={() => handleCall("video")}
+                title={
+                  callStarting === "video"
+                    ? "Starting video call"
+                    : canStartCall
+                      ? "Video call"
+                      : "Calls are connecting"
+                }
+                aria-label={
+                  callStarting === "video"
+                    ? "Starting video call"
+                    : "Video call"
+                }
+                disabled={!canStartCall || callStarting !== null}
+                onClick={() => void handleCall("video")}
               >
                 <Video size={16} />
               </button>
             </>
           )}
-          <button
-            className={`btn-ghost h-9 w-9 p-0 ${showPins ? "text-accent" : ""}`}
+          {canShowPins && (
+            <button
+              type="button"
+              className={`btn-ghost h-9 w-9 p-0 ${showPins ? "text-accent" : ""}`}
               onClick={() => {
                 setShowPins(!showPins);
                 setShowFiles(false);
@@ -191,12 +322,15 @@ export default function TopBar({
                 setShowNotifications(false);
                 setShowDetails(false);
               }}
-            title="Pinned messages"
-          >
-            <Pin size={16} />
-          </button>
+              title="Pinned messages"
+              aria-label="Pinned messages"
+            >
+              <Pin size={16} />
+            </button>
+          )}
           {channelId && (type === "channel" || type === "dm") && (
             <button
+              type="button"
               className={`btn-ghost h-9 w-9 p-0 ${showFiles ? "text-accent" : ""}`}
               onClick={() => {
                 setShowFiles(!showFiles);
@@ -214,6 +348,7 @@ export default function TopBar({
           )}
           {canShowRemovedMessages && (
             <button
+              type="button"
               className={`btn-ghost h-9 w-9 p-0 ${showRemoved ? "text-accent" : ""}`}
               onClick={() => {
                 setShowRemoved(!showRemoved);
@@ -230,6 +365,7 @@ export default function TopBar({
             </button>
           )}
           <button
+            type="button"
             className="btn-ghost h-9 w-9 p-0"
             onClick={() => {
               setShowSearch(true);
@@ -241,11 +377,13 @@ export default function TopBar({
               setShowDetails(false);
             }}
             title="Search messages"
+            aria-label="Search messages"
           >
             <Search size={16} />
           </button>
           {canShowDetails && (
             <button
+              type="button"
               className={`btn-ghost h-9 w-9 p-0 ${showDetails ? "text-accent" : ""}`}
               onClick={() => {
                 setShowDetails(!showDetails);
@@ -263,6 +401,7 @@ export default function TopBar({
           )}
           {canConfigureNotifications && channelId && (
             <button
+              type="button"
               className={`btn-ghost h-9 w-9 p-0 relative ${showNotifications ? "text-accent" : ""}`}
               onClick={() => {
                 setShowNotifications(!showNotifications);
@@ -276,17 +415,39 @@ export default function TopBar({
               aria-label="Notifications"
             >
               <NotificationIcon size={16} />
-              {notificationLevel && notificationLevel !== "MUTED" && (
-                <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent" />
-              )}
+              {resolvedNotificationLevel &&
+                resolvedNotificationLevel !== "MUTED" && (
+                  <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent" />
+                )}
             </button>
           )}
         </div>
       </header>
 
+      {callError && (
+        <div
+          className="flex items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+          role="status"
+          data-testid="call-start-error"
+        >
+          <span className="min-w-0 flex-1">{callError}</span>
+          <button
+            type="button"
+            onClick={() => setCallError(null)}
+            className="rounded-md p-0.5 text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/30"
+            aria-label="Dismiss call error"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
       {showPins && channelId && (
-        <PinnedMessagesPanel channelId={channelId} onClose={() => setShowPins(false)} />
+        <PinnedMessagesPanel
+          channelId={channelId}
+          onClose={() => setShowPins(false)}
+        />
       )}
       {showFiles && channelId && (
         <FilesPanel channelId={channelId} onClose={() => setShowFiles(false)} />
@@ -341,7 +502,10 @@ export default function TopBar({
         <NotificationPreferencesPanel
           channelId={channelId}
           onClose={() => setShowNotifications(false)}
-          onLevelChange={setNotificationLevel}
+          onLevelChange={(level) => {
+            setNotificationLevel(level);
+            setPreference(channelId, level);
+          }}
         />
       )}
     </>

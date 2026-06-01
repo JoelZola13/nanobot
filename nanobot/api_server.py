@@ -81,6 +81,7 @@ ACADEMY_RUNTIME_FILE = ACADEMY_DATA_DIR / "runtime.json"
 VIDEOS_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "out"
 AUDIO_DIR = Path.home() / ".nanobot" / "workspace" / "remotion" / "public" / "audio"
 ARTICLE_IMAGES_DIR = Path.home() / ".nanobot" / "workspace" / "article-images"
+DOCLING_ASSETS_DIR = Path.home() / ".nanobot" / "workspace" / "documents" / "docling-assets"
 NEWS_DIR = Path.home() / ".nanobot" / "workspace" / "news"
 NEWS_DB_FILE = Path.home() / ".nanobot" / "workspace" / "news" / "articles.json"
 AVATARS_DIR = Path(__file__).parent.parent / "static" / "avatars"
@@ -4702,6 +4703,10 @@ MIME_TYPES = {
     ".webm": "video/webm",
     ".mov": "video/quicktime",
     ".mkv": "video/x-matroska",
+    ".csv": "text/csv",
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".json": "application/json",
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -4960,6 +4965,153 @@ async def audio_transcriptions(request: Request) -> JSONResponse:
         return Response(text, media_type="text/plain")
 
     return JSONResponse({"text": text})
+
+
+def _request_bool(request: Request, name: str, default: bool = False) -> bool:
+    value = request.query_params.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _request_int(request: Request, name: str) -> int | None:
+    raw = request.query_params.get(name)
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def _request_float(request: Request, name: str, default: float) -> float:
+    raw = request.query_params.get(name)
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+async def documents_docling_features(request: Request) -> JSONResponse:
+    """GET /api/documents/docling/features — describe local Docling import capabilities."""
+    from nanobot.services.docling_converter import docling_feature_manifest
+
+    return JSONResponse(docling_feature_manifest())
+
+
+async def documents_docling_asset(request: Request) -> FileResponse | JSONResponse:
+    """Serve Docling conversion assets generated during import."""
+    conversion_id = request.path_params["conversion_id"]
+    filename = request.path_params["filename"]
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", conversion_id):
+        return JSONResponse({"error": "Invalid conversion id"}, status_code=400)
+
+    root = (DOCLING_ASSETS_DIR / conversion_id).resolve()
+    filepath = (root / filename).resolve()
+    if ".." in filename or not filepath.is_relative_to(root):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    if not filepath.exists() or not filepath.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    return FileResponse(filepath, media_type=MIME_TYPES.get(filepath.suffix.lower(), "application/octet-stream"))
+
+
+async def documents_docling_import(request: Request) -> JSONResponse:
+    """POST /api/documents/import/docling — convert any Docling-supported file."""
+    from nanobot.services.docling_converter import (
+        DoclingConversionOptions,
+        DoclingUnavailableError,
+        UnsupportedDoclingFormatError,
+        convert_document_with_docling,
+        normalize_docling_enrichments,
+        normalize_docling_exports,
+    )
+
+    max_upload_bytes = int(os.environ.get("DOCLING_MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
+
+    try:
+        form = await request.form()
+    except Exception:
+        return JSONResponse({"error": "Invalid multipart form data"}, status_code=400)
+
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        return JSONResponse({"error": "No document file provided"}, status_code=400)
+
+    original_filename = Path(str(getattr(upload, "filename", "") or "upload")).name
+    suffix = Path(original_filename).suffix or ".bin"
+    conversion_id = uuid.uuid4().hex
+    asset_url_prefix = f"/api/documents/docling/assets/{conversion_id}"
+    asset_dir = DOCLING_ASSETS_DIR / conversion_id
+
+    requested_exports = normalize_docling_exports(
+        request.query_params.get("exports") or str(form.get("exports") or "")
+    )
+    ocr_lang = tuple(
+        lang.strip()
+        for lang in (request.query_params.get("ocr_lang") or str(form.get("ocr_lang") or "")).split(",")
+        if lang.strip()
+    )
+    enrichments = normalize_docling_enrichments(
+        request.query_params.get("enrich") or str(form.get("enrich") or "")
+    )
+    options = DoclingConversionOptions(
+        exports=requested_exports,
+        generate_assets=_request_bool(request, "assets", True),
+        asset_url_prefix=asset_url_prefix,
+        enable_ocr=_request_bool(request, "ocr", True),
+        force_full_page_ocr=_request_bool(request, "force_ocr", False),
+        ocr_lang=ocr_lang,
+        enable_enrichments=_request_bool(request, "enrich_all", False),
+        enrichments=enrichments,
+        enable_audio=_request_bool(request, "audio", True),
+        image_scale=_request_float(request, "image_scale", 2.0),
+        max_num_pages=_request_int(request, "max_pages"),
+        max_file_size=max_upload_bytes,
+    )
+
+    with tempfile.TemporaryDirectory(prefix="docling-import-") as temp_dir:
+        temp_path = Path(temp_dir) / f"upload{suffix}"
+        total_bytes = 0
+        with temp_path.open("wb") as handle:
+            while True:
+                chunk = await upload.read(1024 * 1024)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_upload_bytes:
+                    return JSONResponse(
+                        {
+                            "error": "Uploaded document is too large",
+                            "max_upload_bytes": max_upload_bytes,
+                        },
+                        status_code=413,
+                    )
+                handle.write(chunk)
+
+        try:
+            result = await asyncio.to_thread(
+                convert_document_with_docling,
+                temp_path,
+                original_filename=original_filename,
+                output_dir=asset_dir,
+                options=options,
+            )
+        except DoclingUnavailableError as exc:
+            return JSONResponse({"error": str(exc), "docling_available": False}, status_code=503)
+        except UnsupportedDoclingFormatError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception as exc:
+            logger.exception(f"Docling import failed for {original_filename}: {exc}")
+            return JSONResponse({"error": f"Docling import failed: {exc}"}, status_code=500)
+
+    result["docling_available"] = True
+    result["uploaded_bytes"] = total_bytes
+    return JSONResponse(result)
 
 
 _QWEN_SPEAKERS = {"Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ryan", "Aiden", "Ono_Anna", "Sohee"}
@@ -6867,6 +7019,9 @@ app = Starlette(
         Route("/v1/audio/transcriptions", audio_transcriptions, methods=["POST"]),
         Route("/v1/audio/speech", audio_speech, methods=["POST"]),
         Route("/v1/embeddings", embeddings, methods=["POST"]),
+        Route("/api/documents/docling/features", documents_docling_features, methods=["GET"]),
+        Route("/api/documents/docling/assets/{conversion_id}/{filename:path}", documents_docling_asset, methods=["GET"]),
+        Route("/api/documents/import/docling", documents_docling_import, methods=["POST"]),
         Route("/health", health, methods=["GET"]),
         Route("/screenshots/{filename:path}", serve_screenshot, methods=["GET"]),
         Route("/videos/{filename:path}", serve_video, methods=["GET"]),

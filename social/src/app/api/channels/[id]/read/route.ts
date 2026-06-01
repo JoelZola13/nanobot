@@ -3,6 +3,23 @@ import { auth } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getIO } from "@/lib/socketServer";
 
+async function requireChannelAccess(channelId: string, userId: string) {
+  const membership = await prisma.channelMember.findUnique({
+    where: { channelId_userId: { channelId, userId } },
+    include: { channel: { select: { isArchived: true } } },
+  });
+
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  }
+
+  if (membership.channel.isArchived) {
+    return NextResponse.json({ error: "Channel is archived" }, { status: 403 });
+  }
+
+  return null;
+}
+
 // POST /api/channels/[id]/read — mark channel as read up to a given messageId
 export async function POST(
   request: Request,
@@ -14,13 +31,33 @@ export async function POST(
   }
 
   const { id: channelId } = await params;
-  const { messageId } = await request.json();
+  const body = (await request.json().catch(() => ({}))) as {
+    messageId?: unknown;
+  };
+  const messageId =
+    typeof body.messageId === "string" ? body.messageId.trim() : "";
 
   if (!messageId) {
     return NextResponse.json({ error: "messageId required" }, { status: 400 });
   }
 
-  // Upsert read receipt — unique on [userId, channelId]
+  const accessError = await requireChannelAccess(channelId, session.user.id);
+  if (accessError) {
+    return accessError;
+  }
+
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { id: true, channelId: true, deletedAt: true },
+  });
+
+  if (!message || message.channelId !== channelId || message.deletedAt) {
+    return NextResponse.json(
+      { ok: false, ignored: true, reason: "message-not-found" },
+      { status: 202 },
+    );
+  }
+
   const receipt = await prisma.readReceipt.upsert({
     where: {
       userId_channelId: {
@@ -66,8 +103,13 @@ export async function GET(
 
   const { id: channelId } = await params;
 
+  const accessError = await requireChannelAccess(channelId, session.user.id);
+  if (accessError) {
+    return accessError;
+  }
+
   const receipts = await prisma.readReceipt.findMany({
-    where: { channelId },
+    where: { channelId, message: { deletedAt: null } },
     include: {
       user: {
         select: { id: true, displayName: true, avatarUrl: true },

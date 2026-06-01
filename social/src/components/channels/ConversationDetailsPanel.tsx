@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  AlertCircle,
   Bell,
   Check,
   ExternalLink,
@@ -10,9 +11,11 @@ import {
   Hash,
   Info,
   Image,
+  Loader2,
   Music,
   Pencil,
   Pin,
+  RefreshCw,
   UserRound,
   Users,
   Video,
@@ -51,7 +54,11 @@ const formatMembers = (memberCount?: number) => {
   return `${memberCount} member${memberCount === 1 ? "" : "s"}`;
 };
 
-const formatCount = (count: number | null, singular: string, plural: string) => {
+const formatCount = (
+  count: number | null,
+  singular: string,
+  plural: string,
+) => {
   if (count === null) return "Loading";
   return `${count} ${count === 1 ? singular : plural}`;
 };
@@ -63,6 +70,23 @@ const iconForFile = (mimeType: string) => {
   if (mimeType.includes("pdf") || mimeType.includes("text")) return FileText;
   return File;
 };
+
+async function getApiErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    message?: unknown;
+  } | null;
+
+  if (typeof payload?.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  if (typeof payload?.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return fallback;
+}
 
 export default function ConversationDetailsPanel({
   channelId,
@@ -82,7 +106,10 @@ export default function ConversationDetailsPanel({
   const [pinCount, setPinCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [sharedFiles, setSharedFiles] = useState<ChannelFile[] | null>(null);
-  const [currentDescription, setCurrentDescription] = useState(description || "");
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [currentDescription, setCurrentDescription] = useState(
+    description || "",
+  );
   const [topicDraft, setTopicDraft] = useState(description || "");
   const [editingTopic, setEditingTopic] = useState(false);
   const [savingTopic, setSavingTopic] = useState(false);
@@ -93,32 +120,75 @@ export default function ConversationDetailsPanel({
   const topicText = currentDescription.trim();
   const sharedPreviewFiles = sharedFiles?.slice(0, 4) || [];
 
+  const loadSummary = useCallback(
+    async (signal?: AbortSignal) => {
+      setPinCount(null);
+      setFileCount(null);
+      setSharedFiles(null);
+      setSummaryError(null);
+
+      try {
+        const [pinsResponse, filesResponse] = await Promise.all([
+          fetch(apiUrl(`/api/channels/${channelId}/pins`), {
+            cache: "no-store",
+            signal,
+          }),
+          fetch(apiUrl(`/api/channels/${channelId}/files`), {
+            cache: "no-store",
+            signal,
+          }),
+        ]);
+
+        if (!pinsResponse.ok) {
+          throw new Error(
+            await getApiErrorMessage(
+              pinsResponse,
+              "Conversation summary could not load.",
+            ),
+          );
+        }
+
+        if (!filesResponse.ok) {
+          throw new Error(
+            await getApiErrorMessage(
+              filesResponse,
+              "Conversation summary could not load.",
+            ),
+          );
+        }
+
+        const [pinsData, filesData] = (await Promise.all([
+          pinsResponse.json(),
+          filesResponse.json(),
+        ])) as [{ pins?: unknown[] }, { files?: ChannelFile[] }];
+        if (signal?.aborted) return;
+        const files = Array.isArray(filesData.files) ? filesData.files : [];
+        setPinCount(Array.isArray(pinsData.pins) ? pinsData.pins.length : 0);
+        setFileCount(files.length);
+        setSharedFiles(files);
+      } catch (error) {
+        if (signal?.aborted) return;
+        setPinCount(null);
+        setFileCount(null);
+        setSharedFiles([]);
+        setSummaryError(
+          error instanceof Error
+            ? error.message
+            : "Conversation summary could not load.",
+        );
+      }
+    },
+    [channelId],
+  );
+
   useEffect(() => {
-    let cancelled = false;
-
-    setPinCount(null);
-    setFileCount(null);
-    setSharedFiles(null);
-
-    Promise.all([
-      fetch(apiUrl(`/api/channels/${channelId}/pins`))
-        .then((response) => (response.ok ? response.json() : { pins: [] }))
-        .catch(() => ({ pins: [] })),
-      fetch(apiUrl(`/api/channels/${channelId}/files`))
-        .then((response) => (response.ok ? response.json() : { files: [] }))
-        .catch(() => ({ files: [] })),
-    ]).then(([pinsData, filesData]) => {
-      if (cancelled) return;
-      const files = Array.isArray(filesData.files) ? filesData.files : [];
-      setPinCount(Array.isArray(pinsData.pins) ? pinsData.pins.length : 0);
-      setFileCount(files.length);
-      setSharedFiles(files);
-    });
+    const controller = new AbortController();
+    void loadSummary(controller.signal);
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [channelId]);
+  }, [loadSummary]);
 
   useEffect(() => {
     const nextDescription = description || "";
@@ -156,16 +226,24 @@ export default function ConversationDetailsPanel({
           type: channelVisibility,
         }),
       });
-      if (!response.ok) throw new Error("Failed to update topic");
+      if (!response.ok) {
+        throw new Error(
+          await getApiErrorMessage(response, "Topic could not be saved."),
+        );
+      }
 
-      const updated = (await response.json()) as { description?: string | null };
+      const updated = (await response.json()) as {
+        description?: string | null;
+      };
       const nextDescription = updated.description || "";
       setCurrentDescription(nextDescription);
       setTopicDraft(nextDescription);
       setEditingTopic(false);
       onTopicChange?.(nextDescription || undefined);
-    } catch {
-      setTopicError("Topic could not be saved.");
+    } catch (error) {
+      setTopicError(
+        error instanceof Error ? error.message : "Topic could not be saved.",
+      );
     } finally {
       setSavingTopic(false);
     }
@@ -174,6 +252,8 @@ export default function ConversationDetailsPanel({
   return (
     <div
       data-testid="conversation-details-panel"
+      role="dialog"
+      aria-label="Conversation details"
       className="absolute right-4 top-14 z-40 w-80 overflow-hidden rounded-xl border border-border bg-bg-surface shadow-xl"
     >
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -227,6 +307,7 @@ export default function ConversationDetailsPanel({
                 data-testid="conversation-details-topic-edit"
                 onClick={handleStartTopicEdit}
                 className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-text-muted hover:bg-bg-hover hover:text-text-primary"
+                aria-label="Edit channel topic"
               >
                 <Pencil size={12} />
                 <span>Edit</span>
@@ -242,10 +323,17 @@ export default function ConversationDetailsPanel({
                 onChange={(event) => setTopicDraft(event.target.value)}
                 className="min-h-20 w-full resize-none rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
                 placeholder="What is this channel about?"
+                aria-label="Channel topic"
                 autoFocus
               />
               {topicError && (
-                <div className="text-xs text-danger">{topicError}</div>
+                <div
+                  className="text-xs text-danger"
+                  data-testid="conversation-details-topic-error"
+                  role="alert"
+                >
+                  {topicError}
+                </div>
               )}
               <div className="flex justify-end gap-2">
                 <button
@@ -254,6 +342,7 @@ export default function ConversationDetailsPanel({
                   onClick={handleCancelTopicEdit}
                   disabled={savingTopic}
                   className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-text-muted hover:bg-bg-hover hover:text-text-primary disabled:opacity-60"
+                  aria-label="Cancel topic edit"
                 >
                   <X size={12} />
                   <span>Cancel</span>
@@ -264,6 +353,7 @@ export default function ConversationDetailsPanel({
                   onClick={handleSaveTopic}
                   disabled={savingTopic}
                   className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-accent-hover disabled:opacity-60"
+                  aria-label="Save channel topic"
                 >
                   <Check size={12} />
                   <span>{savingTopic ? "Saving..." : "Save"}</span>
@@ -291,19 +381,44 @@ export default function ConversationDetailsPanel({
               type="button"
               onClick={onOpenFiles}
               className="rounded-md px-1.5 py-1 text-xs font-medium text-text-muted hover:bg-bg-hover hover:text-text-primary"
+              aria-label="View all shared files"
             >
               View all
             </button>
           )}
         </div>
 
-        {sharedFiles === null ? (
+        {summaryError ? (
+          <div
+            className="rounded-lg border border-red-300 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            data-testid="conversation-details-summary-error"
+            role="alert"
+          >
+            <div className="flex items-start gap-2">
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
+              <span className="min-w-0 flex-1">{summaryError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadSummary()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-400 dark:border-red-800 dark:bg-red-950/20 dark:text-red-100 dark:hover:bg-red-950/50"
+              aria-label="Retry details summary"
+            >
+              <RefreshCw size={12} />
+              Retry
+            </button>
+          </div>
+        ) : sharedFiles === null ? (
           <div className="grid grid-cols-4 gap-2">
             {[0, 1, 2, 3].map((index) => (
               <div
                 key={index}
-                className="aspect-square animate-pulse rounded-lg bg-bg-elevated"
-              />
+                className="flex aspect-square items-center justify-center rounded-lg bg-bg-elevated text-text-muted"
+                role="status"
+                aria-label="Loading shared media"
+              >
+                <Loader2 size={14} className="animate-spin" />
+              </div>
             ))}
           </div>
         ) : sharedPreviewFiles.length > 0 ? (
@@ -333,7 +448,11 @@ export default function ConversationDetailsPanel({
           <DetailsAction
             icon={Pin}
             label="Pinned messages"
-            meta={formatCount(pinCount, "pin", "pins")}
+            meta={
+              summaryError
+                ? "Unavailable"
+                : formatCount(pinCount, "pin", "pins")
+            }
             testId="conversation-details-pins"
             onClick={onOpenPins}
           />
@@ -342,7 +461,11 @@ export default function ConversationDetailsPanel({
           <DetailsAction
             icon={FileText}
             label="Files"
-            meta={formatCount(fileCount, "file", "files")}
+            meta={
+              summaryError
+                ? "Unavailable"
+                : formatCount(fileCount, "file", "files")
+            }
             testId="conversation-details-files"
             onClick={onOpenFiles}
           />
@@ -372,18 +495,19 @@ function SharedMediaPreview({ file }: { file: ChannelFile }) {
       data-testid="conversation-details-media-item"
       className="group relative flex aspect-square min-w-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg-elevated text-text-secondary transition-colors hover:border-accent hover:text-accent"
       title={file.fileName}
+      aria-label={`Open ${file.fileName}`}
     >
       {isImage ? (
         <img
           src={file.url}
-          alt=""
+          alt={file.fileName}
           className="h-full w-full object-cover"
           loading="lazy"
         />
       ) : (
         <Icon size={20} />
       )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-black/60 px-1.5 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-black/60 px-1.5 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
         <span className="min-w-0 flex-1 truncate">{file.fileName}</span>
         <ExternalLink size={10} className="shrink-0" />
       </div>
@@ -410,6 +534,7 @@ function DetailsAction({
       data-testid={testId}
       onClick={onClick}
       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+      aria-label={meta ? `${label}, ${meta}` : label}
     >
       <Icon size={15} className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">{label}</span>

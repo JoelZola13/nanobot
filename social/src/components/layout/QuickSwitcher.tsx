@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   Bot,
   Hash,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import type { ChannelInfo } from "@/types";
 import { apiUrl } from "@/lib/apiUrl";
+import { useEmbeddedNavigation } from "@/lib/useEmbeddedNavigation";
 
 type DmChannel = ChannelInfo & {
   otherUser?: {
@@ -79,11 +81,14 @@ interface QuickSwitcherProps {
   channels: ChannelInfo[];
   dms: DmChannel[];
   userId: string;
+  initialQuery?: string;
 }
 
 export type QuickSwitcherMode = "jump" | "compose";
+type QuickSwitcherErrorKind = "search" | "dm";
 
-const normalized = (value: string | null | undefined) => value?.toLowerCase() || "";
+const normalized = (value: string | null | undefined) =>
+  value?.toLowerCase() || "";
 
 export default function QuickSwitcher({
   open,
@@ -92,6 +97,7 @@ export default function QuickSwitcher({
   channels,
   dms,
   userId,
+  initialQuery = "",
 }: QuickSwitcherProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,10 +106,21 @@ export default function QuickSwitcher({
   const [searching, setSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<QuickSwitcherErrorKind | null>(
+    null,
+  );
+  const [searchRetryNonce, setSearchRetryNonce] = useState(0);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const { withEmbed } = useEmbeddedNavigation();
 
   const trimmedQuery = query.trim();
   const lowerQuery = trimmedQuery.toLowerCase();
   const isComposeMode = mode === "compose";
+
+  useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -126,30 +143,55 @@ export default function QuickSwitcher({
       setRemoteResults([]);
       setSearching(false);
       setStartingId(null);
+      setError(null);
+      setErrorKind(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open && initialQuery) {
+      setQuery(initialQuery);
+    }
+  }, [initialQuery, open]);
 
   useEffect(() => {
     if (!open || trimmedQuery.length < 2) {
       setRemoteResults([]);
       setSearching(false);
+      setErrorKind(null);
       return;
     }
 
     const controller = new AbortController();
     setSearching(true);
+    setError(null);
+    setErrorKind(null);
 
     const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch(apiUrl(`/api/users/search?q=${encodeURIComponent(trimmedQuery)}`), {
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          apiUrl(`/api/users/search?q=${encodeURIComponent(trimmedQuery)}`),
+          {
+            signal: controller.signal,
+          },
+        );
         if (res.ok) {
           const users = (await res.json()) as SearchUser[];
           setRemoteResults(users.filter((user) => user.id !== userId));
+        } else {
+          const data = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setRemoteResults([]);
+          setError(data?.error || "People search is unavailable right now.");
+          setErrorKind("search");
         }
       } catch {
-        if (!controller.signal.aborted) setRemoteResults([]);
+        if (!controller.signal.aborted) {
+          setRemoteResults([]);
+          setError("People search is unavailable right now.");
+          setErrorKind("search");
+        }
       } finally {
         if (!controller.signal.aborted) setSearching(false);
       }
@@ -159,10 +201,11 @@ export default function QuickSwitcher({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, trimmedQuery, userId]);
+  }, [open, searchRetryNonce, trimmedQuery, userId]);
 
   const existingDmUserIds = useMemo(
-    () => new Set(dms.map((dm) => dm.otherUser?.id).filter(Boolean) as string[]),
+    () =>
+      new Set(dms.map((dm) => dm.otherUser?.id).filter(Boolean) as string[]),
     [dms],
   );
 
@@ -173,14 +216,17 @@ export default function QuickSwitcher({
     };
 
     const channelItems = channels
-      .filter((channel) => matches(channel.name, channel.slug, channel.description))
+      .filter((channel) =>
+        matches(channel.name, channel.slug, channel.description),
+      )
       .slice(0, lowerQuery ? 8 : 5)
       .map<SwitcherItem>((channel) => ({
         id: `channel-${channel.id}`,
         type: "channel",
         label: channel.name || "unnamed",
-        description: channel.description || `${channel.memberCount || 1} members`,
-        href: `/channels/${channel.id}`,
+        description:
+          channel.description || `${channel.memberCount || 1} members`,
+        href: withEmbed(`/channels/${channel.id}`),
         isPrivate: channel.type === "PRIVATE",
       }));
 
@@ -198,8 +244,12 @@ export default function QuickSwitcher({
         id: `dm-${dm.id}`,
         type: "dm",
         label: dm.name || dm.otherUser?.displayName || "Unknown",
-        description: dm.otherUser?.isAgent ? "AI agent DM" : dm.otherUser?.status === "online" ? "Online teammate" : "Teammate DM",
-        href: `/dm/${dm.id}`,
+        description: dm.otherUser?.isAgent
+          ? "AI agent DM"
+          : dm.otherUser?.status === "online"
+            ? "Online teammate"
+            : "Teammate DM",
+        href: withEmbed(`/dm/${dm.id}`),
         avatarUrl: dm.otherUser?.avatarUrl || null,
         isAgent: Boolean(dm.otherUser?.isAgent),
         status: dm.otherUser?.status || "offline",
@@ -211,7 +261,9 @@ export default function QuickSwitcher({
         id: `person-${user.id}`,
         type: "person",
         label: user.displayName,
-        description: user.isAgent ? "Start an AI agent DM" : `@${user.username}`,
+        description: user.isAgent
+          ? "Start an AI agent DM"
+          : `@${user.username}`,
         userId: user.id,
         avatarUrl: user.avatarUrl,
         isAgent: user.isAgent,
@@ -226,18 +278,32 @@ export default function QuickSwitcher({
             type: "browse",
             label: "Browse teammates and agents",
             description: "Open the full direct message directory",
-            href: "/dm",
+            href: withEmbed("/dm"),
+          },
+          {
+            id: "browse-teammates",
+            type: "browse",
+            label: "Browse teammates",
+            description: "Open the teammates directory",
+            href: withEmbed("/dm?filter=teammates"),
+          },
+          {
+            id: "browse-agents",
+            type: "browse",
+            label: "Browse AI agents",
+            description: "Open the agents directory",
+            href: withEmbed("/dm?filter=agents"),
           },
         ];
 
     return [...channelItems, ...dmItems, ...remoteItems, ...browseItems];
-  }, [channels, dms, existingDmUserIds, lowerQuery, remoteResults]);
+  }, [channels, dms, existingDmUserIds, lowerQuery, remoteResults, withEmbed]);
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [lowerQuery, items.length]);
 
-  if (!open) return null;
+  if (!open || !portalRoot) return null;
 
   const close = () => {
     setQuery("");
@@ -253,6 +319,8 @@ export default function QuickSwitcher({
   const startDM = async (targetUserId: string) => {
     if (startingId) return;
     setStartingId(targetUserId);
+    setError(null);
+    setErrorKind(null);
     try {
       const res = await fetch(apiUrl("/api/dm"), {
         method: "POST",
@@ -262,9 +330,18 @@ export default function QuickSwitcher({
       if (res.ok) {
         const { channelId } = (await res.json()) as { channelId: string };
         close();
-        router.push(`/dm/${channelId}`);
+        router.push(withEmbed(`/dm/${channelId}`));
         router.refresh();
+        return;
       }
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setError(data?.error || "Could not start that direct message.");
+      setErrorKind("dm");
+    } catch {
+      setError("Could not start that direct message.");
+      setErrorKind("dm");
     } finally {
       setStartingId(null);
     }
@@ -288,13 +365,17 @@ export default function QuickSwitcher({
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSelectedIndex((index) => (items.length === 0 ? 0 : (index + 1) % items.length));
+      setSelectedIndex((index) =>
+        items.length === 0 ? 0 : (index + 1) % items.length,
+      );
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSelectedIndex((index) => (items.length === 0 ? 0 : (index - 1 + items.length) % items.length));
+      setSelectedIndex((index) =>
+        items.length === 0 ? 0 : (index - 1 + items.length) % items.length,
+      );
       return;
     }
 
@@ -304,12 +385,14 @@ export default function QuickSwitcher({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-3 pt-[12vh]"
       role="dialog"
       aria-modal="true"
-      aria-label={isComposeMode ? "New message quick switcher" : "Quick switcher"}
+      aria-label={
+        isComposeMode ? "New message quick switcher" : "Quick switcher"
+      }
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) close();
       }}
@@ -323,13 +406,25 @@ export default function QuickSwitcher({
           color: "var(--sv-text-primary)",
         }}
       >
-        <div className="flex items-center gap-3 border-b px-4 py-3" style={{ borderColor: "var(--sv-border)" }}>
+        <div
+          className="flex items-center gap-3 border-b px-4 py-3"
+          style={{ borderColor: "var(--sv-border)" }}
+        >
           <Search size={18} className="shrink-0 text-text-muted" />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={isComposeMode ? "Start a DM or open a conversation" : "Jump to a channel, DM, or agent"}
+            placeholder={
+              isComposeMode
+                ? "Start a DM or open a conversation"
+                : "Jump to a channel, DM, or agent"
+            }
+            aria-label={
+              isComposeMode
+                ? "Start a DM or open a conversation"
+                : "Jump to a channel, DM, or agent"
+            }
             className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
           />
           <button
@@ -337,6 +432,7 @@ export default function QuickSwitcher({
             onClick={close}
             className="sidebar-icon-button h-8 w-8"
             title="Close quick switcher"
+            aria-label="Close quick switcher"
           >
             <X size={16} />
           </button>
@@ -346,7 +442,9 @@ export default function QuickSwitcher({
           {items.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Search size={28} className="mx-auto mb-2 text-text-muted" />
-              <h3 className="font-heading text-sm font-semibold text-text-primary">No matches</h3>
+              <h3 className="font-heading text-sm font-semibold text-text-primary">
+                No matches
+              </h3>
               <p className="text-xs text-text-muted">
                 Search by channel, teammate, username, or agent name.
               </p>
@@ -359,22 +457,37 @@ export default function QuickSwitcher({
                   type="button"
                   onClick={() => activate(item)}
                   onMouseEnter={() => setSelectedIndex(index)}
+                  disabled={item.type === "person" && Boolean(startingId)}
+                  data-testid="quick-switcher-result"
+                  aria-label={getSwitcherItemLabel(item)}
                   className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-                    selectedIndex === index ? "bg-bg-hover" : "hover:bg-bg-hover"
+                    selectedIndex === index
+                      ? "bg-bg-hover"
+                      : "hover:bg-bg-hover"
                   }`}
                 >
                   <SwitcherIcon item={item} />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-sm font-semibold text-text-primary">{item.label}</span>
-                      {item.type === "person" && item.isAgent && <span className="badge-teal text-2xs">agent</span>}
+                      <span className="truncate text-sm font-semibold text-text-primary">
+                        {item.label}
+                      </span>
+                      {item.type === "person" && item.isAgent && (
+                        <span className="badge-teal text-2xs">agent</span>
+                      )}
                     </div>
-                    <p className="truncate text-xs text-text-muted">{item.description}</p>
+                    <p className="truncate text-xs text-text-muted">
+                      {item.description}
+                    </p>
                   </div>
                   {item.type === "person" && startingId === item.userId ? (
-                    <span className="text-2xs font-medium text-text-muted">Opening</span>
+                    <span className="text-2xs font-medium text-text-muted">
+                      Opening
+                    </span>
                   ) : (
-                    <span className="text-2xs text-text-muted">{item.type === "person" ? "Start DM" : "Open"}</span>
+                    <span className="text-2xs text-text-muted">
+                      {item.type === "person" ? "Start DM" : "Open"}
+                    </span>
                   )}
                 </button>
               ))}
@@ -386,14 +499,46 @@ export default function QuickSwitcher({
           className="flex items-center gap-3 border-t px-4 py-2 text-2xs text-text-muted"
           style={{ borderColor: "var(--sv-border)" }}
         >
-          <span>Enter opens</span>
-          <span>Arrows move</span>
-          <span>Esc closes</span>
+          {error ? (
+            <>
+              <span
+                className="text-red-400"
+                role="status"
+                data-testid="quick-switcher-error"
+              >
+                {error}
+              </span>
+              {errorKind === "search" && trimmedQuery.length >= 2 && (
+                <button
+                  type="button"
+                  className="ml-auto text-2xs font-semibold text-accent hover:underline disabled:opacity-60"
+                  disabled={searching}
+                  aria-label="Retry quick switcher people search"
+                  onClick={() => setSearchRetryNonce((nonce) => nonce + 1)}
+                >
+                  Retry
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <span>Enter opens</span>
+              <span>Arrows move</span>
+              <span>Esc closes</span>
+            </>
+          )}
           {searching && <span className="ml-auto">Searching...</span>}
         </div>
       </div>
-    </div>
+    </div>,
+    portalRoot,
   );
+}
+
+function getSwitcherItemLabel(item: SwitcherItem) {
+  if (item.type === "person") return `Start DM with ${item.label}`;
+  if (item.type === "browse") return item.label;
+  return `Open ${item.label}`;
 }
 
 function SwitcherIcon({ item }: { item: SwitcherItem }) {
@@ -421,9 +566,15 @@ function SwitcherIcon({ item }: { item: SwitcherItem }) {
 
   return (
     <div className="relative shrink-0">
-      <div className={`avatar h-9 w-9 text-sm ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}>
+      <div
+        className={`avatar h-9 w-9 text-sm ${isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"}`}
+      >
         {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+          <img
+            src={avatarUrl}
+            alt=""
+            className="h-full w-full rounded-full object-cover"
+          />
         ) : isAgent ? (
           <Bot size={16} />
         ) : (

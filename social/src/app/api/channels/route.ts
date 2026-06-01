@@ -7,6 +7,7 @@ import {
 } from "@/lib/defaultChannels";
 import {
   canCreateWorkspaceChannels,
+  isWorkspaceAdminRole,
   canManageChannel,
   normalizeChannelDescription,
   normalizeChannelName,
@@ -52,12 +53,13 @@ export async function GET(req: NextRequest) {
 
   await ensureDefaultChannelsForUser(session.user.id);
   const canCreate = canCreateWorkspaceChannels(session.user);
+  const canAdministerWorkspace = isWorkspaceAdminRole(session.user.role);
   const includeArchived =
     req.nextUrl.searchParams.get("includeArchived") === "true";
 
   const channels = await prisma.channel.findMany({
     where: includeArchived
-      ? canCreate
+      ? canAdministerWorkspace
         ? { type: { in: ["PUBLIC", "PRIVATE"] } }
         : {
             type: { in: ["PUBLIC", "PRIVATE"] },

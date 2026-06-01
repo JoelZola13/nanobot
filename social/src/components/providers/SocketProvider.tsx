@@ -1,13 +1,31 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Socket } from "socket.io-client";
 import { getSocket, disconnectSocket } from "@/lib/socket";
 import { usePresenceStore } from "@/stores/presenceStore";
 import { useUnreadStore } from "@/stores/unreadStore";
 import { useCallStore } from "@/stores/callStore";
-import { playMessageSound, playCallRingtone, stopCallRingtone } from "@/lib/sounds";
-import { createPeerConnection, getLocalMedia, createOffer, createAnswer } from "@/lib/webrtc";
+import {
+  playMessageSound,
+  playCallRingtone,
+  stopCallRingtone,
+} from "@/lib/sounds";
+import {
+  createPeerConnection,
+  getLocalMedia,
+  createOffer,
+  createAnswer,
+  replaceVideoTrack,
+} from "@/lib/webrtc";
 import {
   isNotificationLevel,
   messageMentionsUsername,
@@ -20,9 +38,20 @@ import {
 import type { MessageData } from "@/types";
 
 const SocketContext = createContext<Socket | null>(null);
+const NotificationPreferencesContext = createContext<{
+  preferences: Record<string, NotificationLevel>;
+  setPreference: (channelId: string, level: NotificationLevel) => void;
+}>({
+  preferences: {},
+  setPreference: () => {},
+});
 
 export function useSocket() {
   return useContext(SocketContext);
+}
+
+export function useNotificationPreferences() {
+  return useContext(NotificationPreferencesContext);
 }
 
 // Store peer connection globally so call handlers can access it
@@ -44,16 +73,42 @@ export default function SocketProvider({
   children: React.ReactNode;
 }) {
   const [socketState, setSocketState] = useState<Socket | null>(null);
+  const [currentNotificationPreferences, setCurrentNotificationPreferences] =
+    useState(notificationPreferences);
   const socketRef = useRef<Socket | null>(null);
   const notificationPreferencesRef = useRef(notificationPreferences);
   const notificationDestinationsRef = useRef(notificationDestinations);
   const setPresence = usePresenceStore((s) => s.setStatus);
   const setAllPresence = usePresenceStore((s) => s.setAll);
   const incrementUnread = useUnreadStore((s) => s.increment);
-  const { setIncomingCall, setLocalStream, setRemoteStream, endCall } = useCallStore.getState();
+  const { setIncomingCall, setLocalStream, setRemoteStream, endCall } =
+    useCallStore.getState();
+
+  const setNotificationPreference = useCallback(
+    (channelId: string, level: NotificationLevel) => {
+      notificationPreferencesRef.current = {
+        ...notificationPreferencesRef.current,
+        [channelId]: level,
+      };
+      setCurrentNotificationPreferences((current) => ({
+        ...current,
+        [channelId]: level,
+      }));
+    },
+    [],
+  );
+
+  const notificationPreferencesValue = useMemo(
+    () => ({
+      preferences: currentNotificationPreferences,
+      setPreference: setNotificationPreference,
+    }),
+    [currentNotificationPreferences, setNotificationPreference],
+  );
 
   useEffect(() => {
     notificationPreferencesRef.current = notificationPreferences;
+    setCurrentNotificationPreferences(notificationPreferences);
   }, [notificationPreferences]);
 
   useEffect(() => {
@@ -69,10 +124,7 @@ export default function SocketProvider({
 
       if (!detail?.channelId || !isNotificationLevel(detail.level)) return;
 
-      notificationPreferencesRef.current = {
-        ...notificationPreferencesRef.current,
-        [detail.channelId]: detail.level,
-      };
+      setNotificationPreference(detail.channelId, detail.level);
     };
 
     window.addEventListener(
@@ -85,7 +137,7 @@ export default function SocketProvider({
         handleNotificationPreference,
       );
     };
-  }, []);
+  }, [setNotificationPreference]);
 
   useEffect(() => {
     const socket = getSocket(userId);
@@ -110,13 +162,19 @@ export default function SocketProvider({
     }
 
     // ── Presence ──
-    socket.on("presence:list", (entries: { userId: string; status: string }[]) => {
-      setAllPresence(entries);
-    });
+    socket.on(
+      "presence:list",
+      (entries: { userId: string; status: string }[]) => {
+        setAllPresence(entries);
+      },
+    );
 
-    socket.on("presence:update", ({ userId: uid, status }: { userId: string; status: string }) => {
-      setPresence(uid, status as "online" | "away" | "offline");
-    });
+    socket.on(
+      "presence:update",
+      ({ userId: uid, status }: { userId: string; status: string }) => {
+        setPresence(uid, status as "online" | "away" | "offline");
+      },
+    );
 
     // Heartbeat every 30s
     const heartbeatInterval = setInterval(() => {
@@ -157,10 +215,13 @@ export default function SocketProvider({
     });
 
     // ── WebRTC Call Signaling ──
-    socket.on("call:incoming", ({ callerId, callerName, callType, channelId }) => {
-      setIncomingCall({ callerId, callerName, callType, channelId });
-      playCallRingtone();
-    });
+    socket.on(
+      "call:incoming",
+      ({ callerId, callerName, callType, channelId }) => {
+        setIncomingCall({ callerId, callerName, callType, channelId });
+        playCallRingtone();
+      },
+    );
 
     socket.on("call:offer", async ({ callerId, offer }) => {
       try {
@@ -172,11 +233,19 @@ export default function SocketProvider({
 
         peerConnection = createPeerConnection(
           (remoteStream) => setRemoteStream(remoteStream),
-          (candidate) => socket.emit("call:ice-candidate", { targetUserId: callerId, candidate }),
+          (candidate) =>
+            socket.emit("call:ice-candidate", {
+              targetUserId: callerId,
+              candidate,
+            }),
         );
 
-        stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        stream
+          .getTracks()
+          .forEach((track) => peerConnection!.addTrack(track, stream));
+        await peerConnection.setRemoteDescription(
+          new RTCSessionDescription(offer),
+        );
         const answer = await createAnswer(peerConnection);
         socket.emit("call:answer", { targetUserId: callerId, answer });
       } catch (err) {
@@ -187,7 +256,9 @@ export default function SocketProvider({
     socket.on("call:answer", async ({ answer }) => {
       try {
         if (peerConnection) {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+          await peerConnection.setRemoteDescription(
+            new RTCSessionDescription(answer),
+          );
         }
       } catch (err) {
         console.error("Error handling call answer:", err);
@@ -230,7 +301,11 @@ export default function SocketProvider({
 
   return (
     <SocketContext.Provider value={socketState}>
-      {children}
+      <NotificationPreferencesContext.Provider
+        value={notificationPreferencesValue}
+      >
+        {children}
+      </NotificationPreferencesContext.Provider>
     </SocketContext.Provider>
   );
 }
@@ -243,17 +318,21 @@ export async function initiateCall(
   callType: "audio" | "video",
   channelId: string,
 ): Promise<void> {
-  const { setActiveCall, setLocalStream, setRemoteStream } = useCallStore.getState();
+  const { setActiveCall, setLocalStream, setRemoteStream } =
+    useCallStore.getState();
 
   const stream = await getLocalMedia(callType === "video");
   setLocalStream(stream);
 
   peerConnection = createPeerConnection(
     (remoteStream) => setRemoteStream(remoteStream),
-    (candidate) => socket.emit("call:ice-candidate", { targetUserId, candidate }),
+    (candidate) =>
+      socket.emit("call:ice-candidate", { targetUserId, candidate }),
   );
 
-  stream.getTracks().forEach((track) => peerConnection!.addTrack(track, stream));
+  stream
+    .getTracks()
+    .forEach((track) => peerConnection!.addTrack(track, stream));
 
   const offer = await createOffer(peerConnection);
   socket.emit("call:initiate", { targetUserId, callType, channelId });
@@ -300,4 +379,11 @@ export function rejectOrEndCall(socket: Socket): void {
   peerConnection = null;
   endCall();
   stopCallRingtone();
+}
+
+export async function replaceActiveCallVideoTrack(
+  track: MediaStreamTrack,
+): Promise<void> {
+  if (!peerConnection) return;
+  await replaceVideoTrack(peerConnection, track);
 }

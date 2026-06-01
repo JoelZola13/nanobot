@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   type FormEvent,
   type ReactNode,
@@ -29,6 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
+import { useEmbeddedNavigation } from "@/lib/useEmbeddedNavigation";
 
 type ChannelSummary = {
   id: string;
@@ -54,7 +55,7 @@ type WorkspacePolicies = {
   defaultNotificationLevel: "ALL" | "MENTIONS" | "MUTED";
   publicChannelJoinPolicy: "OPEN" | "WORKSPACE_ADMINS";
   privateChannelJoinPolicy: "INVITE_ONLY";
-  channelCreationPolicy: "WORKSPACE_ADMINS";
+  channelCreationPolicy: "MEMBERS";
   canManage: boolean;
 };
 
@@ -66,38 +67,77 @@ const formatCount = (count: number | undefined, label: string) => {
 const normalizeChannelName = (channel: ChannelSummary) =>
   channel.name || channel.slug || "unnamed";
 
+async function getApiErrorMessage(response: Response, fallback: string) {
+  const payload = (await response.json().catch(() => null)) as {
+    error?: unknown;
+    message?: unknown;
+  } | null;
+
+  if (typeof payload?.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  if (typeof payload?.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return fallback;
+}
+
 export default function ChannelsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { shouldPreserveEmbed, withEmbed } = useEmbeddedNavigation();
   const [channels, setChannels] = useState<ChannelSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [channelType, setChannelType] = useState<ChannelVisibility>("PUBLIC");
+  const [createVisibilityTouched, setCreateVisibilityTouched] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [editingChannel, setEditingChannel] = useState<ChannelSummary | null>(
+    null,
+  );
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editType, setEditType] = useState<ChannelVisibility>("PUBLIC");
   const [updating, setUpdating] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [busyChannelId, setBusyChannelId] = useState<string | null>(null);
-  const [archivingChannelId, setArchivingChannelId] = useState<string | null>(null);
+  const [archivingChannelId, setArchivingChannelId] = useState<string | null>(
+    null,
+  );
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [channelActionErrors, setChannelActionErrors] = useState<
+    Record<string, string>
+  >({});
   const [workspacePolicies, setWorkspacePolicies] =
     useState<WorkspacePolicies | null>(null);
+  const [workspacePoliciesLoading, setWorkspacePoliciesLoading] =
+    useState(false);
+  const [workspacePolicyError, setWorkspacePolicyError] = useState<
+    string | null
+  >(null);
 
   const loadChannels = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
 
     try {
       const url = showArchived
         ? "/api/channels?includeArchived=true"
         : "/api/channels";
       const res = await fetch(apiUrl(url), { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load channels");
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(res, "Channels could not load."),
+        );
+      }
 
       const data = (await res.json()) as ChannelSummary[];
       setChannels(
@@ -112,8 +152,10 @@ export default function ChannelsPage() {
             isMember: Boolean(channel.isMember),
           })),
       );
-    } catch {
-      setError("Channels could not load.");
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Channels could not load.",
+      );
     } finally {
       setLoading(false);
     }
@@ -176,40 +218,111 @@ export default function ChannelsPage() {
     [activeChannels],
   );
   const canCreateChannels = channels.some((channel) => channel.canCreate);
-  const canViewArchivedChannels = channels.some(
-    (channel) => channel.canCreate || channel.canManage,
-  );
+  const canViewArchivedChannels = channels.some((channel) => channel.canManage);
+  const defaultChannelType =
+    workspacePolicies?.defaultChannelVisibility ?? "PUBLIC";
 
   useEffect(() => {
+    if (searchParams.get("create") === "true" && canCreateChannels) {
+      setEditingChannel(null);
+      setShowCreate(true);
+    }
+  }, [canCreateChannels, searchParams]);
+
+  const replaceCreateParam = useCallback(
+    (visible: boolean) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (visible) {
+        params.set("create", "true");
+      } else {
+        params.delete("create");
+      }
+      if (shouldPreserveEmbed) params.set("embed", "true");
+
+      const queryString = params.toString();
+      router.replace(`/channels${queryString ? `?${queryString}` : ""}`, {
+        scroll: false,
+      });
+    },
+    [router, searchParams, shouldPreserveEmbed],
+  );
+
+  const openCreateForm = useCallback(() => {
+    setEditingChannel(null);
+    setEditError(null);
+    setCreateError(null);
+    setActionError(null);
+    setCreateVisibilityTouched(false);
+    setChannelType(defaultChannelType);
+    setShowCreate(true);
+    replaceCreateParam(true);
+  }, [defaultChannelType, replaceCreateParam]);
+
+  const closeCreateForm = useCallback(() => {
+    setShowCreate(false);
+    setName("");
+    setDescription("");
+    setChannelType(defaultChannelType);
+    setCreateVisibilityTouched(false);
+    setCreateError(null);
+    replaceCreateParam(false);
+  }, [defaultChannelType, replaceCreateParam]);
+
+  const closeEditForm = useCallback(() => {
+    setEditingChannel(null);
+    setEditError(null);
+  }, []);
+
+  const loadWorkspacePolicies = useCallback(async () => {
     if (!canCreateChannels) {
       setWorkspacePolicies(null);
+      setWorkspacePolicyError(null);
+      setWorkspacePoliciesLoading(false);
       return;
     }
 
-    let cancelled = false;
+    setWorkspacePoliciesLoading(true);
+    setWorkspacePolicyError(null);
 
-    fetch(apiUrl("/api/workspace/policies"), { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load workspace policies");
-        return res.json() as Promise<WorkspacePolicies>;
-      })
-      .then((data) => {
-        if (!cancelled) setWorkspacePolicies(data);
-      })
-      .catch(() => {
-        if (!cancelled) setWorkspacePolicies(null);
+    try {
+      const res = await fetch(apiUrl("/api/workspace/policies"), {
+        cache: "no-store",
       });
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(res, "Workspace defaults could not load."),
+        );
+      }
 
-    return () => {
-      cancelled = true;
-    };
+      const data = (await res.json()) as WorkspacePolicies;
+      setWorkspacePolicies(data);
+    } catch (error) {
+      setWorkspacePolicies(null);
+      setWorkspacePolicyError(
+        error instanceof Error
+          ? error.message
+          : "Workspace defaults could not load.",
+      );
+    } finally {
+      setWorkspacePoliciesLoading(false);
+    }
   }, [canCreateChannels]);
+
+  useEffect(() => {
+    void loadWorkspacePolicies();
+  }, [loadWorkspacePolicies]);
+
+  useEffect(() => {
+    if (!showCreate || createVisibilityTouched) return;
+    setChannelType(defaultChannelType);
+  }, [createVisibilityTouched, defaultChannelType, showCreate]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || creating) return;
     setCreating(true);
-    setError(null);
+    setActionError(null);
+    setCreateError(null);
 
     try {
       const res = await fetch(apiUrl("/api/channels"), {
@@ -217,28 +330,39 @@ export default function ChannelsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description, type: channelType }),
       });
-      if (!res.ok) throw new Error("Failed to create channel");
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(res, "Channel could not be created."),
+        );
+      }
 
       const channel = await res.json();
       setShowCreate(false);
       setName("");
       setDescription("");
-      setChannelType("PUBLIC");
-      router.push(`/channels/${channel.id}`);
-      router.refresh();
-    } catch {
-      setError("Channel could not be created.");
+      setChannelType(defaultChannelType);
+      setCreateVisibilityTouched(false);
+      router.push(withEmbed(`/channels/${channel.id}`));
+    } catch (error) {
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "Channel could not be created.",
+      );
     } finally {
       setCreating(false);
     }
   };
 
   const openEditChannel = (channel: ChannelSummary) => {
-    setShowCreate(false);
+    closeCreateForm();
     setEditingChannel(channel);
     setEditName(normalizeChannelName(channel));
     setEditDescription(channel.description || "");
     setEditType(channel.type === "PRIVATE" ? "PRIVATE" : "PUBLIC");
+    setEditError(null);
+    setActionError(null);
+    clearChannelActionError(channel.id);
   };
 
   const updateChannel = (updatedChannel: ChannelSummary) => {
@@ -259,7 +383,8 @@ export default function ChannelsPage() {
     e.preventDefault();
     if (!editingChannel || !editName.trim() || updating) return;
     setUpdating(true);
-    setError(null);
+    setActionError(null);
+    setEditError(null);
 
     try {
       const res = await fetch(apiUrl(`/api/channels/${editingChannel.id}`), {
@@ -271,14 +396,24 @@ export default function ChannelsPage() {
           type: editType,
         }),
       });
-      if (!res.ok) throw new Error("Failed to update channel");
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            res,
+            `#${normalizeChannelName(editingChannel)} could not be updated.`,
+          ),
+        );
+      }
 
       const updatedChannel = (await res.json()) as ChannelSummary;
       updateChannel(updatedChannel);
-      setEditingChannel(null);
-      router.refresh();
-    } catch {
-      setError(`#${normalizeChannelName(editingChannel)} could not be updated.`);
+      closeEditForm();
+    } catch (error) {
+      setEditError(
+        error instanceof Error
+          ? error.message
+          : `#${normalizeChannelName(editingChannel)} could not be updated.`,
+      );
     } finally {
       setUpdating(false);
     }
@@ -324,7 +459,8 @@ export default function ChannelsPage() {
     }
 
     setArchivingChannelId(channel.id);
-    setError(null);
+    setActionError(null);
+    clearChannelActionError(channel.id);
 
     try {
       const res = await fetch(apiUrl(`/api/channels/${channel.id}/archive`), {
@@ -332,19 +468,31 @@ export default function ChannelsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ archived }),
       });
-      if (!res.ok) throw new Error("Failed to update archive state");
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            res,
+            `#${normalizeChannelName(channel)} could not be ${
+              archived ? "archived" : "restored"
+            }.`,
+          ),
+        );
+      }
 
       const updatedChannel = (await res.json()) as ChannelSummary;
       applyChannelArchiveState(updatedChannel);
       setEditingChannel((current) =>
         current?.id === channel.id ? null : current,
       );
-      router.refresh();
-    } catch {
-      setError(
-        `#${normalizeChannelName(channel)} could not be ${
-          archived ? "archived" : "restored"
-        }.`,
+      clearChannelActionError(channel.id);
+    } catch (error) {
+      setChannelActionError(
+        channel.id,
+        error instanceof Error
+          ? error.message
+          : `#${normalizeChannelName(channel)} could not be ${
+              archived ? "archived" : "restored"
+            }.`,
       );
     } finally {
       setArchivingChannelId(null);
@@ -360,7 +508,8 @@ export default function ChannelsPage() {
       currentChannels.map((channel) => {
         if (channel.id !== channelId) return channel;
         const wasMember = Boolean(channel.isMember);
-        const memberDelta = isMember && !wasMember ? 1 : !isMember && wasMember ? -1 : 0;
+        const memberDelta =
+          isMember && !wasMember ? 1 : !isMember && wasMember ? -1 : 0;
 
         return {
           ...channel,
@@ -372,22 +521,54 @@ export default function ChannelsPage() {
     );
   };
 
+  const clearChannelActionError = (channelId: string) => {
+    setChannelActionErrors((currentErrors) => {
+      if (!currentErrors[channelId]) return currentErrors;
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[channelId];
+      return nextErrors;
+    });
+  };
+
+  const setChannelActionError = (channelId: string, error: string) => {
+    setChannelActionErrors((currentErrors) => ({
+      ...currentErrors,
+      [channelId]: error,
+    }));
+  };
+
   const handleJoin = async (channel: ChannelSummary) => {
     if (busyChannelId) return;
     setBusyChannelId(channel.id);
-    setError(null);
+    setActionError(null);
+    clearChannelActionError(channel.id);
 
     try {
-      const res = await fetch(apiUrl(`/api/channels/${channel.id}/membership`), {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to join channel");
+      const res = await fetch(
+        apiUrl(`/api/channels/${channel.id}/membership`),
+        {
+          method: "POST",
+        },
+      );
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            res,
+            `#${normalizeChannelName(channel)} could not be joined.`,
+          ),
+        );
+      }
 
       const data = await res.json();
       updateChannelMembership(channel.id, true, data.role);
-      router.refresh();
-    } catch {
-      setError(`#${normalizeChannelName(channel)} could not be joined.`);
+      clearChannelActionError(channel.id);
+    } catch (error) {
+      setChannelActionError(
+        channel.id,
+        error instanceof Error
+          ? error.message
+          : `#${normalizeChannelName(channel)} could not be joined.`,
+      );
     } finally {
       setBusyChannelId(null);
     }
@@ -396,18 +577,34 @@ export default function ChannelsPage() {
   const handleLeave = async (channel: ChannelSummary) => {
     if (busyChannelId || channel.isDefault) return;
     setBusyChannelId(channel.id);
-    setError(null);
+    setActionError(null);
+    clearChannelActionError(channel.id);
 
     try {
-      const res = await fetch(apiUrl(`/api/channels/${channel.id}/membership`), {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error("Failed to leave channel");
+      const res = await fetch(
+        apiUrl(`/api/channels/${channel.id}/membership`),
+        {
+          method: "DELETE",
+        },
+      );
+      if (!res.ok) {
+        throw new Error(
+          await getApiErrorMessage(
+            res,
+            `#${normalizeChannelName(channel)} could not be left.`,
+          ),
+        );
+      }
 
       updateChannelMembership(channel.id, false);
-      router.refresh();
-    } catch {
-      setError(`#${normalizeChannelName(channel)} could not be left.`);
+      clearChannelActionError(channel.id);
+    } catch (error) {
+      setChannelActionError(
+        channel.id,
+        error instanceof Error
+          ? error.message
+          : `#${normalizeChannelName(channel)} could not be left.`,
+      );
     } finally {
       setBusyChannelId(null);
     }
@@ -415,6 +612,7 @@ export default function ChannelsPage() {
 
   const hasVisibleChannels =
     activeChannels.length > 0 || archivedChannels.length > 0;
+  const hasQuery = query.trim().length > 0;
 
   return (
     <>
@@ -440,10 +638,18 @@ export default function ChannelsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setEditingChannel(null);
-                  setShowCreate(!showCreate);
+                  if (showCreate) {
+                    closeCreateForm();
+                  } else {
+                    openCreateForm();
+                  }
                 }}
                 className="btn-primary inline-flex items-center gap-2 self-start text-sm"
+                aria-label={
+                  showCreate ? "Close new channel form" : "Create a new channel"
+                }
+                aria-expanded={showCreate}
+                aria-controls="channel-browser-create-form"
               >
                 <Plus size={16} />
                 <span>New Channel</span>
@@ -460,7 +666,20 @@ export default function ChannelsPage() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search channels"
                 className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                aria-label="Search channels"
+                aria-controls="channel-browser-results"
+                data-testid="channel-browser-search"
               />
+              {hasQuery && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                  aria-label="Clear channel search"
+                >
+                  Clear
+                </button>
+              )}
             </div>
             {canViewArchivedChannels && (
               <button
@@ -470,6 +689,12 @@ export default function ChannelsPage() {
                   showArchived ? "text-accent" : ""
                 }`}
                 aria-pressed={showArchived}
+                aria-controls="channel-browser-results"
+                aria-label={
+                  showArchived
+                    ? "Hide archived channels"
+                    : "Show archived channels"
+                }
               >
                 <Archive size={15} />
                 <span>{showArchived ? "Hide archived" : "Show archived"}</span>
@@ -477,25 +702,41 @@ export default function ChannelsPage() {
             )}
           </div>
 
-          {workspacePolicies?.canManage && (
+          {workspacePoliciesLoading && !workspacePolicies ? (
+            <WorkspacePolicyLoading />
+          ) : workspacePolicyError ? (
+            <WorkspacePolicyLoadError
+              error={workspacePolicyError}
+              onRetry={() => void loadWorkspacePolicies()}
+            />
+          ) : workspacePolicies?.canManage ? (
             <WorkspacePolicySummary policies={workspacePolicies} />
-          )}
+          ) : null}
 
           {showCreate && (
             <form
+              id="channel-browser-create-form"
+              data-testid="channel-browser-create-form"
               onSubmit={handleCreate}
               className="mb-6 space-y-4 rounded-lg border border-border bg-bg-surface p-5"
             >
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                <label
+                  htmlFor="new-channel-name"
+                  className="mb-1.5 block text-sm font-medium text-text-primary"
+                >
                   Channel name
                 </label>
                 <div className="flex items-center gap-2">
                   <Hash size={16} className="shrink-0 text-text-muted" />
                   <input
+                    id="new-channel-name"
                     type="text"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      setCreateError(null);
+                    }}
                     placeholder="e.g. content-team"
                     className="input-field flex-1"
                     autoFocus
@@ -517,38 +758,65 @@ export default function ChannelsPage() {
                     icon={<Globe2 size={15} />}
                     title="Public"
                     subtitle="Open access"
-                    onClick={() => setChannelType("PUBLIC")}
+                    ariaLabel="New channel visibility Public"
+                    testId="channel-browser-create-visibility-public"
+                    onClick={() => {
+                      setCreateVisibilityTouched(true);
+                      setChannelType("PUBLIC");
+                    }}
                   />
                   <VisibilityButton
                     active={channelType === "PRIVATE"}
                     icon={<Lock size={15} />}
                     title="Private"
                     subtitle="Invite-only"
-                    onClick={() => setChannelType("PRIVATE")}
+                    ariaLabel="New channel visibility Private"
+                    testId="channel-browser-create-visibility-private"
+                    onClick={() => {
+                      setCreateVisibilityTouched(true);
+                      setChannelType("PRIVATE");
+                    }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                <label
+                  htmlFor="new-channel-description"
+                  className="mb-1.5 block text-sm font-medium text-text-primary"
+                >
                   Description{" "}
                   <span className="font-normal text-text-muted">
                     (optional)
                   </span>
                 </label>
                 <input
+                  id="new-channel-description"
                   type="text"
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    setCreateError(null);
+                  }}
                   placeholder="What's this channel about?"
                   className="input-field w-full"
                 />
               </div>
+              {createError && (
+                <div
+                  className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+                  role="status"
+                  data-testid="channel-browser-create-error"
+                >
+                  {createError}
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreate(false)}
+                  onClick={closeCreateForm}
                   className="btn-ghost text-sm"
+                  aria-label="Cancel new channel"
                 >
                   Cancel
                 </button>
@@ -565,6 +833,8 @@ export default function ChannelsPage() {
 
           {editingChannel && (
             <form
+              id="channel-browser-edit-form"
+              data-testid="channel-browser-edit-form"
               onSubmit={handleUpdate}
               className="mb-6 space-y-4 rounded-lg border border-border bg-bg-surface p-5"
             >
@@ -579,7 +849,7 @@ export default function ChannelsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditingChannel(null)}
+                  onClick={closeEditForm}
                   className="btn-ghost text-sm"
                 >
                   Close
@@ -587,15 +857,22 @@ export default function ChannelsPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                <label
+                  htmlFor="edit-channel-name"
+                  className="mb-1.5 block text-sm font-medium text-text-primary"
+                >
                   Channel name
                 </label>
                 <div className="flex items-center gap-2">
                   <Hash size={16} className="shrink-0 text-text-muted" />
                   <input
+                    id="edit-channel-name"
                     type="text"
                     value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
+                    onChange={(e) => {
+                      setEditName(e.target.value);
+                      setEditError(null);
+                    }}
                     className="input-field flex-1"
                     autoFocus
                   />
@@ -616,6 +893,8 @@ export default function ChannelsPage() {
                     icon={<Globe2 size={15} />}
                     title="Public"
                     subtitle="Open access"
+                    ariaLabel="Edit channel visibility Public"
+                    testId="channel-browser-edit-visibility-public"
                     onClick={() => setEditType("PUBLIC")}
                   />
                   <VisibilityButton
@@ -623,31 +902,50 @@ export default function ChannelsPage() {
                     icon={<Lock size={15} />}
                     title="Private"
                     subtitle="Invite-only"
+                    ariaLabel="Edit channel visibility Private"
+                    testId="channel-browser-edit-visibility-private"
                     onClick={() => setEditType("PRIVATE")}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                <label
+                  htmlFor="edit-channel-description"
+                  className="mb-1.5 block text-sm font-medium text-text-primary"
+                >
                   Description{" "}
                   <span className="font-normal text-text-muted">
                     (optional)
                   </span>
                 </label>
                 <input
+                  id="edit-channel-description"
                   type="text"
                   value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
+                  onChange={(e) => {
+                    setEditDescription(e.target.value);
+                    setEditError(null);
+                  }}
                   placeholder="What's this channel about?"
                   className="input-field w-full"
                 />
               </div>
+              {editError && (
+                <div
+                  className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+                  role="status"
+                  data-testid="channel-browser-edit-error"
+                >
+                  {editError}
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditingChannel(null)}
+                  onClick={closeEditForm}
                   className="btn-ghost text-sm"
+                  aria-label="Cancel channel edit"
                 >
                   Cancel
                 </button>
@@ -662,18 +960,43 @@ export default function ChannelsPage() {
             </form>
           )}
 
-          {error && (
-            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
-              {error}
+          {actionError && (
+            <div
+              className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+              role="status"
+              data-testid="channel-browser-action-error"
+            >
+              {actionError}
             </div>
           )}
 
+          {loadError && channels.length > 0 && (
+            <ChannelLoadError
+              error={loadError}
+              onRetry={() => void loadChannels()}
+            />
+          )}
+
           {loading ? (
-            <div className="rounded-lg border border-border bg-bg-surface px-4 py-10 text-center text-sm text-text-muted">
+            <div
+              className="rounded-lg border border-border bg-bg-surface px-4 py-10 text-center text-sm text-text-muted"
+              aria-busy="true"
+              data-testid="channel-browser-loading"
+            >
               Loading channels...
             </div>
+          ) : loadError && channels.length === 0 ? (
+            <ChannelLoadError
+              error={loadError}
+              onRetry={() => void loadChannels()}
+            />
           ) : hasVisibleChannels ? (
-            <div className="space-y-6">
+            <div
+              id="channel-browser-results"
+              className="space-y-6"
+              aria-live="polite"
+              data-testid="channel-browser-results"
+            >
               <ChannelSection
                 title="Default channels"
                 channels={defaultChannels}
@@ -683,6 +1006,8 @@ export default function ChannelsPage() {
                 onEdit={openEditChannel}
                 onArchiveChange={handleArchiveChange}
                 archivingChannelId={archivingChannelId}
+                channelActionErrors={channelActionErrors}
+                withEmbed={withEmbed}
               />
               <ChannelSection
                 title="Your public channels"
@@ -693,6 +1018,8 @@ export default function ChannelsPage() {
                 onEdit={openEditChannel}
                 onArchiveChange={handleArchiveChange}
                 archivingChannelId={archivingChannelId}
+                channelActionErrors={channelActionErrors}
+                withEmbed={withEmbed}
               />
               <ChannelSection
                 title="Private channels"
@@ -703,6 +1030,8 @@ export default function ChannelsPage() {
                 onEdit={openEditChannel}
                 onArchiveChange={handleArchiveChange}
                 archivingChannelId={archivingChannelId}
+                channelActionErrors={channelActionErrors}
+                withEmbed={withEmbed}
               />
               <ChannelSection
                 title="Browse public channels"
@@ -713,6 +1042,8 @@ export default function ChannelsPage() {
                 onEdit={openEditChannel}
                 onArchiveChange={handleArchiveChange}
                 archivingChannelId={archivingChannelId}
+                channelActionErrors={channelActionErrors}
+                withEmbed={withEmbed}
               />
               {showArchived && (
                 <ChannelSection
@@ -724,11 +1055,18 @@ export default function ChannelsPage() {
                   onEdit={openEditChannel}
                   onArchiveChange={handleArchiveChange}
                   archivingChannelId={archivingChannelId}
+                  channelActionErrors={channelActionErrors}
+                  withEmbed={withEmbed}
                 />
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-bg-surface px-6 py-12 text-center">
+            <div
+              id="channel-browser-results"
+              className="rounded-lg border border-border bg-bg-surface px-6 py-12 text-center"
+              aria-live="polite"
+              data-testid="channel-browser-empty"
+            >
               <Users size={42} className="mx-auto mb-3 text-text-muted" />
               <h3 className="font-heading text-lg font-semibold text-text-primary">
                 No matching channels
@@ -744,11 +1082,35 @@ export default function ChannelsPage() {
   );
 }
 
-function WorkspacePolicySummary({
-  policies,
+function ChannelLoadError({
+  error,
+  onRetry,
 }: {
-  policies: WorkspacePolicies;
+  error: string;
+  onRetry: () => void;
 }) {
+  return (
+    <div
+      className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+      role="alert"
+      data-testid="channel-browser-load-error"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>{error}</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="btn-ghost self-start border-red-300 bg-white/70 text-sm text-red-700 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/30"
+          aria-label="Retry channels"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function WorkspacePolicySummary({ policies }: { policies: WorkspacePolicies }) {
   const notificationLabels: Record<
     WorkspacePolicies["defaultNotificationLevel"],
     string
@@ -785,7 +1147,10 @@ function WorkspacePolicySummary({
   ];
 
   return (
-    <section className="mb-5 rounded-lg border border-border bg-bg-surface p-4">
+    <section
+      className="mb-5 rounded-lg border border-border bg-bg-surface p-4"
+      data-testid="channel-browser-policy-summary"
+    >
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-primary">
         <SlidersHorizontal size={16} className="text-accent" />
         <span>Workspace defaults</span>
@@ -809,23 +1174,69 @@ function WorkspacePolicySummary({
   );
 }
 
+function WorkspacePolicyLoading() {
+  return (
+    <section
+      className="mb-5 rounded-lg border border-border bg-bg-surface p-4 text-sm text-text-muted"
+      aria-busy="true"
+      data-testid="channel-browser-policy-loading"
+    >
+      Loading workspace defaults...
+    </section>
+  );
+}
+
+function WorkspacePolicyLoadError({
+  error,
+  onRetry,
+}: {
+  error: string;
+  onRetry: () => void;
+}) {
+  return (
+    <section
+      className="mb-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+      role="status"
+      data-testid="channel-browser-policy-error"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span>{error}</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="btn-ghost self-start border-amber-300 bg-white/70 text-sm text-amber-800 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/30"
+          aria-label="Retry workspace defaults"
+        >
+          Retry
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function VisibilityButton({
   active,
   icon,
   title,
   subtitle,
+  ariaLabel,
+  testId,
   onClick,
 }: {
   active: boolean;
   icon: ReactNode;
   title: string;
   subtitle: string;
+  ariaLabel: string;
+  testId: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={ariaLabel}
+      data-testid={testId}
       className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
         active
           ? "border-accent bg-accent-muted text-accent"
@@ -854,6 +1265,8 @@ function ChannelSection({
   onEdit,
   onArchiveChange,
   archivingChannelId,
+  channelActionErrors,
+  withEmbed,
 }: {
   title: string;
   channels: ChannelSummary[];
@@ -863,6 +1276,8 @@ function ChannelSection({
   onEdit: (channel: ChannelSummary) => void;
   onArchiveChange: (channel: ChannelSummary, archived: boolean) => void;
   archivingChannelId: string | null;
+  channelActionErrors: Record<string, string>;
+  withEmbed: (href: string) => string;
 }) {
   if (channels.length === 0) return null;
 
@@ -885,6 +1300,8 @@ function ChannelSection({
             onLeave={onLeave}
             onEdit={onEdit}
             onArchiveChange={onArchiveChange}
+            actionError={channelActionErrors[channel.id]}
+            withEmbed={withEmbed}
           />
         ))}
       </div>
@@ -900,6 +1317,8 @@ function ChannelRow({
   onLeave,
   onEdit,
   onArchiveChange,
+  actionError,
+  withEmbed,
 }: {
   channel: ChannelSummary;
   busy: boolean;
@@ -908,6 +1327,8 @@ function ChannelRow({
   onLeave: (channel: ChannelSummary) => void;
   onEdit: (channel: ChannelSummary) => void;
   onArchiveChange: (channel: ChannelSummary, archived: boolean) => void;
+  actionError?: string;
+  withEmbed: (href: string) => string;
 }) {
   const isPrivate = channel.type === "PRIVATE";
   const isMember = Boolean(channel.isMember);
@@ -915,7 +1336,11 @@ function ChannelRow({
   const channelName = normalizeChannelName(channel);
 
   return (
-    <article className="flex flex-col gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3 transition-colors hover:border-accent/60 sm:flex-row sm:items-start">
+    <article
+      className="flex flex-col gap-3 rounded-lg border border-border bg-bg-surface px-4 py-3 transition-colors hover:border-accent/60 sm:flex-row sm:items-start"
+      data-testid="channel-browser-row"
+      aria-label={`#${channelName} channel`}
+    >
       <div className="flex min-w-0 flex-1 gap-3">
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-bg-base text-text-muted">
           {isPrivate ? <Lock size={17} /> : <Hash size={17} />}
@@ -964,9 +1389,7 @@ function ChannelRow({
               <MessageSquare size={13} />
               {formatCount(channel.messageCount, "message")}
             </span>
-            {channel.role && (
-              <span className="capitalize">{channel.role}</span>
-            )}
+            {channel.role && <span className="capitalize">{channel.role}</span>}
             {channel.canManage && (
               <span className="inline-flex items-center gap-1 text-accent">
                 <ShieldCheck size={13} />
@@ -974,6 +1397,15 @@ function ChannelRow({
               </span>
             )}
           </div>
+          {actionError && (
+            <div
+              className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+              role="status"
+              data-testid="channel-browser-row-action-error"
+            >
+              {actionError}
+            </div>
+          )}
         </div>
       </div>
 
@@ -986,6 +1418,7 @@ function ChannelRow({
                 onClick={() => onArchiveChange(channel, false)}
                 disabled={archiving}
                 className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                aria-label={`Restore #${channelName}`}
               >
                 <RotateCcw size={14} />
                 <span>{archiving ? "Restoring..." : "Restore"}</span>
@@ -1000,6 +1433,7 @@ function ChannelRow({
                   type="button"
                   onClick={() => onEdit(channel)}
                   className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                  aria-label={`Edit #${channelName}`}
                 >
                   <Pencil size={14} />
                   <span>Edit</span>
@@ -1010,6 +1444,7 @@ function ChannelRow({
                     onClick={() => onArchiveChange(channel, true)}
                     disabled={archiving}
                     className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm text-text-muted hover:text-danger"
+                    aria-label={`Archive #${channelName}`}
                   >
                     <Archive size={14} />
                     <span>{archiving ? "Archiving..." : "Archive"}</span>
@@ -1018,8 +1453,9 @@ function ChannelRow({
               </>
             )}
             <Link
-              href={`/channels/${channel.id}`}
-              className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+              href={withEmbed(`/channels/${channel.id}`)}
+              className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm !text-black"
+              aria-label={`Open #${channelName}`}
             >
               <span>Open</span>
               <ArrowRight size={14} />
@@ -1034,6 +1470,7 @@ function ChannelRow({
                 onClick={() => onLeave(channel)}
                 disabled={busy}
                 className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                aria-label={`Leave #${channelName}`}
               >
                 <LogOut size={14} />
                 <span>{busy ? "Leaving..." : "Leave"}</span>
@@ -1048,6 +1485,7 @@ function ChannelRow({
                   type="button"
                   onClick={() => onEdit(channel)}
                   className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+                  aria-label={`Edit #${channelName}`}
                 >
                   <Pencil size={14} />
                   <span>Edit</span>
@@ -1058,6 +1496,7 @@ function ChannelRow({
                     onClick={() => onArchiveChange(channel, true)}
                     disabled={archiving}
                     className="btn-ghost inline-flex h-9 items-center gap-1.5 px-3 text-sm text-text-muted hover:text-danger"
+                    aria-label={`Archive #${channelName}`}
                   >
                     <Archive size={14} />
                     <span>{archiving ? "Archiving..." : "Archive"}</span>
@@ -1070,9 +1509,17 @@ function ChannelRow({
               onClick={() => onJoin(channel)}
               disabled={busy || isPrivate}
               className="btn-primary inline-flex h-9 items-center gap-1.5 px-3 text-sm"
+              aria-label={
+                isPrivate
+                  ? `#${channelName} is invite only`
+                  : `Join #${channelName}`
+              }
+              title={isPrivate ? "Invite only" : undefined}
             >
               <Plus size={14} />
-              <span>{busy ? "Joining..." : isPrivate ? "Invite only" : "Join"}</span>
+              <span>
+                {busy ? "Joining..." : isPrivate ? "Invite only" : "Join"}
+              </span>
             </button>
           </>
         )}

@@ -5,13 +5,24 @@ import {
   type FocusEvent,
   type MouseEvent,
   type ReactNode,
+  useId,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { Bot, Calendar, ExternalLink, MapPin } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  Calendar,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { apiUrl } from "@/lib/apiUrl";
+import { useEmbeddedNavigation } from "@/lib/useEmbeddedNavigation";
 
 export type ProfilePopoverUser = {
   id?: string;
@@ -48,6 +59,13 @@ const statusLabel = (profile: ProfilePopoverUser) => {
   return profile.status === "online" ? "Online" : "Away";
 };
 
+async function apiErrorMessage(res: Response, fallback: string) {
+  const data = (await res.json().catch(() => null)) as {
+    error?: string;
+  } | null;
+  return data?.error || fallback;
+}
+
 export default function ProfilePopover({
   user,
   userId,
@@ -59,12 +77,16 @@ export default function ProfilePopover({
 }: ProfilePopoverProps) {
   const rootRef = useRef<HTMLSpanElement>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const triggerWasOpenOnPointerDownRef = useRef<boolean | null>(null);
+  const dialogId = useId();
   const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<ProfilePopoverUser | null>(
     user || null,
   );
   const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const { withEmbed } = useEmbeddedNavigation();
 
   const lookup = useMemo(
     () => ({
@@ -76,11 +98,11 @@ export default function ProfilePopover({
 
   useEffect(() => {
     setProfile(user || null);
-    setFailed(false);
+    setProfileError(null);
   }, [user]);
 
   useEffect(() => {
-    if (!open || failed) return;
+    if (!open) return;
     if (profile?.channelCount !== undefined || profile?.website !== undefined) {
       return;
     }
@@ -96,31 +118,37 @@ export default function ProfilePopover({
 
     const controller = new AbortController();
     setLoading(true);
+    setProfileError(null);
 
     fetch(apiUrl(`/api/users/profile?${params.toString()}`), {
       signal: controller.signal,
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Profile unavailable");
+        if (!res.ok)
+          throw new Error(await apiErrorMessage(res, "Profile unavailable."));
         return res.json() as Promise<ProfilePopoverUser>;
       })
       .then((data) => {
         setProfile(data);
-        setFailed(false);
+        setProfileError(null);
       })
       .catch((error) => {
-        if (error.name !== "AbortError") setFailed(true);
+        if (error.name !== "AbortError") {
+          setProfileError(
+            error instanceof Error ? error.message : "Profile unavailable.",
+          );
+        }
       })
       .finally(() => setLoading(false));
 
     return () => controller.abort();
   }, [
-    failed,
     lookup.userId,
     lookup.username,
     open,
     profile?.channelCount,
     profile?.website,
+    retryKey,
   ]);
 
   useEffect(() => {
@@ -169,13 +197,28 @@ export default function ProfilePopover({
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    const wasOpenOnPointerDown = triggerWasOpenOnPointerDownRef.current;
+    triggerWasOpenOnPointerDownRef.current = null;
+
+    if (wasOpenOnPointerDown === false) {
+      setOpen(true);
+      return;
+    }
+
     setOpen((current) => !current);
   };
 
   const popoverClass =
-    align === "right"
-      ? "right-0 origin-top-right"
-      : "left-0 origin-top-left";
+    align === "right" ? "right-0 origin-top-right" : "left-0 origin-top-left";
+  const triggerName =
+    profile?.displayName || user?.displayName || username || user?.username;
+  const triggerLabel = triggerName
+    ? `Open ${triggerName} profile card`
+    : "Open profile card";
+  const retryProfile = () => {
+    setProfileError(null);
+    setRetryKey((current) => current + 1);
+  };
 
   return (
     <span
@@ -190,6 +233,11 @@ export default function ProfilePopover({
         className={triggerClassName}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-controls={open ? dialogId : undefined}
+        aria-label={triggerLabel}
+        onPointerDown={() => {
+          triggerWasOpenOnPointerDownRef.current = open;
+        }}
         onClick={handleClick}
         onFocus={openPopover}
       >
@@ -198,7 +246,11 @@ export default function ProfilePopover({
 
       {open && (
         <span
+          id={dialogId}
           role="dialog"
+          aria-label={
+            triggerName ? `${triggerName} profile card` : "Profile card"
+          }
           className={`absolute top-full z-[80] mt-2 w-72 rounded-lg border border-border bg-bg-surface p-3 text-left shadow-xl ${popoverClass}`}
           onMouseEnter={openPopover}
           onMouseLeave={scheduleClose}
@@ -206,8 +258,11 @@ export default function ProfilePopover({
           <ProfileCard
             profile={profile}
             loading={loading}
-            failed={failed}
+            error={profileError}
             fallbackName={username || user?.displayName || user?.username}
+            onClose={() => setOpen(false)}
+            onRetry={retryProfile}
+            withEmbed={withEmbed}
           />
         </span>
       )}
@@ -218,30 +273,87 @@ export default function ProfilePopover({
 function ProfileCard({
   profile,
   loading,
-  failed,
+  error,
   fallbackName,
+  onClose,
+  onRetry,
+  withEmbed,
 }: {
   profile: ProfilePopoverUser | null;
   loading: boolean;
-  failed: boolean;
+  error: string | null;
   fallbackName?: string;
+  onClose: () => void;
+  onRetry: () => void;
+  withEmbed: (href: string) => string;
 }) {
-  if (failed) {
+  const displayName = profile?.displayName || fallbackName || "Teammate";
+
+  if (error) {
     return (
-      <span className="block text-sm text-text-secondary">
-        Profile unavailable.
+      <span data-testid="profile-popover-card" className="block">
+        <span className="mb-2 flex items-start justify-between gap-3">
+          <span className="min-w-0 text-sm font-semibold text-text-primary">
+            {displayName}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="sidebar-icon-button h-6 w-6 shrink-0"
+            title="Close profile card"
+            aria-label="Close profile card"
+          >
+            <X size={13} />
+          </button>
+        </span>
+        <span
+          data-testid="profile-popover-error"
+          className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-2.5 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+        >
+          <AlertCircle size={13} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1">{error}</span>
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-text-secondary hover:border-accent hover:text-accent"
+          aria-label="Retry profile"
+        >
+          <RefreshCw size={12} />
+          Retry
+        </button>
       </span>
     );
   }
 
   if (!profile && loading) {
     return (
-      <span className="block text-sm text-text-muted">Loading profile...</span>
+      <span data-testid="profile-popover-card" className="block">
+        <span className="mb-2 flex items-start justify-between gap-3">
+          <span className="min-w-0 text-sm font-semibold text-text-primary">
+            {displayName}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="sidebar-icon-button h-6 w-6 shrink-0"
+            title="Close profile card"
+            aria-label="Close profile card"
+          >
+            <X size={13} />
+          </button>
+        </span>
+        <span className="flex items-center gap-2 text-sm text-text-muted">
+          <Loader2 size={14} className="animate-spin" />
+          Loading profile...
+        </span>
+      </span>
     );
   }
 
-  const displayName = profile?.displayName || fallbackName || "Teammate";
-  const profileUrl = profile?.id ? `/profile/${profile.id}` : undefined;
+  const profileUrl = profile?.id
+    ? withEmbed(`/profile/${profile.id}`)
+    : undefined;
   const joinedAt = profile?.createdAt ? new Date(profile.createdAt) : null;
   const joinedText =
     joinedAt && Number.isFinite(joinedAt.getTime())
@@ -249,11 +361,24 @@ function ProfileCard({
       : null;
 
   return (
-    <span className="block">
+    <span data-testid="profile-popover-card" className="block">
+      <span className="mb-2 flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="sidebar-icon-button h-6 w-6"
+          title="Close profile card"
+          aria-label="Close profile card"
+        >
+          <X size={13} />
+        </button>
+      </span>
       <span className="flex items-start gap-3">
         <span
           className={`avatar flex h-12 w-12 shrink-0 text-base ${
-            profile?.isAgent ? "bg-teal-muted text-teal" : "bg-accent-muted text-accent"
+            profile?.isAgent
+              ? "bg-teal-muted text-teal"
+              : "bg-accent-muted text-accent"
           }`}
         >
           {profile?.avatarUrl ? (
@@ -311,7 +436,8 @@ function ProfileCard({
         )}
       </span>
 
-      {(profile?.channelCount !== undefined || profile?.postCount !== undefined) && (
+      {(profile?.channelCount !== undefined ||
+        profile?.postCount !== undefined) && (
         <span className="mt-3 flex gap-4 border-t border-border pt-3 text-xs text-text-muted">
           {profile.channelCount !== undefined && (
             <span>

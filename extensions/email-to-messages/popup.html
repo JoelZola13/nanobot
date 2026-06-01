@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Send to Nanobot</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Send to Nanobot</h1>
+      </header>
+
+      <section>
+        <h2>Messages</h2>
+
+      <label>
+        Messages URL
+        <input id="baseUrl" type="url" spellcheck="false" placeholder="http://localhost:3180/social">
+      </label>
+
+      <label>
+        Destination type
+        <select id="destinationType">
+          <option value="channel">Channel</option>
+          <option value="dm">Direct message</option>
+        </select>
+      </label>
+
+      <label>
+        Search destination
+        <input id="destinationSearch" type="search" autocomplete="off" placeholder="Search channels">
+      </label>
+
+      <div id="selectedDestination" class="selected" aria-live="polite">No destination selected</div>
+      <div id="results" class="results"></div>
+
+      <button id="sendButton" type="button">Send to Selected Destination</button>
+      </section>
+
+      <section>
+        <h2>Documents</h2>
+
+        <label>
+          Documents URL
+          <input id="documentsUrl" type="url" spellcheck="false" placeholder="http://localhost:3180/documents">
+        </label>
+
+        <label>
+          User ID
+          <input id="documentsUserId" type="text" spellcheck="false" placeholder="Auto-detect from Documents session">
+        </label>
+
+        <label class="checkbox">
+          <input id="openDocumentAfterClip" type="checkbox">
+          Open saved document
+        </label>
+
+        <button id="clipButton" type="button" class="secondary">Save Page to Documents</button>
+      </section>
+
+      <p id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

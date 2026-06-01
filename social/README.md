@@ -8,7 +8,8 @@ After the local Docker stack is running, use one command to check the Messages d
 npm run health
 ```
 
-The check verifies the LibreChat API health route, the Social auth bridge, NextAuth providers, Social page routes, `social-postgres`, and the `/ws-social` Socket.IO proxy.
+The check verifies the LibreChat API health route, the Social auth bridge, NextAuth providers, Social page routes, Social setup diagnostics, `social-postgres`, and the `/ws-social` Socket.IO proxy.
+The same teammate-safe setup signal is available at `/social/api/setup/diagnostics` for the LibreChat `/messages` wrapper, so missing `sv-social`, missing Social tables, or bridge-secret mismatches become visible in the UI.
 
 Useful overrides:
 
@@ -27,6 +28,10 @@ npm run test:api
 ```
 
 The test runner covers DM creation, channel membership join/leave behavior, and the LibreChat session bridge fallback.
+
+## UI Regression Checks
+
+Use the [Messages No-Dead-Controls Checklist](../docs/messages-no-dead-controls-checklist.md) before merging shell, sidebar, composer, panel, or Activity changes. Any visible control must navigate, open/close UI, update visible state, submit with feedback, be clearly disabled, or not render.
 
 ## Production Deployment
 

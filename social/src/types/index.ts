@@ -25,6 +25,8 @@ export interface ChannelInfo {
   messageCount?: number;
   role?: string;
   unreadCount?: number;
+  canCreate?: boolean;
+  canManage?: boolean;
 }
 
 export interface MessageData {
@@ -77,9 +79,54 @@ export interface MessageData {
     height: number | null;
   }[];
   metadata?: {
-    type?: "voice";
+    type?: "voice" | "email_import" | "email_reply";
     duration?: number;
     transcription?: string;
+    transcriptionStatus?: "pending" | "complete" | "failed";
+    transcriptionError?: string;
+    email?: {
+      provider?: string;
+      subject: string;
+      from?: {
+        name?: string;
+        email?: string;
+      };
+      to?: {
+        name?: string;
+        email?: string;
+      }[];
+      cc?: {
+        name?: string;
+        email?: string;
+      }[];
+      sentAt?: string;
+      messageId?: string;
+      sourceUrl?: string;
+      capturedAt?: string;
+      bodyPreview?: string;
+      bodyHtml?: string;
+      bodyTruncated?: boolean;
+      htmlTruncated?: boolean;
+      attachments?: {
+        name?: string;
+        url?: string;
+        mimeType?: string;
+        sizeLabel?: string;
+      }[];
+    };
+    emailReply?: {
+      sourceMessageId: string;
+      provider?: string;
+      sourceUrl?: string;
+      to: {
+        name?: string;
+        email: string;
+      };
+      subject: string;
+      sentAt: string;
+      inReplyTo?: string;
+      messageId?: string;
+    };
     deletionAudit?: {
       actorId: string;
       actorName: string;

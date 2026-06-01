@@ -26,14 +26,19 @@ export function useReadReceipts(
   const sendReadReceipt = useCallback(
     async (messageId: string) => {
       if (!messageId || messageId === lastSentRef.current) return;
-      lastSentRef.current = messageId;
 
       try {
-        await fetch(apiUrl(`/api/channels/${channelId}/read`), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageId }),
-        });
+        const response = await fetch(
+          apiUrl(`/api/channels/${channelId}/read`),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageId }),
+          },
+        );
+        if (response.ok) {
+          lastSentRef.current = messageId;
+        }
       } catch {
         // Silently fail — read receipts are best-effort
       }
@@ -66,7 +71,9 @@ export function useReadReceipts(
  * Fetches initial read receipts for a channel.
  * Returns a Map<messageId, userId[]> showing who has read up to each message.
  */
-export async function fetchReadReceipts(channelId: string): Promise<ReadReceiptData[]> {
+export async function fetchReadReceipts(
+  channelId: string,
+): Promise<ReadReceiptData[]> {
   try {
     const res = await fetch(apiUrl(`/api/channels/${channelId}/read`));
     if (res.ok) return res.json();

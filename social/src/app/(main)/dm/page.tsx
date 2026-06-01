@@ -4,9 +4,17 @@ import { prisma } from "@/lib/prisma";
 import TopBar from "@/components/layout/TopBar";
 import PeopleList from "@/components/dm/PeopleList";
 
-export default async function DMPage() {
+export default async function DMPage({
+  searchParams,
+}: {
+  searchParams?: { filter?: string };
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const initialFilter =
+    searchParams?.filter === "agents" || searchParams?.filter === "teammates"
+      ? searchParams.filter
+      : "all";
 
   // Fetch all users — people first, then agents
   const people = await prisma.user.findMany({
@@ -54,11 +62,16 @@ export default async function DMPage() {
 
   return (
     <>
-      <TopBar title="Messages" type="dm" description="Send direct messages to people and AI agents" />
+      <TopBar
+        title="Messages"
+        type="dm"
+        description="Send direct messages to people and AI agents"
+      />
       <PeopleList
         people={people.map(serializePerson)}
         agents={agents.map(serializePerson)}
         currentUserId={session.user.id}
+        initialFilter={initialFilter}
       />
     </>
   );

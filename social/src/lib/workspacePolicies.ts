@@ -2,7 +2,7 @@ import {
   isNotificationLevel,
   type NotificationLevel,
 } from "@/lib/notificationPreferences";
-import { canCreateWorkspaceChannels } from "@/lib/channelManagement";
+import { isWorkspaceAdminRole } from "@/lib/channelManagement";
 
 type SessionUserWithRole = {
   role?: string | null;
@@ -16,7 +16,7 @@ export type WorkspacePolicies = {
   defaultNotificationLevel: NotificationLevel;
   publicChannelJoinPolicy: PublicChannelJoinPolicy;
   privateChannelJoinPolicy: "INVITE_ONLY";
-  channelCreationPolicy: "WORKSPACE_ADMINS";
+  channelCreationPolicy: "MEMBERS";
 };
 
 const CHANNEL_VISIBILITIES = new Set<WorkspaceChannelVisibility>([
@@ -68,7 +68,7 @@ export function getWorkspacePolicies(): WorkspacePolicies {
       process.env.SOCIAL_PUBLIC_CHANNEL_JOIN_POLICY,
     ),
     privateChannelJoinPolicy: "INVITE_ONLY",
-    channelCreationPolicy: "WORKSPACE_ADMINS",
+    channelCreationPolicy: "MEMBERS",
   };
 }
 
@@ -94,5 +94,5 @@ export function canJoinPublicChannel(
 ) {
   if (existingRole) return true;
   const policy = getWorkspacePolicies().publicChannelJoinPolicy;
-  return policy === "OPEN" || canCreateWorkspaceChannels(user);
+  return policy === "OPEN" || isWorkspaceAdminRole(user?.role);
 }

@@ -15,6 +15,11 @@ export function getMessageHref({ channelId, messageId, channelType }: MessageHre
   return `${getConversationPath(channelType, channelId)}?${params.toString()}`;
 }
 
-export function getJumpToMessageLabel(kind: "mention" | "saved") {
-  return kind === "mention" ? "Jump to mention" : "Jump to saved message";
+export function getJumpToMessageLabel(
+  kind: "mention" | "saved" | "thread" | "reaction",
+) {
+  if (kind === "mention") return "Jump to mention";
+  if (kind === "saved") return "Jump to saved message";
+  if (kind === "thread") return "Jump to thread";
+  return "Jump to reacted message";
 }

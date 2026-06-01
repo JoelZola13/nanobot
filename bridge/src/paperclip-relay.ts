@@ -20,13 +20,17 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleGoogleCalendarRoute } from "./google-calendar.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Config ──────────────────────────────────────────────────────────
-const RELAY_PORT = 3050;
+const RELAY_PORT = Number(process.env.RELAY_PORT || 3050);
+const RELAY_HOST = process.env.RELAY_HOST || "0.0.0.0";
 const NANOBOT_API = process.env.NANOBOT_API_URL || "http://127.0.0.1:18790";
 const PAPERCLIP_API = process.env.PAPERCLIP_API_URL || "http://127.0.0.1:3100/api";
+const PAPERCLIP_API_TOKEN =
+  process.env.PAPERCLIP_API_TOKEN || "pcp_board_nanobot_local_tasks";
 const COMPANY_ID = "78940514-fbb0-4c2d-8cee-09bcfd5399a4";
 const PROJECT_ID = "645c5cd9-caa1-46c7-be50-da6e6001df14"; // "Nanobot" project with workspace
 
@@ -79,8 +83,18 @@ function findAgentByName(name: string): [string, AgentMapEntry] | null {
 }
 
 // ── Paperclip API Client ────────────────────────────────────────────
+function pcHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers = { ...extra };
+  if (PAPERCLIP_API_TOKEN) {
+    headers.Authorization = `Bearer ${PAPERCLIP_API_TOKEN}`;
+  }
+  return headers;
+}
+
 async function pcGet(path: string): Promise<any> {
-  const resp = await fetch(`${PAPERCLIP_API}${path}`);
+  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
+    headers: pcHeaders(),
+  });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`GET ${path}: ${resp.status} — ${text}`);
@@ -91,7 +105,7 @@ async function pcGet(path: string): Promise<any> {
 async function pcPatch(path: string, body: any): Promise<any> {
   const resp = await fetch(`${PAPERCLIP_API}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: pcHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -104,7 +118,7 @@ async function pcPatch(path: string, body: any): Promise<any> {
 async function pcPost(path: string, body: any): Promise<any> {
   const resp = await fetch(`${PAPERCLIP_API}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: pcHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -115,7 +129,10 @@ async function pcPost(path: string, body: any): Promise<any> {
 }
 
 async function pcDelete(path: string): Promise<any> {
-  const resp = await fetch(`${PAPERCLIP_API}${path}`, { method: "DELETE" });
+  const resp = await fetch(`${PAPERCLIP_API}${path}`, {
+    method: "DELETE",
+    headers: pcHeaders(),
+  });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`DELETE ${path}: ${resp.status} — ${text}`);
@@ -599,62 +616,65 @@ async function handleLabels(
 // ═══════════════════════════════════════════════════════════════════
 
 // Calendar view: project timeline + all active issues grouped by status & priority
+async function getCalendarSummary(): Promise<any> {
+  const [issues, agents, project, goals] = await Promise.all([
+    pcGet(`/companies/${COMPANY_ID}/issues`),
+    pcGet(`/companies/${COMPANY_ID}/agents`).catch(() => []),
+    pcGet(`/projects/${PROJECT_ID}`).catch(() => ({
+      name: "Nanobot",
+      targetDate: null,
+      status: "active",
+    })),
+    pcGet(`/companies/${COMPANY_ID}/goals`).catch(() => []),
+  ]);
+
+  const enriched = issues.map((i: any) => ({
+    identifier: i.identifier,
+    title: i.title,
+    status: i.status,
+    priority: i.priority,
+    createdAt: i.createdAt,
+    completedAt: i.completedAt,
+    assignee: agents.find((a: any) => a.id === i.assigneeAgentId)?.name || "unassigned",
+    team: agents.find((a: any) => a.id === i.assigneeAgentId)?.metadata?.team || "unassigned",
+    hasSubtasks: issues.some((c: any) => c.parentId === i.id),
+    isSubtask: !!i.parentId,
+  }));
+
+  const active = enriched.filter((i: any) =>
+    ["todo", "in_progress", "backlog"].includes(i.status)
+  );
+  const recentDone = enriched
+    .filter((i: any) => i.status === "done")
+    .sort((a: any, b: any) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime())
+    .slice(0, 10);
+
+  return {
+    project: {
+      name: project.name,
+      targetDate: project.targetDate,
+      status: project.status,
+    },
+    goals: goals.filter((g: any) => g.status === "active").map((g: any) => ({
+      title: g.title,
+      level: g.level,
+    })),
+    active,
+    recentlyCompleted: recentDone,
+    stats: {
+      total: issues.length,
+      active: active.length,
+      done: enriched.filter((i: any) => i.status === "done").length,
+    },
+  };
+}
+
 async function handleCalendar(
   req: IncomingMessage,
   res: ServerResponse,
   url: URL
 ): Promise<void> {
-  if (req.method === "GET") {
-    const [issues, agents, project, goals] = await Promise.all([
-      pcGet(`/companies/${COMPANY_ID}/issues`),
-      pcGet(`/companies/${COMPANY_ID}/agents`),
-      pcGet(`/projects/${PROJECT_ID}`),
-      pcGet(`/companies/${COMPANY_ID}/goals`),
-    ]);
-
-    const enriched = issues.map((i: any) => ({
-      identifier: i.identifier,
-      title: i.title,
-      status: i.status,
-      priority: i.priority,
-      createdAt: i.createdAt,
-      completedAt: i.completedAt,
-      assignee: agents.find((a: any) => a.id === i.assigneeAgentId)?.name || "unassigned",
-      team: agents.find((a: any) => a.id === i.assigneeAgentId)?.metadata?.team || "unassigned",
-      hasSubtasks: issues.some((c: any) => c.parentId === i.id),
-      isSubtask: !!i.parentId,
-    }));
-
-    const active = enriched.filter((i: any) =>
-      ["todo", "in_progress", "backlog"].includes(i.status)
-    );
-    const recentDone = enriched
-      .filter((i: any) => i.status === "done")
-      .sort((a: any, b: any) => new Date(b.completedAt || b.createdAt).getTime() - new Date(a.completedAt || a.createdAt).getTime())
-      .slice(0, 10);
-
-    jsonResp(res, 200, {
-      project: {
-        name: project.name,
-        targetDate: project.targetDate,
-        status: project.status,
-      },
-      goals: goals.filter((g: any) => g.status === "active").map((g: any) => ({
-        title: g.title,
-        level: g.level,
-      })),
-      active,
-      recentlyCompleted: recentDone,
-      stats: {
-        total: issues.length,
-        active: active.length,
-        done: enriched.filter((i: any) => i.status === "done").length,
-      },
-    });
-    return;
-  }
-
-  jsonResp(res, 405, { error: "Method not allowed" });
+  await handleGoogleCalendarRoute(req, res, url, getCalendarSummary);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1017,7 +1037,11 @@ const server = createServer(async (req, res) => {
     }
 
     // ── Calendar (due dates + project timeline) ────────────────
-    if (url.pathname === "/calendar") {
+    if (
+      url.pathname.startsWith("/calendar") ||
+      url.pathname.startsWith("/api/integrations/google") ||
+      url.pathname.startsWith("/api/calendar")
+    ) {
       await handleCalendar(req, res, url);
       return;
     }
@@ -1053,10 +1077,10 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(RELAY_PORT, "127.0.0.1", () => {
+server.listen(RELAY_PORT, RELAY_HOST, () => {
   const count = Object.keys(agentMapping).length;
   console.log(`[relay] ═══════════════════════════════════════`);
-  console.log(`[relay] Paperclip Relay v3 on http://127.0.0.1:${RELAY_PORT}`);
+  console.log(`[relay] Paperclip Relay v3 on http://${RELAY_HOST}:${RELAY_PORT}`);
   console.log(`[relay] ${count} agents mapped`);
   console.log(`[relay] Nanobot: ${NANOBOT_API}`);
   console.log(`[relay] Paperclip: ${PAPERCLIP_API}`);

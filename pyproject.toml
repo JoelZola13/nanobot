@@ -46,6 +46,10 @@ dependencies = [
     "starlette>=0.36.0",
     "asyncpg>=0.29.0",
     "redis>=5.0",
+    "docling[asr]>=2.92.0",
+    "pandas>=2.2.0",
+    "pyarrow>=15.0.0",
+    "tabulate>=0.9.0",
 ]
 
 [project.optional-dependencies]

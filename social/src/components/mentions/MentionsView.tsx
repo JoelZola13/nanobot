@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
 import { AtSign, Bot, Hash, MessageSquare } from "lucide-react";
 import MarkdownContent from "@/components/channels/MarkdownContent";
 import JumpToMessageLink from "@/components/messages/JumpToMessageLink";
+import RelativeTime from "@/components/messages/RelativeTime";
 import ProfilePopover from "@/components/users/ProfilePopover";
 import { getJumpToMessageLabel } from "@/lib/messageLinks";
+import { useEmbeddedNavigation } from "@/lib/useEmbeddedNavigation";
 import type { MentionResult } from "@/lib/mentions";
 
 export default function MentionsView({
@@ -16,6 +17,8 @@ export default function MentionsView({
   username: string | null;
   mentions: MentionResult[];
 }) {
+  const { withEmbed } = useEmbeddedNavigation();
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-5">
@@ -49,7 +52,11 @@ export default function MentionsView({
         ) : (
           <div className="space-y-3">
             {mentions.map((mention) => (
-              <MentionCard key={mention.id} mention={mention} />
+              <MentionCard
+                key={mention.id}
+                mention={mention}
+                withEmbed={withEmbed}
+              />
             ))}
           </div>
         )}
@@ -58,15 +65,27 @@ export default function MentionsView({
   );
 }
 
-function MentionCard({ mention }: { mention: MentionResult }) {
+function MentionCard({
+  mention,
+  withEmbed,
+}: {
+  mention: MentionResult;
+  withEmbed: (href: string) => string;
+}) {
   const isDm = mention.channelType === "DM";
+  const mentionHref = withEmbed(mention.href);
 
   return (
-    <article className="rounded-lg border border-border bg-bg-surface px-4 py-3">
+    <article
+      className="rounded-lg border border-border bg-bg-surface px-4 py-3"
+      data-testid="mention-card"
+    >
       <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
         <Link
-          href={mention.href}
+          href={mentionHref}
           className="flex min-w-0 items-center gap-2 rounded-md text-xs text-text-muted hover:text-accent"
+          data-testid="mention-channel-link"
+          aria-label={`Open mentioned conversation ${mention.channelLabel}`}
         >
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary">
             {isDm ? <MessageSquare size={13} /> : <Hash size={13} />}
@@ -75,12 +94,10 @@ function MentionCard({ mention }: { mention: MentionResult }) {
             {mention.channelLabel}
           </span>
           <span>/</span>
-          <span className="shrink-0">
-            {formatDistanceToNow(new Date(mention.createdAt), { addSuffix: true })}
-          </span>
+          <RelativeTime value={mention.createdAt} className="shrink-0" />
         </Link>
         <JumpToMessageLink
-          href={mention.href}
+          href={mentionHref}
           label={getJumpToMessageLabel("mention")}
           channelLabel={mention.channelLabel}
         />
@@ -123,7 +140,9 @@ function MentionCard({ mention }: { mention: MentionResult }) {
             >
               {mention.author.displayName}
             </ProfilePopover>
-            {mention.author.isAgent && <span className="badge-teal">agent</span>}
+            {mention.author.isAgent && (
+              <span className="badge-teal">agent</span>
+            )}
             <span className="truncate text-2xs text-text-muted">
               @{mention.author.username}
             </span>

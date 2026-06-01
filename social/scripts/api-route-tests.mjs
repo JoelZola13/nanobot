@@ -36,9 +36,25 @@ afterEach(() => {
     globalThis.window = originalWindow;
   }
   delete process.env.LIBRECHAT_AUTH_BRIDGE_URL;
+  delete process.env.LIBRECHAT_AUTH_BRIDGE_SECRET;
+  delete process.env.AUTH_SECRET;
+  delete process.env.AUTH_CASDOOR_ISSUER;
+  delete process.env.AUTH_CASDOOR_ID;
+  delete process.env.AUTH_CASDOOR_SECRET;
   delete process.env.SOCIAL_DEFAULT_CHANNEL_VISIBILITY;
   delete process.env.SOCIAL_DEFAULT_NOTIFICATION_LEVEL;
   delete process.env.SOCIAL_PUBLIC_CHANNEL_JOIN_POLICY;
+  delete process.env.EMAIL_REPLY_ENABLED;
+  delete process.env.EMAIL_REPLY_CONSENT_GRANTED;
+  delete process.env.EMAIL_REPLY_SMTP_HOST;
+  delete process.env.EMAIL_REPLY_SMTP_PORT;
+  delete process.env.EMAIL_REPLY_SMTP_USERNAME;
+  delete process.env.EMAIL_REPLY_SMTP_USER;
+  delete process.env.EMAIL_REPLY_SMTP_PASSWORD;
+  delete process.env.EMAIL_REPLY_FROM;
+  delete process.env.EMAIL_REPLY_FROM_ADDRESS;
+  delete process.env.EMAIL_REPLY_SMTP_USE_TLS;
+  delete process.env.EMAIL_REPLY_SMTP_USE_SSL;
 });
 
 function loadTsModule(relativePath, mocks = {}) {
@@ -160,6 +176,85 @@ describe("Social structured logs", () => {
     assert.equal(entry.status, 503);
     assert.equal(typeof entry.timestamp, "string");
     assert.equal(Object.prototype.hasOwnProperty.call(entry, "omitted"), false);
+  });
+});
+
+describe("Setup diagnostics", () => {
+  function loadSetupDiagnosticsModule(prismaMock) {
+    return loadTsModule("src/lib/setupDiagnostics.ts", {
+      "@/lib/auth": {
+        authOptions: {
+          providers: [{ id: "casdoor" }],
+        },
+      },
+      "@/lib/prisma": {
+        prisma: prismaMock,
+      },
+    });
+  }
+
+  test("reports healthy checks when auth, database, and bridge are reachable", async () => {
+    process.env.AUTH_SECRET = "auth-secret";
+    process.env.AUTH_CASDOOR_ISSUER = "http://casdoor.test";
+    process.env.AUTH_CASDOOR_ID = "client-id";
+    process.env.AUTH_CASDOOR_SECRET = "client-secret";
+    process.env.LIBRECHAT_AUTH_BRIDGE_URL = "http://bridge.test/session";
+    process.env.LIBRECHAT_AUTH_BRIDGE_SECRET = "shared-secret";
+
+    const bridgeRequests = [];
+    globalThis.fetch = async (url, options) => {
+      bridgeRequests.push({ url, options });
+      return new Response("", { status: 401 });
+    };
+    const { runSetupDiagnostics } = loadSetupDiagnosticsModule({
+      async $queryRaw() {
+        return [{ users_table: "users", channels_table: "channels" }];
+      },
+    });
+
+    const diagnostics = await runSetupDiagnostics({
+      now: () => new Date("2026-05-04T12:00:00.000Z"),
+    });
+
+    assert.equal(diagnostics.status, "ok");
+    assert.equal(diagnostics.generatedAt, "2026-05-04T12:00:00.000Z");
+    assert.equal(bridgeRequests[0].url, "http://bridge.test/session");
+    assert.equal(bridgeRequests[0].options.headers["x-librechat-social-secret"], "shared-secret");
+    assert.deepEqual(
+      diagnostics.checks.map((check) => [check.id, check.status]),
+      [
+        ["social-service", "ok"],
+        ["social-auth-provider", "ok"],
+        ["social-database", "ok"],
+        ["librechat-auth-bridge", "ok"],
+        ["host-health-check", "ok"],
+      ],
+    );
+  });
+
+  test("returns actionable errors for missing secrets and database tables", async () => {
+    process.env.AUTH_CASDOOR_ISSUER = "http://casdoor.test";
+    process.env.AUTH_CASDOOR_ID = "client-id";
+
+    globalThis.fetch = async () => {
+      throw new Error("bridge should not be called without a secret");
+    };
+    const { runSetupDiagnostics } = loadSetupDiagnosticsModule({
+      async $queryRaw() {
+        return [{ users_table: null, channels_table: null }];
+      },
+    });
+
+    const diagnostics = await runSetupDiagnostics();
+    const checksById = Object.fromEntries(diagnostics.checks.map((check) => [check.id, check]));
+
+    assert.equal(diagnostics.status, "error");
+    assert.equal(checksById["social-auth-provider"].status, "error");
+    assert.match(checksById["social-auth-provider"].summary, /AUTH_SECRET/);
+    assert.equal(checksById["social-database"].status, "error");
+    assert.match(checksById["social-database"].summary, /core tables are missing/);
+    assert.equal(checksById["librechat-auth-bridge"].status, "error");
+    assert.match(checksById["librechat-auth-bridge"].summary, /LIBRECHAT_AUTH_BRIDGE_SECRET/);
   });
 });
 
@@ -342,15 +437,14 @@ describe("Message deep links", () => {
     );
     assert.equal(getJumpToMessageLabel("mention"), "Jump to mention");
     assert.equal(getJumpToMessageLabel("saved"), "Jump to saved message");
+    assert.equal(getJumpToMessageLabel("thread"), "Jump to thread");
+    assert.equal(getJumpToMessageLabel("reaction"), "Jump to reacted message");
   });
 });
 
 describe("Activity inbox helpers", () => {
   test("merges mentions and saved items by newest activity", () => {
-    const { mergeActivityItems } = loadTsModule("src/lib/activity.ts", {
-      "@/lib/mentions": {},
-      "@/lib/savedItems": {},
-    });
+    const { mergeActivityItems } = loadTsModule("src/lib/activityItems.ts");
 
     const author = {
       id: "user-1",
@@ -396,10 +490,7 @@ describe("Activity inbox helpers", () => {
   });
 
   test("limits merged activity items after sorting", () => {
-    const { mergeActivityItems } = loadTsModule("src/lib/activity.ts", {
-      "@/lib/mentions": {},
-      "@/lib/savedItems": {},
-    });
+    const { mergeActivityItems } = loadTsModule("src/lib/activityItems.ts");
 
     const author = {
       id: "user-1",
@@ -451,6 +542,153 @@ describe("Activity inbox helpers", () => {
       items.map((item) => item.id),
       ["mention:mention-new", "saved:saved-middle"],
     );
+  });
+
+  test("counts and filters all supported activity types", () => {
+    const { filterActivityItems, getActivityCounts, getUnreadActivityCounts } =
+      loadTsModule("src/lib/activityItems.ts");
+
+    const items = [
+      { id: "mention:1", kind: "mention", isUnread: true },
+      { id: "saved:1", kind: "saved" },
+      { id: "thread:1", kind: "thread", isUnread: true },
+      { id: "reaction:1", kind: "reaction", isUnread: true },
+      { id: "reaction:2", kind: "reaction" },
+    ];
+
+    assert.deepEqual(getActivityCounts(items), {
+      all: 5,
+      mentions: 1,
+      saved: 1,
+      threads: 1,
+      reactions: 2,
+    });
+    assert.deepEqual(
+      filterActivityItems(items, "reactions").map((item) => item.id),
+      ["reaction:1", "reaction:2"],
+    );
+    assert.deepEqual(
+      filterActivityItems(items, "threads").map((item) => item.id),
+      ["thread:1"],
+    );
+    assert.deepEqual(getUnreadActivityCounts(items), {
+      all: 3,
+      mentions: 1,
+      saved: 0,
+      threads: 1,
+      reactions: 1,
+    });
+  });
+
+  test("groups activity items into readable date sections", () => {
+    const { getActivityDateGroupLabel, groupActivityItemsByDate } =
+      loadTsModule("src/lib/activityItems.ts");
+    const now = new Date(2026, 4, 4, 12);
+    const items = [
+      {
+        id: "mention:today",
+        kind: "mention",
+        occurredAt: new Date(2026, 4, 4, 10).toISOString(),
+      },
+      {
+        id: "saved:today",
+        kind: "saved",
+        occurredAt: new Date(2026, 4, 4, 9).toISOString(),
+      },
+      {
+        id: "thread:yesterday",
+        kind: "thread",
+        occurredAt: new Date(2026, 4, 3, 9).toISOString(),
+      },
+      {
+        id: "reaction:older",
+        kind: "reaction",
+        occurredAt: new Date(2026, 4, 1, 9).toISOString(),
+      },
+    ];
+
+    assert.equal(
+      getActivityDateGroupLabel(items[0].occurredAt, now),
+      "Today",
+    );
+    assert.equal(
+      getActivityDateGroupLabel(items[2].occurredAt, now),
+      "Yesterday",
+    );
+    assert.equal(
+      getActivityDateGroupLabel(items[3].occurredAt, now),
+      "May 1, 2026",
+    );
+
+    const groups = groupActivityItemsByDate(items, now);
+
+    assert.deepEqual(
+      groups.map((group) => ({
+        id: group.id,
+        label: group.label,
+        itemIds: group.items.map((item) => item.id),
+      })),
+      [
+        {
+          id: "2026-05-04",
+          label: "Today",
+          itemIds: ["mention:today", "saved:today"],
+        },
+        {
+          id: "2026-05-03",
+          label: "Yesterday",
+          itemIds: ["thread:yesterday"],
+        },
+        {
+          id: "2026-05-01",
+          label: "May 1, 2026",
+          itemIds: ["reaction:older"],
+        },
+      ],
+    );
+  });
+});
+
+describe("Activity read state API route", () => {
+  test("marks activity as read for the signed-in user", async () => {
+    const readAt = new Date("2026-05-04T16:30:00.000Z");
+    let markedUserId;
+    const { POST } = loadTsModule("src/app/api/activity/read/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock("current-user"),
+      "@/lib/activity": {
+        async markActivityReadForUser(userId) {
+          markedUserId = userId;
+          return readAt;
+        },
+      },
+    });
+
+    const response = await POST();
+
+    assert.equal(response.status, 200);
+    assert.equal(markedUserId, "current-user");
+    assert.deepEqual(await responseJson(response), {
+      ok: true,
+      readAt: "2026-05-04T16:30:00.000Z",
+    });
+  });
+
+  test("rejects unauthenticated activity read updates", async () => {
+    const { POST } = loadTsModule("src/app/api/activity/read/route.ts", {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(null),
+      "@/lib/activity": {
+        async markActivityReadForUser() {
+          throw new Error("should not mark read");
+        },
+      },
+    });
+
+    const response = await POST();
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await responseJson(response), { error: "Unauthorized" });
   });
 });
 
@@ -673,7 +911,8 @@ describe("Channel management permissions", () => {
     } = loadTsModule("src/lib/channelManagement.ts");
 
     assert.equal(canCreateWorkspaceChannels({ role: "ADMIN" }), true);
-    assert.equal(canCreateWorkspaceChannels({ role: "USER" }), false);
+    assert.equal(canCreateWorkspaceChannels({ role: "USER" }), true);
+    assert.equal(canCreateWorkspaceChannels(null), false);
     assert.equal(canManageChannel({ role: "USER" }, "owner"), true);
     assert.equal(canManageChannel({ role: "USER" }, "admin"), true);
     assert.equal(canManageChannel({ role: "USER" }, "member"), false);
@@ -686,6 +925,26 @@ describe("Channel management permissions", () => {
     assert.equal(normalizeAssignableChannelRole("owner"), "member");
     assert.equal(normalizeChannelVisibility("PRIVATE"), "PRIVATE");
     assert.equal(normalizeChannelVisibility("GROUP_DM"), "PUBLIC");
+  });
+});
+
+describe("Embedded navigation", () => {
+  test("preserves embedded Messages context in local destinations", () => {
+    const { withEmbedParam } = loadTsModule("src/lib/embeddedNavigation.ts");
+
+    assert.equal(withEmbedParam("/channels", false), "/channels");
+    assert.equal(
+      withEmbedParam("/channels?create=true", true),
+      "/channels?create=true&embed=true",
+    );
+    assert.equal(
+      withEmbedParam("/channels?embed=true&create=true", true),
+      "/channels?embed=true&create=true",
+    );
+    assert.equal(
+      withEmbedParam("/dm/channel-1#latest", true),
+      "/dm/channel-1?embed=true#latest",
+    );
   });
 });
 
@@ -707,7 +966,7 @@ describe("Workspace policies", () => {
       defaultNotificationLevel: "MENTIONS",
       publicChannelJoinPolicy: "WORKSPACE_ADMINS",
       privateChannelJoinPolicy: "INVITE_ONLY",
-      channelCreationPolicy: "WORKSPACE_ADMINS",
+      channelCreationPolicy: "MEMBERS",
     });
     assert.equal(getDefaultChannelVisibility(undefined), "PRIVATE");
     assert.deepEqual(getDefaultMembershipPreferences(now), {
@@ -746,7 +1005,7 @@ describe("Workspace policies", () => {
     assert.equal(response.status, 200);
     assert.equal(body.defaultChannelVisibility, "PRIVATE");
     assert.equal(body.defaultNotificationLevel, "ALL");
-    assert.equal(body.channelCreationPolicy, "WORKSPACE_ADMINS");
+    assert.equal(body.channelCreationPolicy, "MEMBERS");
     assert.equal(body.canManage, true);
   });
 });
@@ -761,8 +1020,8 @@ describe("Channel API route", () => {
     async ensureDefaultChannelsForUser() {},
   };
 
-  test("requires workspace admin access to create channels", async () => {
-    let createCalled = false;
+  test("creates channels for signed-in workspace members", async () => {
+    let createArgs;
     const channelManagement = loadTsModule("src/lib/channelManagement.ts");
     const { POST } = loadTsModule("src/app/api/channels/route.ts", {
       "next/server": nextServerMock,
@@ -773,8 +1032,19 @@ describe("Channel API route", () => {
             async findUnique() {
               return null;
             },
-            async create() {
-              createCalled = true;
+            async create(args) {
+              createArgs = args;
+              return {
+                id: "member-channel",
+                name: args.data.name,
+                slug: args.data.slug,
+                description: args.data.description,
+                type: args.data.type,
+                iconEmoji: null,
+                isDefault: false,
+                isArchived: false,
+                _count: { members: 1, messages: 0 },
+              };
             },
           },
         },
@@ -786,11 +1056,30 @@ describe("Channel API route", () => {
 
     const response = await POST(jsonRequest({ name: "team-updates" }));
 
-    assert.equal(response.status, 403);
-    assert.deepEqual(await responseJson(response), {
-      error: "Workspace admin access required",
+    assert.equal(response.status, 201);
+    assert.equal(createArgs.data.name, "team-updates");
+    assert.deepEqual(createArgs.data.members.create, {
+      userId: "current-user",
+      role: "owner",
+      notificationLevel: "ALL",
+      mutedAt: null,
     });
-    assert.equal(createCalled, false);
+    assert.deepEqual(await responseJson(response), {
+      id: "member-channel",
+      name: "team-updates",
+      slug: "team-updates",
+      description: null,
+      type: "PUBLIC",
+      iconEmoji: null,
+      isDefault: false,
+      isArchived: false,
+      isMember: true,
+      memberCount: 1,
+      messageCount: 0,
+      role: "owner",
+      canCreate: true,
+      canManage: true,
+    });
   });
 
   test("creates a normalized channel for workspace admins", async () => {
@@ -1707,6 +1996,483 @@ describe("Channel messages API route", () => {
     assert.equal(findManyArgs.skip, 1);
     assert.deepEqual(body.messages.map((message) => message.id), ["msg-1"]);
     assert.equal(body.nextCursor, null);
+  });
+});
+
+describe("Email import API route", () => {
+  function importedMessageRecord(args) {
+    const createdAt = new Date("2026-05-04T12:00:00.000Z");
+    return {
+      id: "imported-message-1",
+      channelId: args.data.channelId,
+      authorId: args.data.authorId,
+      content: args.data.content,
+      parentId: null,
+      isEdited: false,
+      isPinned: false,
+      metadata: args.data.metadata,
+      createdAt,
+      updatedAt: createdAt,
+      deletedAt: null,
+      author: {
+        id: args.data.authorId,
+        username: "current-user",
+        displayName: "Current User",
+        avatarUrl: null,
+        isAgent: false,
+      },
+      attachments: [],
+    };
+  }
+
+  function emailImportRouteMocks({ prisma, userId = "current-user", emitted = [] }) {
+    return {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(userId, "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/messageFormat": loadTsModule("src/lib/messageFormat.ts"),
+      "@/lib/socketServer": {
+        getIO() {
+          return {
+            to(room) {
+              return {
+                emit(event, payload) {
+                  emitted.push({ room, event, payload });
+                },
+              };
+            },
+          };
+        },
+      },
+      "@/lib/emailImport": loadTsModule("src/lib/emailImport.ts"),
+      "@/lib/workspacePolicies": loadWorkspacePoliciesModule(),
+    };
+  }
+
+  test("imports a visible email into a channel the user belongs to", async () => {
+    const emitted = [];
+    let membershipArgs;
+    let createArgs;
+    let updateArgs;
+    const prisma = {
+      channelMember: {
+        async findUnique(args) {
+          membershipArgs = args;
+          return { channel: { isArchived: false } };
+        },
+      },
+      message: {
+        async create(args) {
+          createArgs = args;
+          return importedMessageRecord(args);
+        },
+      },
+      channel: {
+        async update(args) {
+          updateArgs = args;
+          return {};
+        },
+      },
+    };
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/route.ts",
+      emailImportRouteMocks({ prisma, emitted }),
+    );
+
+    const response = await POST(jsonRequest({
+      destination: { type: "channel", channelId: "channel-1" },
+      email: {
+        provider: "gmail",
+        subject: "Grant update",
+        from: { name: "Sender Name", email: "sender@example.org" },
+        to: [{ email: "team@example.org" }],
+        sentAt: "May 4, 2026, 9:30 AM",
+        sourceUrl: "https://mail.google.com/mail/u/0/#inbox/message-1",
+        bodyText: "Hello team,\n\nHere is the grant update.",
+        bodyHtml: "<div>Hello team,<br><br>Here is the grant update.</div>",
+        attachments: [{ name: "brief.pdf", url: "application/pdf:https://mail.google.test/brief:brief.pdf" }],
+      },
+    }));
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 201);
+    assert.deepEqual(membershipArgs.where, {
+      channelId_userId: { channelId: "channel-1", userId: "current-user" },
+    });
+    assert.equal(createArgs.data.channelId, "channel-1");
+    assert.equal(createArgs.data.authorId, "current-user");
+    assert.match(createArgs.data.content, /Imported email: Grant update/);
+    assert.match(createArgs.data.content, /From: Sender Name <sender@example.org>/);
+    assert.match(createArgs.data.content, /Here is the grant update/);
+	    assert.equal(createArgs.data.metadata.type, "email_import");
+	    assert.equal(createArgs.data.metadata.email.provider, "gmail");
+	    assert.equal(createArgs.data.metadata.email.subject, "Grant update");
+	    assert.match(createArgs.data.metadata.email.bodyText, /Here is the grant update/);
+	    assert.match(createArgs.data.metadata.email.bodyHtml, /Hello team/);
+    assert.equal(createArgs.data.metadata.email.attachments[0].name, "brief.pdf");
+    assert.equal(createArgs.data.metadata.email.bodyTruncated, false);
+    assert.equal(createArgs.data.metadata.email.htmlTruncated, false);
+    assert.deepEqual(updateArgs.where, { id: "channel-1" });
+    assert.equal(body.channelId, "channel-1");
+    assert.equal(body.message.id, "imported-message-1");
+    assert.deepEqual(emitted.map(({ room, event }) => [room, event]), [
+      ["channel:channel-1", "message:new"],
+    ]);
+	  });
+
+	  test("auto-joins a visible public channel before importing into it", async () => {
+	    let upsertArgs;
+	    let messageCreateArgs;
+	    const prisma = {
+	      channelMember: {
+	        async findUnique() {
+	          return null;
+	        },
+	        async upsert(args) {
+	          upsertArgs = args;
+	          return { role: "member" };
+	        },
+	      },
+	      channel: {
+	        async findUnique() {
+	          return { id: "public-channel-1", type: "PUBLIC", isArchived: false };
+	        },
+	        async update() {
+	          return {};
+	        },
+	      },
+	      message: {
+	        async create(args) {
+	          messageCreateArgs = args;
+	          return importedMessageRecord(args);
+	        },
+	      },
+	    };
+	    const { POST } = loadTsModule(
+	      "src/app/api/email-import/route.ts",
+	      emailImportRouteMocks({ prisma }),
+	    );
+
+	    const response = await POST(jsonRequest({
+	      destination: { type: "channel", channelId: "public-channel-1" },
+	      email: {
+	        subject: "Public channel follow-up",
+	        bodyText: "Send this to the picked channel.",
+	      },
+	    }));
+	    const body = await responseJson(response);
+
+	    assert.equal(response.status, 201);
+	    assert.deepEqual(upsertArgs.where, {
+	      channelId_userId: {
+	        channelId: "public-channel-1",
+	        userId: "current-user",
+	      },
+	    });
+	    assert.equal(upsertArgs.create.channelId, "public-channel-1");
+	    assert.equal(upsertArgs.create.userId, "current-user");
+	    assert.equal(messageCreateArgs.data.channelId, "public-channel-1");
+	    assert.equal(body.channelId, "public-channel-1");
+	  });
+
+	  test("creates a DM destination when importing to a user with no existing DM", async () => {
+    let createdChannelArgs;
+    let messageCreateArgs;
+    const prisma = {
+      user: {
+        async findUnique(args) {
+          return { id: args.where.id };
+        },
+      },
+      channel: {
+        async findFirst() {
+          return null;
+        },
+        async create(args) {
+          createdChannelArgs = args;
+          return { id: "dm-1" };
+        },
+        async update() {
+          return {};
+        },
+      },
+      message: {
+        async create(args) {
+          messageCreateArgs = args;
+          return importedMessageRecord(args);
+        },
+      },
+    };
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/route.ts",
+      emailImportRouteMocks({ prisma }),
+    );
+
+    const response = await POST(jsonRequest({
+      destination: { type: "dm", userId: "agent-user" },
+      email: {
+        subject: "Follow up",
+        bodyText: "Can you turn this into next steps?",
+      },
+    }));
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 201);
+    assert.equal(createdChannelArgs.data.type, "DM");
+    assert.deepEqual(
+      createdChannelArgs.data.members.create.map((member) => member.userId),
+      ["current-user", "agent-user"],
+    );
+    assert.equal(messageCreateArgs.data.channelId, "dm-1");
+    assert.equal(body.channelId, "dm-1");
+  });
+
+  test("rejects malformed email import payloads", async () => {
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/route.ts",
+      emailImportRouteMocks({ prisma: {} }),
+    );
+
+    const response = await POST(jsonRequest({
+      destination: { type: "channel", channelId: "" },
+      email: { subject: "Missing body shape" },
+    }));
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "Invalid email import payload");
+    assert.ok(Array.isArray(body.details));
+  });
+});
+
+describe("Email reply API route", () => {
+  function replyMessageRecord(args) {
+    const createdAt = new Date("2026-05-04T12:05:00.000Z");
+    return {
+      id: "email-reply-message-1",
+      channelId: args.data.channelId,
+      authorId: args.data.authorId,
+      content: args.data.content,
+      parentId: args.data.parentId,
+      isEdited: false,
+      isPinned: false,
+      metadata: args.data.metadata,
+      createdAt,
+      updatedAt: createdAt,
+      deletedAt: null,
+      author: {
+        id: args.data.authorId,
+        username: "current-user",
+        displayName: "Current User",
+        avatarUrl: null,
+        isAgent: false,
+      },
+      attachments: [],
+    };
+  }
+
+  function nodemailerMock(sentMail = [], transportConfigs = []) {
+    return {
+      createTransport(config) {
+        transportConfigs.push(config);
+        return {
+          async sendMail(mail) {
+            sentMail.push(mail);
+            return { messageId: "<sent-reply@example.org>" };
+          },
+        };
+      },
+    };
+  }
+
+  function emailReplyRouteMocks({
+    prisma,
+    userId = "current-user",
+    emitted = [],
+    mailer = nodemailerMock(),
+    fsMock = { existsSync: () => false, readFileSync: () => "" },
+  }) {
+    const emailReplyModule = loadTsModule("src/lib/emailReply.ts", {
+      nodemailer: mailer,
+      "node:fs": fsMock,
+    });
+
+    return {
+      "next/server": nextServerMock,
+      "@/lib/session": createAuthMock(userId, "USER"),
+      "@/lib/prisma": { prisma },
+      "@/lib/messageFormat": loadTsModule("src/lib/messageFormat.ts"),
+      "@/lib/socketServer": {
+        getIO() {
+          return {
+            to(room) {
+              return {
+                emit(event, payload) {
+                  emitted.push({ room, event, payload });
+                },
+              };
+            },
+          };
+        },
+      },
+      "@/lib/emailReply": emailReplyModule,
+    };
+  }
+
+  function importedEmailRecord(overrides = {}) {
+    return {
+      id: "imported-message-1",
+      channelId: "channel-1",
+      authorId: "current-user",
+      deletedAt: null,
+      metadata: {
+        type: "email_import",
+        email: {
+	          provider: "gmail",
+	          subject: "Grant update",
+	          from: { name: "Sender Name", email: "sender@example.org" },
+	          sentAt: "May 4, 2026, 9:30 AM",
+	          messageId: "original@example.org",
+	          sourceUrl: "https://mail.google.com/mail/u/0/#inbox/message-1",
+	          bodyText: "Hello team,\n\nHere is the grant update.",
+	        },
+	      },
+      channel: { isArchived: false },
+      ...overrides,
+    };
+  }
+
+  test("sends an SMTP reply and records it as a thread reply", async () => {
+    process.env.EMAIL_REPLY_SMTP_HOST = "smtp.test";
+    process.env.EMAIL_REPLY_SMTP_PORT = "2525";
+    process.env.EMAIL_REPLY_SMTP_USERNAME = "nanobot@example.org";
+    process.env.EMAIL_REPLY_SMTP_PASSWORD = "app-password";
+    process.env.EMAIL_REPLY_FROM = "Nanobot <nanobot@example.org>";
+    process.env.EMAIL_REPLY_CONSENT_GRANTED = "true";
+
+    const emitted = [];
+    const sentMail = [];
+    const transportConfigs = [];
+    const mailer = nodemailerMock(sentMail, transportConfigs);
+    let createArgs;
+    let updateArgs;
+    const prisma = {
+      message: {
+        async findUnique() {
+          return importedEmailRecord();
+        },
+        async create(args) {
+          createArgs = args;
+          return replyMessageRecord(args);
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return { role: "member" };
+        },
+      },
+      channel: {
+        async update(args) {
+          updateArgs = args;
+          return {};
+        },
+      },
+    };
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/[messageId]/reply/route.ts",
+      emailReplyRouteMocks({ prisma, emitted, mailer }),
+    );
+
+    const response = await POST(
+      jsonRequest({ content: "Thanks, we will review this today." }),
+      { params: Promise.resolve({ messageId: "imported-message-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 201);
+    assert.equal(transportConfigs[0].host, "smtp.test");
+    assert.equal(transportConfigs[0].port, 2525);
+    assert.equal(sentMail[0].to, "\"Sender Name\" <sender@example.org>");
+	    assert.equal(sentMail[0].subject, "Re: Grant update");
+	    assert.match(sentMail[0].text, /^Thanks, we will review this today\./);
+	    assert.match(sentMail[0].text, /On May 4, 2026, 9:30 AM, "Sender Name" <sender@example.org> wrote:/);
+	    assert.match(sentMail[0].text, /> Here is the grant update\./);
+	    assert.match(sentMail[0].html, /<div dir="ltr">Thanks, we will review this today\.<\/div>/);
+	    assert.match(sentMail[0].html, /gmail_quote/);
+	    assert.match(sentMail[0].html, /Here is the grant update\./);
+	    assert.equal(sentMail[0].inReplyTo, "<original@example.org>");
+    assert.equal(createArgs.data.channelId, "channel-1");
+    assert.equal(createArgs.data.parentId, "imported-message-1");
+    assert.equal(createArgs.data.metadata.type, "email_reply");
+    assert.equal(createArgs.data.metadata.emailReply.to.email, "sender@example.org");
+    assert.equal(createArgs.data.metadata.emailReply.subject, "Re: Grant update");
+    assert.deepEqual(updateArgs.where, { id: "channel-1" });
+    assert.equal(body.message.id, "email-reply-message-1");
+    assert.equal(body.message.parentId, "imported-message-1");
+    assert.deepEqual(emitted.map(({ room, event }) => [room, event]), [
+      ["channel:channel-1", "message:new"],
+    ]);
+  });
+
+  test("rejects email replies when SMTP is not configured", async () => {
+    const prisma = {
+      message: {
+        async findUnique() {
+          return importedEmailRecord();
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return { role: "member" };
+        },
+      },
+    };
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/[messageId]/reply/route.ts",
+      emailReplyRouteMocks({ prisma }),
+    );
+
+    const response = await POST(
+      jsonRequest({ content: "Can you send the deck?" }),
+      { params: Promise.resolve({ messageId: "imported-message-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "SMTP email replies are not configured.");
+  });
+
+  test("rejects imported emails without a replyable sender", async () => {
+    const prisma = {
+      message: {
+        async findUnique() {
+          return importedEmailRecord({
+            metadata: {
+              type: "email_import",
+              email: { subject: "No sender" },
+            },
+          });
+        },
+      },
+      channelMember: {
+        async findUnique() {
+          return { role: "member" };
+        },
+      },
+    };
+    const { POST } = loadTsModule(
+      "src/app/api/email-import/[messageId]/reply/route.ts",
+      emailReplyRouteMocks({ prisma }),
+    );
+
+    const response = await POST(
+      jsonRequest({ content: "Following up." }),
+      { params: Promise.resolve({ messageId: "imported-message-1" }) },
+    );
+    const body = await responseJson(response);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error, "Imported email does not have a replyable sender");
   });
 });
 

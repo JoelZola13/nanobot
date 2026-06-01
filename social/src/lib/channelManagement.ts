@@ -10,7 +10,7 @@ export function isWorkspaceAdminRole(role?: string | null) {
 }
 
 export function canCreateWorkspaceChannels(user?: SessionUserWithRole | null) {
-  return isWorkspaceAdminRole(user?.role);
+  return Boolean(user);
 }
 
 export function canManageChannelRole(role?: string | null) {

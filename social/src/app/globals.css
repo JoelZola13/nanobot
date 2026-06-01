@@ -19,18 +19,19 @@
     --sv-accent: #ffb300;
     --sv-accent-hover: #ffc233;
     --sv-accent-muted: rgba(255, 179, 0, 0.12);
-    --sv-border: rgba(17, 24, 39, 0.10);
+    --sv-border: rgba(17, 24, 39, 0.1);
     --sv-border-subtle: rgba(17, 24, 39, 0.06);
     --sv-glass-surface: rgba(255, 255, 255, 0.55);
     --sv-glass-border: rgba(255, 255, 255, 0.7);
-    --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
+    --sv-glass-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
     --sv-sidebar-bg: #f7f7fa;
     --sv-sidebar-elevated: rgba(17, 24, 39, 0.055);
     --sv-sidebar-hover: rgba(17, 24, 39, 0.075);
     --sv-sidebar-active: rgba(255, 179, 0, 0.24);
     --sv-sidebar-text: rgba(26, 28, 36, 0.88);
     --sv-sidebar-muted: rgba(75, 77, 89, 0.68);
-    --sv-sidebar-border: rgba(17, 24, 39, 0.10);
+    --sv-sidebar-border: rgba(17, 24, 39, 0.1);
     --sv-sidebar-hover-text: #1a1c24;
     --sv-sidebar-active-text: #1a1c24;
   }
@@ -52,14 +53,15 @@
     --sv-border-subtle: rgba(188, 189, 208, 0.08);
     --sv-glass-surface: rgba(255, 255, 255, 0.04);
     --sv-glass-border: rgba(255, 255, 255, 0.08);
-    --sv-glass-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.2);
+    --sv-glass-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.2);
     --sv-sidebar-bg: #19131f;
     --sv-sidebar-elevated: rgba(255, 255, 255, 0.07);
-    --sv-sidebar-hover: rgba(255, 255, 255, 0.10);
+    --sv-sidebar-hover: rgba(255, 255, 255, 0.1);
     --sv-sidebar-active: rgba(255, 214, 0, 0.18);
     --sv-sidebar-text: rgba(255, 255, 255, 0.86);
     --sv-sidebar-muted: rgba(255, 255, 255, 0.52);
-    --sv-sidebar-border: rgba(255, 255, 255, 0.10);
+    --sv-sidebar-border: rgba(255, 255, 255, 0.1);
     --sv-sidebar-hover-text: #fff;
     --sv-sidebar-active-text: #fff;
   }
@@ -92,7 +94,12 @@
     width: calc(100vw - 56px) !important;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading;
   }
 
@@ -279,12 +286,25 @@
       background: var(--sv-bg-elevated);
       color: var(--sv-text-primary);
       box-shadow: var(--sv-glass-shadow);
-      transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+      transition:
+        background 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
+    }
+
+    .sv-messages-shell.is-framed .sv-mobile-sidebar-toggle {
+      left: 3.75rem;
     }
 
     .sv-mobile-sidebar-toggle:hover {
       background: var(--sv-bg-hover);
       border-color: var(--sv-border);
+    }
+
+    .sv-messages-shell:not(.is-interactive) .sv-mobile-sidebar-toggle {
+      pointer-events: none;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     .sv-mobile-sidebar-backdrop.is-mobile-open {

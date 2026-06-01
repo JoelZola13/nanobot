@@ -37,8 +37,20 @@ services:
 
   mongodb:
     container_name: nanobot-mongodb
+    image: mongo:7
     ports:
       - "27018:27017"
+    volumes: !override
+      - ./data-node-mongo7:/data/db
+    command:
+      [
+        "mongod",
+        "--noauth",
+        "--wiredTigerCacheSizeGB",
+        "0.5",
+        "--setParameter",
+        "diagnosticDataCollectionEnabled=false",
+      ]
 
   meilisearch:
     container_name: nanobot-meilisearch
@@ -138,8 +150,17 @@ services:
     ports:
       - "3050:3050"
     environment:
+      - RELAY_HOST=0.0.0.0
       - NANOBOT_API_URL=http://nanobot-api:18790
       - PAPERCLIP_API_URL=http://paperclip:3100/api
+      - PAPERCLIP_API_TOKEN=${PAPERCLIP_API_TOKEN:-pcp_board_nanobot_local_tasks}
+      - GOOGLE_OAUTH_CREDENTIALS=/root/.nanobot/gcp-oauth.keys.json
+      - GOOGLE_CALENDAR_TOKEN_PATH=/root/.nanobot/google-calendar-token.json
+      - GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:3180/calendar/oauth/callback
+    volumes:
+      - type: bind
+        source: ${NANOBOT_HOME:-~/.nanobot}
+        target: /root/.nanobot
     depends_on:
       - nanobot-api
       - paperclip
@@ -200,13 +221,37 @@ services:
       - AUTH_CASDOOR_ISSUER=http://localhost:8380
       - AUTH_CASDOOR_ID=social-app
       - AUTH_CASDOOR_SECRET=social-casdoor-secret-2026
+      - LIBRECHAT_AUTH_BRIDGE_URL=http://api:3180/api/auth/social-session
+      - LIBRECHAT_AUTH_BRIDGE_SECRET=street-voices-social-bridge-2026
       - NANOBOT_API_URL=http://nanobot-api:18790/v1
       - NANOBOT_API_KEY=nanobot
+      - REDIS_URL=redis://postiz-redis:6379
+      - S3_ENDPOINT=http://rustfs:8333
+      - S3_PUBLIC_ENDPOINT=/social/api/files
+      - S3_BUCKET=social
+      - S3_ACCESS_KEY_ID=lobehub
+      - S3_SECRET_ACCESS_KEY=lobehub_s3_secret
+    volumes:
+      - ${HOME}/.nanobot:/root/.nanobot:ro
     depends_on:
       social-postgres:
         condition: service_healthy
       casdoor:
         condition: service_started
+      rustfs:
+        condition: service_started
+    restart: always
+
+  rustfs:
+    container_name: nanobot-rustfs
+    image: chrislusf/seaweedfs
+    command: "server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data"
+    volumes:
+      - social-rustfs-data:/data
+      - type: bind
+        source: ../deploy/seaweedfs-s3.json
+        target: /etc/seaweedfs/s3.json
+        read_only: true
     restart: always
 
   social-postgres:
@@ -324,6 +369,7 @@ services:
 volumes:
   casdoor-postgres-data:
   social-postgres-data:
+  social-rustfs-data:
   postiz-postgres-data:
   postiz-redis-data:
   postiz-config:
